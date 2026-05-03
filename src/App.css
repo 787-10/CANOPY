@@ -538,7 +538,8 @@
 
 .map-stage {
   position: relative;
-  min-height: 0;
+  min-width: 1px;
+  min-height: 500px;
   border: 1px solid var(--line-bright);
   border-radius: 3px;
   background:
@@ -781,6 +782,8 @@
 .cesium-globe {
   position: absolute;
   inset: 0;
+  min-width: 1px;
+  min-height: 1px;
 }
 
 .cesium-globe .cesium-viewer-bottom,

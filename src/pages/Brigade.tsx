@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { ApproveBanner } from '../components/ApproveBanner'
 import { EventFeed } from '../components/EventFeed'
 import { MapStage } from '../components/MapStage'
@@ -127,16 +127,8 @@ const beatDecision: Decision = {
 
 export function Brigade() {
   const socketState = useCanopySocket()
-  const [beatIndex, setBeatIndex] = useState(1)
+  const [beatIndex] = useState(beatSignals.length)
   const [isApproved, setIsApproved] = useState(false)
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setBeatIndex((current) => (current % beatSignals.length) + 1)
-    }, 1500)
-
-    return () => window.clearInterval(timer)
-  }, [])
 
   const mockSignals = useMemo(
     () =>

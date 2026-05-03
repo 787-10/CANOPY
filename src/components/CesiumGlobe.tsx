@@ -6,6 +6,7 @@ import {
   Color,
   createWorldImageryAsync,
   CzmlDataSource,
+  HeadingPitchRange,
   Ion,
   ImageryLayer,
   IonWorldImageryStyle,
@@ -27,15 +28,18 @@ const MAP_RED = Color.fromCssColorString('#e05c4f')
 const MAP_AMBER = Color.fromCssColorString('#c9a457')
 const MAP_CYAN = Color.fromCssColorString('#33f2f0')
 const MAP_PANEL = Color.fromCssColorString('#091112')
+const REAL_SATELLITE_DISPLAY_ALT_M = 720000
 
 const markerSvg = (
-  kind: 'satellite' | 'drone' | 'signal',
+  kind: 'satellite' | 'realSatellite' | 'drone' | 'signal',
   stroke: string,
   fill = '#020404',
 ) => {
   const inner =
-    kind === 'satellite'
-      ? '<path d="M18 4l14 14-14 14L4 18z"/><path d="M18 8v5M18 23v5M8 18h5M23 18h5"/><circle cx="18" cy="18" r="4"/><path d="M2 10V2h8M26 2h8v8M34 26v8h-8M10 34H2v-8"/>'
+    kind === 'realSatellite'
+      ? '<path d="M18 3l15 29H3z"/><path d="M18 10v10M18 25v2"/><path d="M9 30h18"/>'
+      : kind === 'satellite'
+        ? '<circle cx="18" cy="18" r="12"/><circle cx="18" cy="18" r="4"/><path d="M18 2v5M18 29v5M2 18h5M29 18h5"/>'
       : kind === 'drone'
         ? '<path d="M18 4l12 14-12 14L6 18z"/><path d="M18 10v16M10 18h16"/><circle cx="18" cy="18" r="3"/><path d="M3 15v-6h6M27 9h6v6M33 21v6h-6M9 27H3v-6"/>'
         : '<path d="M18 5l13 13-13 13L5 18z"/><circle cx="18" cy="18" r="4"/><path d="M18 1v6M18 29v6M1 18h6M29 18h6"/><path d="M4 4h7M4 4v7M32 4h-7M32 4v7M32 32h-7M32 32v-7M4 32h7M4 32v-7"/>'
@@ -76,6 +80,27 @@ type MapPoint = {
   lat: number
   height: number
   label: string
+}
+
+type N2YOTrackPoint = {
+  timestamp: number
+  timestamp_utc: string
+  lat: number
+  lng: number
+  alt_km: number
+  azimuth_deg: number
+  elevation_deg: number
+  ra_deg: number
+  dec_deg: number
+}
+
+type N2YOPositionCache = {
+  fetched_at: string
+  satellite: {
+    id: number
+    name: string
+  }
+  track: N2YOTrackPoint[]
 }
 
 const contacts = [
@@ -229,104 +254,28 @@ const cameraHeightForSignal = (signal: Signal, point: MapPoint) => {
 const addMinutes = (date: Date, minutes: number) =>
   new Date(date.getTime() + minutes * 60000).toISOString()
 
-const createSatelliteCzml = () => {
-  const start = new Date()
-  const stop = addMinutes(start, 12)
-  const epoch = start.toISOString()
-  const interval = `${epoch}/${stop}`
+const latestN2YOPoint = (cache: N2YOPositionCache | null) => {
+  if (!cache?.track.length) {
+    return null
+  }
 
-  return [
-    {
-      id: 'document',
-      name: 'CANOPY Satellite Tracks',
-      version: '1.0',
-      clock: {
-        interval,
-        currentTime: epoch,
-        multiplier: 8,
-        range: 'LOOP_STOP',
-        step: 'SYSTEM_CLOCK_MULTIPLIER',
-      },
-    },
-    {
-      id: 'Satellite/SAT-BRAVO',
-      availability: interval,
-      name: 'SAT-BRAVO',
-      position: {
-        epoch,
-        interpolationAlgorithm: 'LAGRANGE',
-        interpolationDegree: 2,
-        cartographicDegrees: [
-          0, 28, 18, 720000, 120, 45, 28, 760000, 240, 63.4, 31.2,
-          650000, 360, 83, 37, 740000, 520, 104, 34, 720000,
-        ],
-      },
-      billboard: {
-        height: 24,
-        image: markerSvg('satellite', '#e05c4f'),
-        scale: 1,
-        width: 24,
-      },
-      label: {
-        text: 'SAT-BRAVO',
-        font: MAP_FONT,
-        fillColor: { rgba: [255, 255, 255, 255] },
-        show: false,
-        showBackground: true,
-        backgroundColor: { rgba: [9, 17, 18, 220] },
-        pixelOffset: { cartesian2: [0, -28] },
-      },
-      path: {
-        leadTime: 0,
-        trailTime: 900,
-        width: 1.4,
-        material: {
-          solidColor: {
-            color: { rgba: [201, 164, 87, 145] },
-          },
-        },
-      },
-    },
-    {
-      id: 'Satellite/PNT-CUSTODY',
-      availability: interval,
-      name: 'PNT-CUSTODY',
-      position: {
-        epoch,
-        interpolationAlgorithm: 'LAGRANGE',
-        interpolationDegree: 2,
-        cartographicDegrees: [
-          0, 96, 8, 540000, 120, 82, 23, 560000, 240, 70.5, 38.1,
-          420000, 360, 49, 44, 510000, 520, 24, 36, 530000,
-        ],
-      },
-      billboard: {
-        height: 22,
-        image: markerSvg('satellite', '#33f2f0'),
-        scale: 1,
-        width: 22,
-      },
-      label: {
-        text: 'PNT-CUSTODY',
-        font: MAP_FONT,
-        fillColor: { rgba: [255, 255, 255, 255] },
-        show: false,
-        showBackground: true,
-        backgroundColor: { rgba: [9, 17, 18, 220] },
-        pixelOffset: { cartesian2: [0, -28] },
-      },
-      path: {
-        leadTime: 0,
-        trailTime: 900,
-        width: 1.2,
-        material: {
-          solidColor: {
-            color: { rgba: [245, 247, 240, 110] },
-          },
-        },
-      },
-    },
-  ]
+  return cache.track.reduce((latest, point) =>
+    point.timestamp > latest.timestamp ? point : latest,
+  )
+}
+
+const formatUtcTime = (timestampUtc: string) =>
+  new Intl.DateTimeFormat('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    timeZone: 'UTC',
+    timeZoneName: 'short',
+  }).format(new Date(timestampUtc))
+
+const hasRenderableSize = (element: HTMLElement) => {
+  const rect = element.getBoundingClientRect()
+  return rect.width > 0 && rect.height > 0
 }
 
 const createVehicleCzml = () => {
@@ -400,13 +349,28 @@ export function CesiumGlobe({
   const creditRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const signalEntityIdsRef = useRef<Set<string>>(new Set())
+  const n2yoEntityIdsRef = useRef<Set<string>>(new Set())
   const focusFlightSignalIdRef = useRef<string | null>(null)
   const [activeLayer, setActiveLayer] = useState('baseline')
   const [imageryMode, setImageryMode] = useState('Loading imagery')
+  const [layoutRetry, setLayoutRetry] = useState(0)
+  const [n2yoCache, setN2yoCache] = useState<N2YOPositionCache | null>(null)
+  const [n2yoStatus, setN2yoStatus] = useState('AEHF loading')
 
   useEffect(() => {
     if (!containerRef.current || !creditRef.current) {
       return
+    }
+
+    const container = containerRef.current
+    if (!hasRenderableSize(container)) {
+      let frame = 0
+      frame = window.requestAnimationFrame(() => {
+        if (hasRenderableSize(container)) {
+          setLayoutRetry((current) => current + 1)
+        }
+      })
+      return () => window.cancelAnimationFrame(frame)
     }
 
     if (token) {
@@ -442,6 +406,16 @@ export function CesiumGlobe({
     viewer.scene.globe.showGroundAtmosphere = true
     viewer.scene.screenSpaceCameraController.minimumZoomDistance = 250
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = 42000000
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!hasRenderableSize(container) || viewer.isDestroyed()) {
+        return
+      }
+
+      viewer.resize()
+      viewer.scene.requestRender()
+    })
+    resizeObserver.observe(container)
 
     const addLocalImagery = () => {
       void TileMapServiceImageryProvider.fromUrl(
@@ -648,12 +622,119 @@ export function CesiumGlobe({
 
     return () => {
       isDisposed = true
+      resizeObserver.disconnect()
       viewerRef.current = null
       if (!viewer.isDestroyed()) {
         viewer.destroy()
       }
     }
+  }, [layoutRetry])
+
+  const clearN2yoEntities = () => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) {
+      return
+    }
+
+    n2yoEntityIdsRef.current.forEach((id) => {
+      viewer.entities.removeById(id)
+    })
+    n2yoEntityIdsRef.current.clear()
+  }
+
+  const loadN2yoCache = () => {
+    setN2yoStatus('AEHF loading')
+    void fetch(`/orbital/n2yo_45465_positions.json?ts=${Date.now()}`)
+      .then((response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`)
+        }
+        return response.json() as Promise<N2YOPositionCache>
+      })
+      .then((cache) => {
+        if (!Array.isArray(cache.track) || cache.track.length === 0) {
+          throw new Error('empty track')
+        }
+        setN2yoCache(cache)
+        setN2yoStatus('AEHF live fix')
+      })
+      .catch(() => {
+        setN2yoCache(null)
+        setN2yoStatus('AEHF unavailable')
+      })
+  }
+
+  useEffect(() => {
+    loadN2yoCache()
   }, [])
+
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) {
+      return
+    }
+
+    clearN2yoEntities()
+    if (activeLayer !== 'satellites') {
+      return
+    }
+
+    const point = latestN2YOPoint(n2yoCache)
+    if (!point) {
+      return
+    }
+
+    const satelliteName = n2yoCache?.satellite.name ?? 'AEHF 6'
+    const position = Cartesian3.fromDegrees(point.lng, point.lat, REAL_SATELLITE_DISPLAY_ALT_M)
+    const groundPosition = Cartesian3.fromDegrees(point.lng, point.lat, 0)
+    const label = `REAL N2YO\n${satelliteName}\nNORAD 45465\nALT ${Math.round(point.alt_km).toLocaleString()} km\n${formatUtcTime(point.timestamp_utc)}`
+
+    const realSatelliteEntity = viewer.entities.add({
+      id: 'n2yo-45465-live',
+      name: `${satelliteName} live location`,
+      position,
+      billboard: {
+        color: Color.WHITE,
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        height: 38,
+        image: markerSvg('realSatellite', '#33f2f0'),
+        scaleByDistance: new NearFarScalar(1500000, 1, 36000000, 0.56),
+        width: 38,
+      },
+      label: {
+        backgroundColor: MAP_PANEL.withAlpha(0.88),
+        disableDepthTestDistance: Number.POSITIVE_INFINITY,
+        fillColor: Color.WHITE,
+        font: MAP_FONT,
+        pixelOffset: new Cartesian2(0, -44),
+        scaleByDistance: new NearFarScalar(1500000, 1, 36000000, 0.72),
+        show: true,
+        showBackground: true,
+        style: LabelStyle.FILL,
+        text: label,
+      },
+      description: `N2YO live position for NORAD ${n2yoCache?.satellite.id ?? 45465}; true altitude ${point.alt_km.toFixed(2)} km, displayed at ${(REAL_SATELLITE_DISPLAY_ALT_M / 1000).toFixed(0)} km for scene readability.`,
+    })
+    viewer.entities.add({
+      id: 'n2yo-45465-ground-ring',
+      name: `${satelliteName} sub-satellite point`,
+      position: groundPosition,
+      ellipse: {
+        semiMajorAxis: 180000,
+        semiMinorAxis: 180000,
+        material: MAP_CYAN.withAlpha(0.045),
+        outline: true,
+        outlineColor: MAP_CYAN.withAlpha(0.58),
+      },
+    })
+    n2yoEntityIdsRef.current.add('n2yo-45465-live')
+    n2yoEntityIdsRef.current.add('n2yo-45465-ground-ring')
+    void viewer.flyTo(realSatelliteEntity, {
+      duration: 0.6,
+      offset: new HeadingPitchRange(0, -0.55, 3600000),
+    })
+    viewer.scene.requestRender()
+  }, [activeLayer, n2yoCache])
 
   useEffect(() => {
     const viewer = viewerRef.current
@@ -816,6 +897,7 @@ export function CesiumGlobe({
     }
 
     viewer.dataSources.removeAll()
+    clearN2yoEntities()
     viewer.clock.shouldAnimate = true
     setActiveLayer('baseline')
     viewer.camera.flyTo({
@@ -831,20 +913,14 @@ export function CesiumGlobe({
     }
 
     viewer.dataSources.removeAll()
-    void viewer.dataSources
-      .add(CzmlDataSource.load(createSatelliteCzml()))
-      .then(() => {
-        if (viewer.isDestroyed()) {
-          return
-        }
+    clearN2yoEntities()
+    viewer.clock.shouldAnimate = true
+    setActiveLayer('satellites')
+  }
 
-        viewer.clock.shouldAnimate = true
-        viewer.camera.flyTo({
-          destination: Cartesian3.fromDegrees(58, 28, 18500000),
-          duration: 0.6,
-        })
-        setActiveLayer('satellites')
-      })
+  const focusRealSatellite = () => {
+    loadN2yoCache()
+    loadSatellites()
   }
 
   const loadVehicle = () => {
@@ -854,6 +930,7 @@ export function CesiumGlobe({
     }
 
     viewer.dataSources.removeAll()
+    clearN2yoEntities()
     void viewer.dataSources.add(CzmlDataSource.load(createVehicleCzml())).then(() => {
       if (viewer.isDestroyed()) {
         return
@@ -892,6 +969,14 @@ export function CesiumGlobe({
           type="button"
         >
           Satellites
+        </button>
+        <button
+          className={activeLayer === 'satellites' ? 'is-active' : ''}
+          onClick={focusRealSatellite}
+          title={n2yoStatus}
+          type="button"
+        >
+          Real 45465
         </button>
         <button
           className={activeLayer === 'local-aor' ? 'is-active' : ''}
