@@ -1,11 +1,14 @@
-import { useState } from 'react'
+import { lazy, Suspense, useState } from 'react'
 import { AorMap } from './AorMap'
-import { CesiumGlobe } from './CesiumGlobe'
 import { MissionAlert } from './MissionAlert'
 import type { ScenarioDefinition } from '../data/scenarioLibrary'
 import { signalEffectState } from '../lib/signalEffects'
 import type { PlaybackStatus } from '../types/playback'
 import type { Signal } from '../types/canopy'
+
+const CesiumGlobe = lazy(() =>
+  import('./CesiumGlobe').then((module) => ({ default: module.CesiumGlobe })),
+)
 
 type MapStageProps = {
   correlatedSignalIds: string[]
@@ -42,12 +45,22 @@ export function MapStage({
       aria-label="Operational map"
     >
       {isGlobe ? (
-        <CesiumGlobe
-          correlatedSignalIds={correlatedSignalIds}
-          displayMode="globe"
-          focusSignalId={focusSignalId}
-          signals={signals}
-        />
+        <Suspense
+          fallback={
+            <div
+              aria-label="Loading globe"
+              className="cesium-globe cesium-globe--loading"
+              role="status"
+            />
+          }
+        >
+          <CesiumGlobe
+            correlatedSignalIds={correlatedSignalIds}
+            displayMode="globe"
+            focusSignalId={focusSignalId}
+            signals={signals}
+          />
+        </Suspense>
       ) : (
         <AorMap
           correlatedSignalIds={correlatedSignalIds}
