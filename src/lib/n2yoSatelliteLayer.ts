@@ -444,6 +444,9 @@ export type N2YOLayerState = {
 export const orbitEntityIdForSatellite = (satelliteId: number) =>
   `n2yo-${satelliteId}-orbit`
 
+const parsedPositionCacheByUrl = new Map<string, N2YOPositionCache>()
+const pendingPositionCacheByUrl = new Map<string, Promise<N2YOPositionCache>>()
+
 const realSatelliteMarker = (colorHex: string, family: N2YOSatelliteFamily) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="58" viewBox="0 0 64 58">
@@ -666,17 +669,36 @@ const createSampledMotionOrbitPositions = (
 export async function fetchN2YOPositionCache(
   config: N2YOSatelliteConfig,
 ): Promise<N2YOPositionCache> {
-  const response = await fetch(`${config.cacheUrl}?ts=${Date.now()}`)
-  if (!response.ok) {
-    throw new Error(`failed to load N2YO cache: HTTP ${response.status}`)
+  const parsedCache = parsedPositionCacheByUrl.get(config.cacheUrl)
+  if (parsedCache) {
+    return parsedCache
   }
 
-  const cache = (await response.json()) as N2YOPositionCache
-  if (!Array.isArray(cache.track) || cache.track.length === 0) {
-    throw new Error('N2YO cache did not contain track points')
+  const pendingCache = pendingPositionCacheByUrl.get(config.cacheUrl)
+  if (pendingCache) {
+    return pendingCache
   }
 
-  return cache
+  const cachePromise = fetch(config.cacheUrl)
+    .then(async (response) => {
+      if (!response.ok) {
+        throw new Error(`failed to load N2YO cache: HTTP ${response.status}`)
+      }
+
+      const cache = (await response.json()) as N2YOPositionCache
+      if (!Array.isArray(cache.track) || cache.track.length === 0) {
+        throw new Error('N2YO cache did not contain track points')
+      }
+
+      parsedPositionCacheByUrl.set(config.cacheUrl, cache)
+      return cache
+    })
+    .finally(() => {
+      pendingPositionCacheByUrl.delete(config.cacheUrl)
+    })
+
+  pendingPositionCacheByUrl.set(config.cacheUrl, cachePromise)
+  return cachePromise
 }
 
 export function clearN2YOSatelliteLayer(

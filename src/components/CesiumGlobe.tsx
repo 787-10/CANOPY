@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import {
   ArcGisMapServerImageryProvider,
@@ -175,6 +175,11 @@ const SATELLITE_FAMILY_FILTERS: SatelliteFamilyFilter[] = [
   'CHINA',
   'RUSSIA',
 ]
+const ALL_N2YO_FAMILIES = SATELLITE_FAMILY_FILTERS.filter(
+  (familyFilter): familyFilter is N2YOSatelliteFamily => familyFilter !== 'all',
+)
+const MANEUVER_DEMO_FAMILIES: N2YOSatelliteFamily[] = ['GSSAP', 'CHINA', 'RUSSIA']
+const N2YO_ALTITUDE_SCALE = 0.1
 
 const isFamilyVisible = (
   selection: SatelliteFamilySelection,
@@ -368,12 +373,13 @@ export function CesiumGlobe({
   const viewerRef = useRef<Viewer | null>(null)
   const signalEntityIdsRef = useRef<Set<string>>(new Set())
   const n2yoLayersRef = useRef<N2YOLayerState[]>([])
+  const loadedN2yoSatelliteIdsRef = useRef<Set<number>>(new Set())
   const selectedN2yoLayerRef = useRef<N2YOLayerState | null>(null)
   const [activeLayer, setActiveLayer] = useState('baseline')
   const [imageryMode, setImageryMode] = useState('Loading imagery')
   const [realSatelliteStatus, setRealSatelliteStatus] = useState('Satellites')
   const [satelliteFamilySelection, setSatelliteFamilySelection] =
-    useState<SatelliteFamilySelection>('all')
+    useState<SatelliteFamilySelection>([])
   const [selectedSatellite, setSelectedSatellite] = useState<N2YOLayerState | null>(null)
   const [selectedSatellitePoint, setSelectedSatellitePoint] =
     useState<N2YODisplayPoint | null>(null)
@@ -381,7 +387,7 @@ export function CesiumGlobe({
   const [n2yoLayerCount, setN2yoLayerCount] = useState(0)
   const [orbitCapableLayerCount, setOrbitCapableLayerCount] = useState(0)
   const showAllOrbitsRef = useRef(false)
-  const satelliteFamilySelectionRef = useRef<SatelliteFamilySelection>('all')
+  const satelliteFamilySelectionRef = useRef<SatelliteFamilySelection>([])
   const maneuverDemo = useEventStore((s) => s.maneuverDemo)
   const endManeuverDemo = useEventStore((s) => s.endManeuverDemo)
   const [maneuverProgress, setManeuverProgress] = useState(0)
@@ -754,12 +760,13 @@ export function CesiumGlobe({
     }
     clearN2YOSatelliteLayers(viewer, n2yoLayersRef.current)
     n2yoLayersRef.current = []
+    loadedN2yoSatelliteIdsRef.current.clear()
     setN2yoLayerCount(0)
     setOrbitCapableLayerCount(0)
     selectedN2yoLayerRef.current = null
     setSelectedSatellite(null)
-    satelliteFamilySelectionRef.current = 'all'
-    setSatelliteFamilySelection('all')
+    satelliteFamilySelectionRef.current = []
+    setSatelliteFamilySelection([])
     showAllOrbitsRef.current = false
     setShowAllOrbits(false)
     viewer.clock.shouldAnimate = true
@@ -782,12 +789,13 @@ export function CesiumGlobe({
     }
     clearN2YOSatelliteLayers(viewer, n2yoLayersRef.current)
     n2yoLayersRef.current = []
+    loadedN2yoSatelliteIdsRef.current.clear()
     setN2yoLayerCount(0)
     setOrbitCapableLayerCount(0)
     selectedN2yoLayerRef.current = null
     setSelectedSatellite(null)
-    satelliteFamilySelectionRef.current = 'all'
-    setSatelliteFamilySelection('all')
+    satelliteFamilySelectionRef.current = []
+    setSatelliteFamilySelection([])
     showAllOrbitsRef.current = false
     setShowAllOrbits(false)
     void viewer.dataSources.add(CzmlDataSource.load(createVehicleCzml())).then(() => {
@@ -805,19 +813,139 @@ export function CesiumGlobe({
     })
   }
 
-  const visibleN2yoLayers = (
-    familySelection = satelliteFamilySelectionRef.current,
-  ) =>
-    n2yoLayersRef.current.filter(
-      (layer) => isFamilyVisible(familySelection, layer.satelliteFamily),
-    )
+  const visibleN2yoLayers = useCallback(
+    (familySelection = satelliteFamilySelectionRef.current) =>
+      n2yoLayersRef.current.filter((layer) =>
+        isFamilyVisible(familySelection, layer.satelliteFamily),
+      ),
+    [],
+  )
 
-  const visibleOrbitCapableLayers = (
-    familySelection = satelliteFamilySelectionRef.current,
-  ) =>
-    visibleN2yoLayers(familySelection).filter(
-      (layer) => !isN2YOGeostationaryFamily(layer.satelliteFamily),
-    )
+  const visibleOrbitCapableLayers = useCallback(
+    (familySelection = satelliteFamilySelectionRef.current) =>
+      visibleN2yoLayers(familySelection).filter(
+        (layer) => !isN2YOGeostationaryFamily(layer.satelliteFamily),
+      ),
+    [visibleN2yoLayers],
+  )
+
+  const syncN2YOLayerVisibility = useCallback(
+    (viewer: Viewer, normalizedSelection: SatelliteFamilySelection) => {
+      if (
+        selectedN2yoLayerRef.current &&
+        !isFamilyVisible(
+          normalizedSelection,
+          selectedN2yoLayerRef.current.satelliteFamily,
+        )
+      ) {
+        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        selectedN2yoLayerRef.current = null
+        setSelectedSatellite(null)
+      }
+
+      setN2YOOrbitsVisible(viewer, n2yoLayersRef.current, false)
+      n2yoLayersRef.current.forEach((layer) => {
+        setN2YOSatelliteLayerVisible(
+          viewer,
+          layer,
+          isFamilyVisible(normalizedSelection, layer.satelliteFamily),
+        )
+      })
+
+      const orbitCapableLayers = visibleOrbitCapableLayers(normalizedSelection)
+      setOrbitCapableLayerCount(orbitCapableLayers.length)
+
+      if (selectedN2yoLayerRef.current) {
+        selectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+      } else if (showAllOrbitsRef.current && orbitCapableLayers.length > 0) {
+        setN2YOOrbitsVisible(viewer, orbitCapableLayers, true)
+      } else if (showAllOrbitsRef.current) {
+        showAllOrbitsRef.current = false
+        setShowAllOrbits(false)
+      }
+
+      setN2yoLayerCount(n2yoLayersRef.current.length)
+      viewer.scene.requestRender()
+    },
+    [visibleOrbitCapableLayers],
+  )
+
+  const ensureN2YOSatellitesLoaded = useCallback(
+    (
+      normalizedSelection: SatelliteFamilySelection,
+      options: { flyTo?: boolean } = {},
+    ) => {
+      const viewer = viewerRef.current
+      if (!viewer || viewer.isDestroyed()) {
+        return Promise.resolve()
+      }
+
+      viewer.dataSources.removeAll()
+      const selectedFamilies =
+        normalizedSelection === 'all' ? ALL_N2YO_FAMILIES : normalizedSelection
+      const satellitesToLoad = N2YO_SATELLITES.filter(
+        (satellite) =>
+          selectedFamilies.includes(satellite.family) &&
+          !loadedN2yoSatelliteIdsRef.current.has(satellite.id),
+      )
+
+      syncN2YOLayerVisibility(viewer, normalizedSelection)
+      if (satellitesToLoad.length === 0) {
+        return Promise.resolve()
+      }
+
+      setRealSatelliteStatus('Loading sats')
+      return Promise.all(
+        satellitesToLoad.map((satellite) =>
+          fetchN2YOPositionCache(satellite).then((cache) => ({ cache, satellite })),
+        ),
+      )
+        .then((payloads) => {
+          if (viewer.isDestroyed()) {
+            return
+          }
+
+          if (selectedN2yoLayerRef.current) {
+            deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+          }
+          selectedN2yoLayerRef.current = null
+          setSelectedSatellite(null)
+          showAllOrbitsRef.current = false
+          setShowAllOrbits(false)
+          const newLayers = payloads.flatMap(({ cache, satellite }) => {
+            if (loadedN2yoSatelliteIdsRef.current.has(satellite.id)) {
+              return []
+            }
+
+            loadedN2yoSatelliteIdsRef.current.add(satellite.id)
+            return [
+              addN2YOSatellite(
+                viewer,
+                cache,
+                satellite,
+                latestN2YOAltitudeKm(cache) * 1000 * N2YO_ALTITUDE_SCALE,
+              ),
+            ]
+          })
+          n2yoLayersRef.current = [...n2yoLayersRef.current, ...newLayers]
+          syncN2YOLayerVisibility(viewer, normalizedSelection)
+          if (options.flyTo) {
+            viewer.camera.flyTo({
+              destination: RESET_CAMERA_DESTINATION,
+              duration: 0.8,
+            })
+          }
+          viewer.clock.shouldAnimate = true
+          setActiveLayer('real-satellite')
+          setRealSatelliteStatus('Satellites')
+          viewer.scene.requestRender()
+        })
+        .catch(() => {
+          setRealSatelliteStatus('Sats unavailable')
+        })
+    },
+    [syncN2YOLayerVisibility],
+  )
 
   const applySatelliteFamilyFilter = (familyFilter: SatelliteFamilyFilter) => {
     const viewer = viewerRef.current
@@ -836,46 +964,9 @@ export function CesiumGlobe({
               )
             : [...satelliteFamilySelectionRef.current, familyFilter]
 
-    const normalizedSelection =
-      nextSelection !== 'all' && nextSelection.length === 0 ? 'all' : nextSelection
-
-    satelliteFamilySelectionRef.current = normalizedSelection
-    setSatelliteFamilySelection(normalizedSelection)
-
-    if (
-      selectedN2yoLayerRef.current &&
-      !isFamilyVisible(
-        normalizedSelection,
-        selectedN2yoLayerRef.current.satelliteFamily,
-      )
-    ) {
-      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-      selectedN2yoLayerRef.current = null
-      setSelectedSatellite(null)
-    }
-
-    setN2YOOrbitsVisible(viewer, n2yoLayersRef.current, false)
-    n2yoLayersRef.current.forEach((layer) => {
-      setN2YOSatelliteLayerVisible(
-        viewer,
-        layer,
-        isFamilyVisible(normalizedSelection, layer.satelliteFamily),
-      )
-    })
-
-    const orbitCapableLayers = visibleOrbitCapableLayers(normalizedSelection)
-    setOrbitCapableLayerCount(orbitCapableLayers.length)
-
-    if (selectedN2yoLayerRef.current) {
-      selectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-    } else if (showAllOrbitsRef.current && orbitCapableLayers.length > 0) {
-      setN2YOOrbitsVisible(viewer, orbitCapableLayers, true)
-    } else if (showAllOrbitsRef.current) {
-      showAllOrbitsRef.current = false
-      setShowAllOrbits(false)
-    }
-
-    viewer.scene.requestRender()
+    satelliteFamilySelectionRef.current = nextSelection
+    setSatelliteFamilySelection(nextSelection)
+    void ensureN2YOSatellitesLoaded(nextSelection)
   }
 
   const loadRealSatellites = () => {
@@ -884,58 +975,22 @@ export function CesiumGlobe({
       return
     }
 
-    setRealSatelliteStatus('Loading sats')
     viewer.dataSources.removeAll()
-    void Promise.all(
-      N2YO_SATELLITES.map((satellite) =>
-        fetchN2YOPositionCache(satellite).then((cache) => ({ cache, satellite })),
-      ),
-    )
-      .then((payloads) => {
-        if (viewer.isDestroyed()) {
-          return
-        }
-
-        if (selectedN2yoLayerRef.current) {
-          deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-        }
-        // Display each satellite at a fraction of its true altitude.
-        // We're after *relative* spacing (LEO < MEO < GEO is what the
-        // operator reads); true scale puts GEO at 36,000 km which
-        // dominates the frame. Lower scale keeps the band ordering
-        // intact while pulling the rings in tight enough for a readable
-        // demo. 0.1 = 10% of true. Single knob — bump back up if rings
-        // look too flat or too tight.
-        const ALTITUDE_SCALE = 0.1
-        clearN2YOSatelliteLayers(viewer, n2yoLayersRef.current)
-        n2yoLayersRef.current = payloads.map(({ cache, satellite }) =>
-          addN2YOSatellite(
-            viewer,
-            cache,
-            satellite,
-            latestN2YOAltitudeKm(cache) * 1000 * ALTITUDE_SCALE,
-          ),
-        )
-        setN2yoLayerCount(n2yoLayersRef.current.length)
-        setOrbitCapableLayerCount(visibleOrbitCapableLayers('all').length)
-        viewer.camera.flyTo({
-          destination: RESET_CAMERA_DESTINATION,
-          duration: 0.8,
-        })
-        selectedN2yoLayerRef.current = null
-        setSelectedSatellite(null)
-        satelliteFamilySelectionRef.current = 'all'
-        setSatelliteFamilySelection('all')
-        showAllOrbitsRef.current = false
-        setShowAllOrbits(false)
-        viewer.clock.shouldAnimate = true
-        setActiveLayer('real-satellite')
-        setRealSatelliteStatus('Satellites')
-        viewer.scene.requestRender()
-      })
-      .catch(() => {
-        setRealSatelliteStatus('Sats unavailable')
-      })
+    if (selectedN2yoLayerRef.current) {
+      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+    }
+    selectedN2yoLayerRef.current = null
+    setSelectedSatellite(null)
+    setN2YOOrbitsVisible(viewer, n2yoLayersRef.current, false)
+    showAllOrbitsRef.current = false
+    setShowAllOrbits(false)
+    viewer.clock.shouldAnimate = true
+    setActiveLayer('real-satellite')
+    syncN2YOLayerVisibility(viewer, satelliteFamilySelectionRef.current)
+    viewer.camera.flyTo({
+      destination: RESET_CAMERA_DESTINATION,
+      duration: 0.8,
+    })
   }
 
   const toggleAllOrbits = () => {
@@ -980,8 +1035,6 @@ export function CesiumGlobe({
   // only the friendly's orbital plane changes, and only after the burn.
   useEffect(() => {
     if (!maneuverDemo) {
-      setManeuverProgress(0)
-      setManeuverPair(null)
       return
     }
 
@@ -992,9 +1045,10 @@ export function CesiumGlobe({
 
     const layers = n2yoLayersRef.current
     if (layers.length === 0) {
-      // Need real satellites loaded to drive the orbital math. Auto-load
-      // and let the next render (with populated layers) pick the demo up.
-      loadRealSatellites()
+      // Need a friendly non-GEO and hostile satellite to drive the demo math.
+      satelliteFamilySelectionRef.current = MANEUVER_DEMO_FAMILIES
+      setSatelliteFamilySelection(MANEUVER_DEMO_FAMILIES)
+      void ensureN2YOSatellitesLoaded(MANEUVER_DEMO_FAMILIES, { flyTo: true })
       return
     }
 
@@ -1005,6 +1059,22 @@ export function CesiumGlobe({
       family === 'MUOS' ||
       family === 'WGS' ||
       family === 'SBIRS'
+
+    if (
+      !layers.some(
+        (l) =>
+          isUsFamily(l.satelliteFamily) &&
+          !isN2YOGeostationaryFamily(l.satelliteFamily),
+      ) ||
+      !layers.some(
+        (l) => l.satelliteFamily === 'CHINA' || l.satelliteFamily === 'RUSSIA',
+      )
+    ) {
+      satelliteFamilySelectionRef.current = MANEUVER_DEMO_FAMILIES
+      setSatelliteFamilySelection(MANEUVER_DEMO_FAMILIES)
+      void ensureN2YOSatellitesLoaded(MANEUVER_DEMO_FAMILIES, { flyTo: true })
+      return
+    }
 
     // We need non-GEO satellites for both sides — only non-GEO sats have
     // moving orbital tracks, which is the whole point of the demo. The
@@ -1654,7 +1724,7 @@ export function CesiumGlobe({
       }
       setManeuverPair(null)
     }
-  }, [maneuverDemo, endManeuverDemo])
+  }, [maneuverDemo, endManeuverDemo, n2yoLayerCount, ensureN2YOSatellitesLoaded])
 
   return (
     <>
@@ -1688,7 +1758,7 @@ export function CesiumGlobe({
                     ? 'is-active'
                     : ''
                 }
-                disabled={n2yoLayerCount === 0}
+                disabled={realSatelliteStatus === 'Loading sats'}
                 key={familyFilter}
                 onClick={() => applySatelliteFamilyFilter(familyFilter)}
                 style={
