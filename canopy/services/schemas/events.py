@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import Any, Literal
+from typing import Any, Literal, get_args
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
@@ -37,6 +37,61 @@ Action = Literal[
 ]
 
 Authority = Literal["local", "request"]
+
+# ---- Action taxonomy: single source of truth ------------------------------
+#
+# The ``Action`` literal above is CANOPY's complete counterspace-action
+# vocabulary; a ``Decision`` (and the decide-stage orbit enrichment, replayed
+# traces, the frontend operator panel, …) may carry any of these. Two things
+# are derived from it here so the taxonomy can't fork across the modules that
+# consume it:
+#
+#   ACTION_AUTHORITY   authority routing for *every* action. ``request`` means
+#                      the action exceeds local commander authority and must
+#                      route to the CJFSCC for engagement authority; ``local``
+#                      means it is within delegated brigade authority. Consumed
+#                      by ``decide.tools`` (``routing.validate``).
+#   SELECTABLE_ACTIONS the subset the decision agent is permitted to recommend,
+#                      in menu order. CANOPY is a defensive system: the
+#                      offensive counterspace actions (counterattack, orbital /
+#                      terrestrial strike) exist in the taxonomy so the engine
+#                      can model and route them, but must never be *selected* by
+#                      the agent. Consumed by ``decide.prompts`` as the
+#                      ``submit_decision`` tool's action enum.
+#
+# The guards below turn "add an action but forget to classify it" from a silent
+# three-way drift into an import-time error.
+ACTION_AUTHORITY: dict[Action, Authority] = {
+    "passive_defense": "local",
+    "threat_warning": "local",
+    "sda_tasking": "local",
+    "active_defense_escort": "request",
+    "space_link_interdiction_request": "request",
+    "active_defense_counterattack": "request",
+    "orbital_strike_request": "request",
+    "terrestrial_strike_request": "request",
+}
+
+SELECTABLE_ACTIONS: tuple[Action, ...] = (
+    "passive_defense",
+    "threat_warning",
+    "sda_tasking",
+    "active_defense_escort",
+    "space_link_interdiction_request",
+)
+
+_ALL_ACTIONS: frozenset[str] = frozenset(get_args(Action))
+if set(ACTION_AUTHORITY) != _ALL_ACTIONS:
+    raise RuntimeError(
+        "ACTION_AUTHORITY must route exactly the Action literal: "
+        f"missing={sorted(_ALL_ACTIONS - set(ACTION_AUTHORITY))}, "
+        f"unknown={sorted(set(ACTION_AUTHORITY) - _ALL_ACTIONS)}"
+    )
+if not set(SELECTABLE_ACTIONS) <= _ALL_ACTIONS:
+    raise RuntimeError(
+        "SELECTABLE_ACTIONS must be a subset of the Action literal: "
+        f"unknown={sorted(set(SELECTABLE_ACTIONS) - _ALL_ACTIONS)}"
+    )
 
 UIEventType = Literal["threat_updated", "recommendation_created", "status_update"]
 

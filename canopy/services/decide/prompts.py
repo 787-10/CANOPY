@@ -3,7 +3,19 @@ from __future__ import annotations
 
 from typing import Any
 
-from canopy.services.schemas.events import Attribution
+from canopy.services.schemas.events import (
+    ACTION_AUTHORITY,
+    SELECTABLE_ACTIONS,
+    Attribution,
+)
+
+# Default authority routing presented to the model, rendered from the canonical
+# tables so the prompt can't claim a routing the validator would reject. Only
+# the agent-selectable actions are shown — the offensive actions in
+# ACTION_AUTHORITY are not on the menu.
+_AUTHORITY_MENU: str = "".join(
+    f"  {action} → {ACTION_AUTHORITY[action]}\n" for action in SELECTABLE_ACTIONS
+)
 
 DECISION_TOOL: dict[str, Any] = {
     "name": "submit_decision",
@@ -25,20 +37,15 @@ DECISION_TOOL: dict[str, Any] = {
         "properties": {
             "action": {
                 "type": "string",
-                "enum": [
-                    # Passive Space Defense (Space Warfighting p.11)
-                    # These are local-authority actions by default.
-                    "passive_defense",        # EMCON, masking, hardening, posture
-                    "threat_warning",         # Urgent I&W comms to affected units
-                    "sda_tasking",            # Request SDA collection adjustment
-
-                    # Active Space Defense (Space Warfighting p.10)
-                    # These require demonstrated hostile act or hostile intent.
-                    "active_defense_escort",  # Dedicated protection, space-to-space
-
-                    # Space Link — non-kinetic, link-segment only
-                    "space_link_interdiction_request",  # EW/cyber against adversary links
-                ],
+                # Derived from schemas.events.SELECTABLE_ACTIONS — the defensive
+                # subset of the Action taxonomy. Offensive counterspace actions
+                # are deliberately absent (see the tool description above).
+                # Doctrine grouping: passive_defense / threat_warning /
+                # sda_tasking are Passive Space Defense (Space Warfighting p.11,
+                # local by default); active_defense_escort is Active Space
+                # Defense (p.10); space_link_interdiction_request is non-kinetic
+                # link-segment only.
+                "enum": list(SELECTABLE_ACTIONS),
                 "description": (
                     "Select the minimum effective defensive action. "
                     "Passive actions (passive_defense, threat_warning, sda_tasking) "
@@ -90,11 +97,7 @@ DECISION_TOOL: dict[str, Any] = {
                     "'request' = exceeds local authority; must route to CJFSCC "
                     "for engagement authority; request_packet must be populated. "
                     "Default mapping:\n"
-                    "  passive_defense → local\n"
-                    "  threat_warning → local\n"
-                    "  sda_tasking → request\n"
-                    "  active_defense_escort → request\n"
-                    "  space_link_interdiction_request → request\n"
+                    f"{_AUTHORITY_MENU}"
                     "Space Warfighting: reversible, non-kinetic defensive actions "
                     "at lower confidence may be delegated local; actions with "
                     "escalatory potential are held at higher authority."
