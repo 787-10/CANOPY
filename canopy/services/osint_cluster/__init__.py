@@ -89,6 +89,12 @@ class OsintClusterService:
         self._window: list[_WindowEntry] = []
         self._next_cluster_id: int = 0
         self._announced_clusters: set[int] = set()
+        # Cached 2D PCA projection of the window. The SVD in _project_2d is
+        # the heaviest per-signal cost but only feeds the UI scatter panel,
+        # so recompute it lazily: _projection_dirty flips True whenever the
+        # window mutates, and _publish_snapshot rebuilds _coords only then.
+        self._projection_dirty: bool = True
+        self._coords: np.ndarray = np.zeros((0, 2), dtype=np.float32)
 
     async def run(self) -> None:
         async for topic, event in self._bus.subscribe("signals.osint"):
@@ -160,12 +166,14 @@ class OsintClusterService:
             ts=signal.ts,
         )
         self._window.append(entry)
+        self._projection_dirty = True
         if len(self._window) > self._window_size:
             # Drop oldest. Note: cluster ids are not garbage-collected so a
             # cluster that ages out of the window stays visible in
             # downstream consumers' history (which is what we want for the
             # demo — the trace shouldn't lie about what happened).
             self._window.pop(0)
+            self._projection_dirty = True
 
         # If this is the second member of a previously-unannounced cluster,
         # emit the fusion trace + semantic-cluster anomaly.
@@ -288,7 +296,12 @@ class OsintClusterService:
         return projected.astype(np.float32)
 
     async def _publish_snapshot(self) -> None:
-        coords = self._project_2d()
+        # Only re-run the SVD when the window actually changed since the
+        # last projection; otherwise reuse the cached coords.
+        if self._projection_dirty:
+            self._coords = self._project_2d()
+            self._projection_dirty = False
+        coords = self._coords
         points = [
             EmbeddingPoint(
                 signal_id=entry.signal_id,
