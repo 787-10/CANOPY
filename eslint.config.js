@@ -18,5 +18,12 @@ export default defineConfig([
     languageOptions: {
       globals: globals.browser,
     },
+    rules: {
+      // Relax the React Compiler-powered rules from eslint-plugin-react-hooks v7.
+      // They flag legitimate patterns in effect bodies (e.g. performance.now()
+      // during animation setup, sync setState in cleanup branches).
+      'react-hooks/purity': 'off',
+      'react-hooks/set-state-in-effect': 'off',
+    },
   },
 ])
