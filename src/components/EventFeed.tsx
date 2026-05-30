@@ -333,12 +333,15 @@ export function EventFeed({
     return () => window.clearInterval(timer)
   }, [flowFrames.length, latestSignalId])
 
-  const feedState =
-    latestSignal?.confidence >= 0.86
+  const feedState = latestSignal ? priorityForSignal(latestSignal) : 'idle'
+  const feedStateLabel =
+    feedState === 'high'
       ? 'PRIORITY'
-      : latestSignal?.confidence >= 0.74
+      : feedState === 'watch'
         ? 'WATCH'
-        : 'MONITOR'
+        : feedState === 'low'
+          ? 'MONITOR'
+          : 'IDLE'
   const flowFrame =
     flowFrames[
       Math.min(
@@ -357,7 +360,7 @@ export function EventFeed({
         : 'scenario'
       : activeView === 'flow'
         ? 'flow'
-        : feedState.toLowerCase()
+        : feedState
   const statusLabel =
     activeView === 'raw'
       ? isLive
@@ -365,7 +368,7 @@ export function EventFeed({
         : 'FEED'
       : activeView === 'flow'
         ? 'FLOW'
-        : feedState
+        : feedStateLabel
   const flowShapeClass = (node: FlowNodeId, shapeClass: string) =>
     [
       'event-flow__shape',
