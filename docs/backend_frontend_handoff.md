@@ -67,21 +67,22 @@ It exposes:
 
 ```txt
 POST /signals
-WS   /ws/brigade
+WS   /ws
 ```
 
 `POST /signals` validates a canonical `Signal`, publishes it to
-`signals.{domain}`, and feeds the backend pipeline. `/ws/brigade` streams:
+`signals.{domain}`, and feeds the backend pipeline. `/ws` streams every bus
+event as a JSON envelope tagged with its `kind`:
 
 ```txt
-{ "type": "signal", "data": Signal }
-{ "type": "ui_event", "data": UIEvent }
+{ "topic": "signals.<domain>", "kind": "signal", "data": Signal }
+{ "topic": "ui_events.<...>", "kind": "ui_event", "data": UIEvent }
 ```
 
 The frontend uses `VITE_CANOPY_WS_URL`, defaulting in dev to:
 
 ```txt
-ws://127.0.0.1:8000/ws/brigade
+ws://127.0.0.1:8000/ws
 ```
 
 ## KB Seed Entries
