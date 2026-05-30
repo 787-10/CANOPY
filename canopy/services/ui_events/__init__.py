@@ -30,6 +30,11 @@ _HIGH_SEVERITY_ACTIONS: set[Action] = {
     "space_link_interdiction_request",
 }
 
+# At or above this attribution confidence, a threat is high severity even
+# without a request. Tuned so 0.74 stays medium and 0.82 reads high
+# (see data/expected_ui_events.json).
+_HIGH_SEVERITY_CONFIDENCE = 0.75
+
 _ACTION_TITLES: dict[Action, str] = {
     "passive_defense": "Defensive posture activated",
     "active_defense_escort": "Active defense escort recommended",
@@ -57,8 +62,8 @@ def _extract_demo_beat(source_signal_ids: list[str]) -> str | None:
 def _severity_for(decision: Decision, attribution: Attribution | None) -> UISeverity:
     if decision.authority == "request" or decision.action in _HIGH_SEVERITY_ACTIONS:
         return "high"
-    if attribution is not None and attribution.confidence >= 0.75:
-        return "medium"
+    if attribution is not None and attribution.confidence >= _HIGH_SEVERITY_CONFIDENCE:
+        return "high"
     return "medium"
 
 
