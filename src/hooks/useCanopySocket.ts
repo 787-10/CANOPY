@@ -133,15 +133,24 @@ function reduceMessage(
 
 export function useCanopySocket(url: string | null = DEFAULT_URL) {
   const [state, setState] = useState<CanopySocketState>(initialState)
+  // Drive the global connection indicator (ConnectionStatus) from the only
+  // live socket. setConnection is a stable Zustand action, so listing it in
+  // the effect deps is safe and won't retrigger the connection.
+  const setConnection = useEventStore((s) => s.setConnection)
 
   useEffect(() => {
     if (!url) {
+      // No socket to open (e.g. a production build without VITE_CANOPY_WS_URL):
+      // report offline rather than leaving the indicator stuck on "connecting".
+      setConnection('offline')
       return
     }
 
+    setConnection('connecting')
     const socket = new WebSocket(url)
 
     socket.addEventListener('open', () => {
+      setConnection('live')
       setState((current) => ({
         ...current,
         isConnected: true,
@@ -150,6 +159,7 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
     })
 
     socket.addEventListener('close', () => {
+      setConnection('offline')
       setState((current) => ({
         ...current,
         isConnected: false,
@@ -157,6 +167,7 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
     })
 
     socket.addEventListener('error', () => {
+      setConnection('offline')
       setState((current) => ({
         ...current,
         lastError: 'CANOPY socket error',
@@ -183,7 +194,7 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
     return () => {
       socket.close()
     }
-  }, [url])
+  }, [url, setConnection])
 
   return state
 }
