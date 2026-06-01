@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  python:
+    name: Python · pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      # uv reads .python-version (3.12) and installs the dev dependency-group
+      # (pytest, pytest-asyncio) automatically on first `uv run`.
+      - name: Run pytest
+        run: uv run pytest
+
+  frontend:
+    name: Frontend · lint · typecheck · test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Lint
+        run: npm run lint
+      - name: Typecheck (app)
+        run: npm run typecheck
+      - name: Typecheck (tests)
+        run: npm run typecheck:test
+      - name: Unit tests
+        run: npm test
