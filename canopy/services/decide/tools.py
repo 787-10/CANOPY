@@ -16,7 +16,7 @@ from typing import Any, Protocol
 
 from canopy.services.kb import KB
 from canopy.services.orbit import MIN_OPERATIONAL_LEAD_S, OrbitService
-from canopy.services.schemas.events import Action, Authority
+from canopy.services.schemas.events import ACTION_AUTHORITY, Action, Authority
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
@@ -275,19 +275,11 @@ class RequestDraftTool:
 
 # ---- routing.validate ------------------------------------------------------
 
-# Authority routing rules. Maps action → expected authority. ``request``
-# means the action requires CJFSCC approval (not local commander). Local
-# commander cannot authorise orbital effects on their own.
-_ROUTING_RULES: dict[str, Authority] = {
-    "passive_defense": "local",
-    "active_defense_escort": "request",
-    "active_defense_counterattack": "request",
-    "orbital_strike_request": "request",
-    "terrestrial_strike_request": "request",
-    "space_link_interdiction_request": "request",
-    "sda_tasking": "local",
-    "threat_warning": "local",
-}
+# Authority routing is the canonical ACTION_AUTHORITY table in schemas.events
+# (keyed over the full Action taxonomy), so this validator can't drift from the
+# actions it checks. ``request`` means the action requires CJFSCC engagement
+# authority, not the local commander; a local commander cannot authorise
+# active-defense or strike actions on their own.
 
 
 @dataclass
@@ -314,7 +306,7 @@ class RoutingValidateTool:
     async def execute(self, args: dict[str, Any], ctx: ToolContext) -> dict[str, Any]:
         action: Action = args["action"]
         authority: Authority = args["authority"]
-        expected = _ROUTING_RULES.get(action)
+        expected = ACTION_AUTHORITY.get(action)
         if expected is None:
             return {
                 "valid": False,

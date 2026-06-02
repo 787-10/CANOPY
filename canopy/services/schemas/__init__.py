@@ -1,4 +1,6 @@
 from canopy.services.schemas.events import (
+    ACTION_AUTHORITY,
+    SELECTABLE_ACTIONS,
     Action,
     Anomaly,
     Attribution,
@@ -17,6 +19,8 @@ from canopy.services.schemas.events import (
 )
 
 __all__ = [
+    "ACTION_AUTHORITY",
+    "SELECTABLE_ACTIONS",
     "Action",
     "Anomaly",
     "Attribution",
