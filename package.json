@@ -17,7 +17,7 @@
     "cesium": "^1.141.0",
     "maplibre-gl": "^5.24.0",
     "mgrs": "^2.1.0",
-    "react": "^19.2.5",
+    "react": "^19.0.0",
     "react-dom": "^19.2.5",
     "zustand": "^5.0.12"
   },
@@ -29,7 +29,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
-    "@vitejs/plugin-react": "^6.0.1",
+    "@vitejs/plugin-react": "^4.3.4",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.2",
