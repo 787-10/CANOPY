@@ -38,6 +38,7 @@ class TrialArtifact:
     errors: list[dict[str, str]] = field(default_factory=list)
     validation_events: list[dict] = field(default_factory=list)
     runtime_events: list[dict] = field(default_factory=list)
+    kb_context: list[dict] = field(default_factory=list)
 
     @property
     def anomaly_source_signal_ids(self) -> list[str]:
@@ -73,6 +74,7 @@ class TrialArtifact:
             "errors": self.errors,
             "validation_events": self.validation_events,
             "runtime_events": self.runtime_events,
+            "kb_context": self.kb_context,
         }
 
 
@@ -88,6 +90,7 @@ async def run_trial(
     if isinstance(scenario, ScenarioSpec):
         path = scenario.scenario_path
         signal_filter = scenario.includes_as_input
+        signal_transform = scenario.sanitize_input
     else:
         path = Path(scenario)
         # Legacy generated variants predate record roles. Their embedded
@@ -95,6 +98,7 @@ async def run_trial(
         signal_filter = lambda signal: (
             signal.source != "canopy-correlation-engine"
         )
+        signal_transform = None
     artifact = TrialArtifact(scenario=path)
     engine = build_engine(
         provider=provider,
@@ -108,6 +112,9 @@ async def run_trial(
         temperature=model_spec.temperature if model_spec else 0.0,
         seed=model_spec.seed if model_spec else 1337,
     )
+    artifact.kb_context = [
+        entry.model_dump(mode="json") for entry in engine.kb.all_entries()
+    ]
     service_tasks = start_engine_tasks(engine)
 
     async def consume(pattern: str, target: list, expected_type: type) -> None:
@@ -137,6 +144,7 @@ async def run_trial(
             speed=10000.0,
             max_delay_s=0.0,
             signal_filter=signal_filter,
+            signal_transform=signal_transform,
         )
         await replay.run()
         await engine.bus.drain()
@@ -155,6 +163,14 @@ async def run_trial(
                     "message": f"trial exceeded {timeout_s:.1f}s",
                 }
             )
+        except Exception as exc:  # noqa: BLE001 - preserve a failed case
+            artifact.errors.append(
+                {
+                    "stage": "trial",
+                    "type": exc.__class__.__name__,
+                    "message": str(exc),
+                }
+            )
     finally:
         artifact.elapsed_seconds = time.perf_counter() - started
         all_tasks = (*capture_tasks, *service_tasks)
@@ -170,6 +186,8 @@ async def run_trial(
                         "message": str(outcome),
                     }
                 )
+        artifact.errors.extend(engine.attrib.errors)
+        artifact.errors.extend(engine.decide.errors)
         artifact.validation_events = list(
             getattr(engine.llm, "validation_events", [])
         )

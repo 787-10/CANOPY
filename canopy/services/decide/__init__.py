@@ -84,6 +84,7 @@ class DecideService:
         self._tool_ctx = tool_ctx
         self._anomaly_cache: OrderedDict[str, Anomaly] = OrderedDict()
         self._cache_size = anomaly_cache_size
+        self.errors: list[dict[str, str]] = []
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:
@@ -108,7 +109,14 @@ class DecideService:
                 continue
             try:
                 decision = await self._llm.decide(event)
-            except Exception:
+            except Exception as exc:
+                self.errors.append(
+                    {
+                        "stage": "decision",
+                        "type": exc.__class__.__name__,
+                        "message": str(exc),
+                    }
+                )
                 log.exception(
                     "decide: LLMClient.decide failed for attribution=%s", event.id
                 )
@@ -125,7 +133,9 @@ class DecideService:
                 await self._tracer.emit(
                     "decide",
                     "decision",
-                    f"action={decision.action} authority={decision.authority} target={decision.target}",
+                    "action="
+                    f"{decision.action} authority={decision.authority} "
+                    f"target={decision.target}",
                     ref_id=decision.id,
                     attribution_id=event.id,
                     actor=event.actor,

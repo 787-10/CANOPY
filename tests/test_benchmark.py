@@ -11,9 +11,15 @@ from pathlib import Path
 
 import pytest
 
-from bench.run import _label_outputs, _run, _seed_labels
+from bench.run import (
+    _aggregate_scorecards,
+    _episode_timeout,
+    _label_outputs,
+    _run,
+    _seed_labels,
+)
 from bench.runner import run_trial
-from bench.specs import load_scenario_registry
+from bench.specs import ModelSpec, load_scenario_registry
 from canopy._engine import build_engine, build_llm
 from canopy.services.kb import KB
 
@@ -93,6 +99,53 @@ def test_missing_outputs_are_always_failures():
     assert not result.action_correct
     assert not result.authority_correct
     assert not result.calibrated
+
+
+def test_episode_timeout_covers_all_sequential_model_calls():
+    spec = ModelSpec(
+        id="large",
+        provider="ollama",
+        model="large:latest",
+        timeout_s=480,
+    )
+
+    assert _episode_timeout("ollama", spec, multi_agent=True) == 1950
+    assert _episode_timeout("ollama", spec, multi_agent=False) == 990
+
+
+def test_repetition_aggregation_pools_every_attempt() -> None:
+    first_result = _label_outputs(
+        {
+            "file": "one.jsonl",
+            "expected_actor": "Unknown",
+            "expected_action": "any",
+            "expected_authority": "any",
+        },
+        {"attribution": [], "decision": []},
+        0.1,
+    )
+    second_result = _label_outputs(
+        {
+            "file": "two.jsonl",
+            "expected_actor": "Unknown",
+            "expected_action": "any",
+            "expected_authority": "any",
+        },
+        {"attribution": [], "decision": []},
+        0.1,
+    )
+    first = Scorecard(results=[first_result])
+    second = Scorecard(results=[second_result])
+    first.items.append({"attempt": 1})
+    second.items.append({"attempt": 2})
+
+    aggregate = _aggregate_scorecards([first, second])
+
+    assert aggregate.items == [
+        {"attempt": 1, "benchmark_repetition": 1},
+        {"attempt": 2, "benchmark_repetition": 2},
+    ]
+    assert [result.repetition for result in aggregate.results] == [1, 2]
 
 
 def test_trial_scores_one_scenario_level_assessment():

@@ -3,9 +3,72 @@ from __future__ import annotations
 
 import os
 import subprocess
+from hashlib import sha256
+from pathlib import Path
 from typing import Any
 
 from bench.specs import ModelSpec
+
+ROOT = Path(__file__).resolve().parent.parent
+
+
+def _file_hash(path: Path) -> str:
+    return sha256(path.read_bytes()).hexdigest()
+
+
+def benchmark_provenance() -> dict[str, Any]:
+    """Hash every static input that changes benchmark interpretation."""
+    from canopy.services.attrib.prompts import (
+        attribution_system_prompt,
+        reconcile_system_prompt,
+        redteam_system_prompt,
+    )
+    from canopy.services.decide.prompts import decision_system_prompt
+
+    files = {
+        "scenario_registry": ROOT / "scenarios" / "manifest.json",
+        "variant_labels": ROOT / "bench" / "scenarios" / "labels.json",
+        "model_specs": ROOT / "bench" / "models.yaml",
+        "knowledge_base": ROOT / "data" / "kb_seed_entries.json",
+    }
+    file_hashes = {name: _file_hash(path) for name, path in files.items()}
+    from bench.specs import load_scenario_registry
+
+    scenario_hashes = {
+        f"scenarios/{case.file}": _file_hash(case.scenario_path)
+        for case in load_scenario_registry().cases
+    }
+    variants_root = ROOT / "bench" / "scenarios"
+    variant_hashes = {
+        str(path.relative_to(ROOT)): _file_hash(path)
+        for path in sorted(variants_root.glob("*.jsonl"))
+    }
+    prompt_text = {
+        "attribution": attribution_system_prompt(),
+        "redteam": redteam_system_prompt(),
+        "reconcile": reconcile_system_prompt(),
+        "decision": decision_system_prompt(),
+    }
+    prompt_hashes = {
+        name: sha256(text.encode("utf-8")).hexdigest()
+        for name, text in prompt_text.items()
+    }
+    suite_inputs = {
+        "scenario_registry": file_hashes["scenario_registry"],
+        "variant_labels": file_hashes["variant_labels"],
+        **scenario_hashes,
+        **variant_hashes,
+    }
+    suite_material = "".join(
+        f"{name}:{digest}\n" for name, digest in sorted(suite_inputs.items())
+    )
+    return {
+        "suite_hash": sha256(suite_material.encode("ascii")).hexdigest(),
+        "file_hashes": file_hashes,
+        "scenario_hashes": scenario_hashes,
+        "variant_hashes": variant_hashes,
+        "prompt_hashes": prompt_hashes,
+    }
 
 
 def hardware_snapshot() -> dict[str, Any]:

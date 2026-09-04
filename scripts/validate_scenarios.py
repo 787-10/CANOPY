@@ -131,7 +131,11 @@ def validate_file(path: Path, validator: Any | None) -> tuple[int, list[str]]:
 
             try:
                 ts = parse_ts(record.get("ts"))
-                if previous_ts is not None and ts < previous_ts:
+                reordered = (
+                    record.get("provenance", {}).get("notes")
+                    == "adversarial_reordered_arrival"
+                )
+                if previous_ts is not None and ts < previous_ts and not reordered:
                     errors.append(f"{path}:{line_no}: timestamp moved backward")
                 previous_ts = ts
             except Exception:

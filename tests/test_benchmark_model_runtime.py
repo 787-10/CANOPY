@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import httpx
 
-from bench.model_runtime import preflight_model
+from bench.model_runtime import benchmark_provenance, preflight_model
 from bench.specs import ModelSpec
 
 
@@ -60,3 +60,18 @@ def test_ollama_preflight_fails_closed_for_missing_model() -> None:
 
     assert result["available"] is False
     assert "not installed" in result["error"]
+
+
+def test_benchmark_provenance_hashes_suite_prompts_and_kb() -> None:
+    provenance = benchmark_provenance()
+
+    assert len(provenance["suite_hash"]) == 64
+    assert set(provenance["prompt_hashes"]) == {
+        "attribution",
+        "redteam",
+        "reconcile",
+        "decision",
+    }
+    assert "knowledge_base" in provenance["file_hashes"]
+    assert len(provenance["scenario_hashes"]) == 11
+    assert len(provenance["variant_hashes"]) == 44

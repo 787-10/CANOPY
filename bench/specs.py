@@ -23,6 +23,7 @@ class RecordRoleRule(BaseModel):
     source: str | None = None
     signal_ids: list[str] = Field(default_factory=list)
     event_types: list[str] = Field(default_factory=list)
+    excluded_sources: list[str] = Field(default_factory=list)
 
     def matches(self, signal: Signal) -> bool:
         checks = []
@@ -32,6 +33,8 @@ class RecordRoleRule(BaseModel):
             checks.append(signal.id in self.signal_ids)
         if self.event_types:
             checks.append(signal.payload.event_type in self.event_types)
+        if self.excluded_sources:
+            checks.append(signal.source not in self.excluded_sources)
         return bool(checks) and all(checks)
 
 
@@ -52,7 +55,7 @@ class ScenarioSpec(BaseModel):
     file: str = Field(min_length=1)
     name: str
     short_name: str
-    family: Literal["iran", "regional", "army"]
+    family: str = Field(min_length=1, pattern=r"^[a-z][a-z0-9_-]*$")
     theater: str
     objective: str
     domains: list[Domain]
@@ -61,6 +64,7 @@ class ScenarioSpec(BaseModel):
     tags: list[str] = Field(default_factory=list)
     checkpoint: Literal["final"] = "final"
     record_roles: list[RecordRoleRule] = Field(default_factory=list)
+    redacted_observable_fields: list[str] = Field(default_factory=list)
     expected: ExpectedOutcome
     oracle_notes: str
 
@@ -76,14 +80,22 @@ class ScenarioSpec(BaseModel):
         for rule in self.record_roles:
             if rule.matches(signal):
                 return rule.role
-        return "stimulus"
+        return "oracle"
 
     def includes_as_input(self, signal: Signal) -> bool:
         return self.role_for(signal) in {"stimulus", "context"}
 
+    def sanitize_input(self, signal: Signal) -> Signal:
+        sanitized = signal.model_copy(deep=True)
+        for field_name in self.redacted_observable_fields:
+            sanitized.payload.observables.pop(field_name, None)
+        return sanitized
+
 
 class ScenarioRegistry(BaseModel):
     schema_version: int = Field(ge=1)
+    common_record_roles: list[RecordRoleRule] = Field(default_factory=list)
+    redacted_observable_fields: list[str] = Field(default_factory=list)
     cases: list[ScenarioSpec]
 
     @model_validator(mode="after")
@@ -94,6 +106,22 @@ class ScenarioRegistry(BaseModel):
             raise ValueError("scenario ids must be unique")
         if len(files) != len(set(files)):
             raise ValueError("scenario files must be unique")
+        for case in self.cases:
+            combined_rules = [*case.record_roles, *self.common_record_roles]
+            case.record_roles = list(
+                {
+                    json.dumps(rule.model_dump(mode="json"), sort_keys=True): rule
+                    for rule in combined_rules
+                }.values()
+            )
+            case.redacted_observable_fields = list(
+                dict.fromkeys(
+                    [
+                        *case.redacted_observable_fields,
+                        *self.redacted_observable_fields,
+                    ]
+                )
+            )
         return self
 
     def demo_cases(self) -> list[ScenarioSpec]:
