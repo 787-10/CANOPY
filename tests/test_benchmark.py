@@ -7,10 +7,15 @@ numbers) to avoid brittleness against stub-template changes.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 
 import pytest
 
-from bench.run import _run, _seed_labels
+from bench.run import _label_outputs, _run, _seed_labels
+from bench.runner import run_trial
+from canopy._engine import build_engine
+
+ROOT = Path(__file__).resolve().parent.parent
 from bench.scoring import (
     Scorecard,
     actor_match,
@@ -29,7 +34,7 @@ def test_actor_match_handles_actor_head():
 
 def test_action_authority_match_any_wildcard():
     assert action_match("active_defense_escort", "any")
-    assert action_match("threat_warning", "*")
+    assert not action_match("threat_warning", "*")
     assert authority_match("local", "any")
 
 
@@ -52,6 +57,61 @@ def test_seed_labels_loads_at_least_eleven():
             "expected_authority",
         ):
             assert required in label, f"label missing {required}"
+
+
+def test_unknown_provider_fails_closed():
+    with pytest.raises(ValueError, match="unknown LLM provider"):
+        build_engine(provider="stbu")
+
+
+def test_missing_outputs_are_always_failures():
+    result = _label_outputs(
+        {
+            "file": "missing.jsonl",
+            "expected_actor": "Unknown",
+            "expected_action": "any",
+            "expected_authority": "any",
+            "confidence_band": "low",
+        },
+        {"attribution": [], "decision": []},
+        0.1,
+    )
+
+    assert not result.actor_correct
+    assert not result.action_correct
+    assert not result.authority_correct
+    assert not result.calibrated
+
+
+def test_trial_scores_one_scenario_level_assessment():
+    trial = asyncio.run(
+        run_trial(
+            ROOT / "scenarios" / "beat2.jsonl",
+            provider="stub",
+            multi_agent=True,
+        )
+    )
+
+    assert len(trial.attributions) == 1
+    assert len(trial.decisions) == 1
+    assert set(trial.attributions[0].source_signal_ids) == set(
+        trial.anomaly_source_signal_ids
+    )
+
+
+def test_trials_are_isolated_and_repeatable():
+    first = asyncio.run(
+        run_trial(ROOT / "scenarios" / "beat2.jsonl", provider="stub")
+    )
+    second = asyncio.run(
+        run_trial(ROOT / "scenarios" / "beat2.jsonl", provider="stub")
+    )
+
+    assert len(first.signals) == len(second.signals)
+    assert len(first.anomalies) == len(second.anomalies)
+    assert [item.actor for item in first.attributions] == [
+        item.actor for item in second.attributions
+    ]
 
 
 def test_bench_run_against_subset_produces_scorecard():

@@ -147,3 +147,31 @@ async def test_subscription_cleans_up_on_cancel() -> None:
         await task
     await asyncio.sleep(0)
     assert len(bus._subs) == 0  # type: ignore[attr-defined]
+
+
+async def test_drain_waits_for_cascaded_publications() -> None:
+    bus = InProcessBus()
+    received: list[Signal] = []
+
+    async def relay() -> None:
+        async for _, event in bus.subscribe("signals.input"):
+            await asyncio.sleep(0.01)
+            await bus.publish("signals.output", event)
+
+    async def collect() -> None:
+        async for _, event in bus.subscribe("signals.output"):
+            received.append(event)  # type: ignore[arg-type]
+
+    relay_task = asyncio.create_task(relay())
+    collect_task = asyncio.create_task(collect())
+    await asyncio.sleep(0)
+
+    signal = _signal()
+    await bus.publish("signals.input", signal)
+    await bus.drain()
+
+    assert received == [signal]
+
+    relay_task.cancel()
+    collect_task.cancel()
+    await asyncio.gather(relay_task, collect_task, return_exceptions=True)
