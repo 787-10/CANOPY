@@ -54,3 +54,4 @@ Thumbs.db
 # Bench-generated scenario variants
 bench/scorecard.json
 bench/compare/
+bench/runs/

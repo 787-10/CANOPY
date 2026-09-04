@@ -81,6 +81,14 @@ def _print_table(scorecards: dict[str, Scorecard]) -> None:
             [
                 row("Action class accuracy", lambda c: _pct(c.action_accuracy())),
                 row("Authority routing", lambda c: _pct(c.authority_accuracy())),
+                row(
+                    "Forbidden action rate",
+                    lambda c: _pct(c.forbidden_action_rate()),
+                ),
+                row(
+                    "Unauthorized route rate",
+                    lambda c: _pct(c.unauthorized_routing_rate()),
+                ),
             ],
         ),
         (
@@ -101,6 +109,11 @@ def _print_table(scorecards: dict[str, Scorecard]) -> None:
                 row(
                     "Confidence-tier match",
                     lambda c: _pct(c.calibration_rate()),
+                ),
+                row("Brier score", lambda c: f"{c.brier_score():.3f}"),
+                row(
+                    "Expected calibration error",
+                    lambda c: f"{c.expected_calibration_error():.3f}",
                 ),
             ],
         ),
@@ -396,6 +409,10 @@ def _scorecard_from_dict(payload: dict) -> Scorecard:
                 action_correct=r["action_correct"],
                 authority_correct=r["authority_correct"],
                 calibrated=r["calibrated"],
+                forbidden_action=r.get("forbidden_action", False),
+                case_id=r.get("case_id"),
+                family=r.get("family"),
+                cluster_id=r.get("cluster_id"),
             )
         )
     return card
