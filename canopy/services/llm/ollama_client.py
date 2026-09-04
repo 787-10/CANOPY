@@ -10,7 +10,7 @@ Configure via env vars (or constructor args):
 
 * ``CANOPY_OLLAMA_URL`` — base URL of the Ollama daemon. Over Tailscale this
   is typically ``http://<machine-name>:11434`` or ``http://<100.x.x.x>:11434``.
-* ``CANOPY_OLLAMA_MODEL`` — the model tag to use (e.g. ``gemma4:26b``).
+* ``CANOPY_OLLAMA_MODEL`` — the model tag to use (e.g. ``gemma3:4b``).
 * ``CANOPY_OLLAMA_TIMEOUT_S`` — per-request HTTP timeout (default 180 s).
 """
 from __future__ import annotations
@@ -23,6 +23,10 @@ from typing import Any
 
 from canopy.services.kb import KB
 from canopy.services.kb.models import KBEntry
+from canopy.services.llm.validation import (
+    validate_and_repair_attribution,
+    validate_and_repair_decision,
+)
 from canopy.services.schemas.events import (
     Anomaly,
     Attribution,
@@ -33,7 +37,7 @@ from canopy.services.schemas.events import (
 log = logging.getLogger(__name__)
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
-DEFAULT_OLLAMA_MODEL = "gemma4:26b"
+DEFAULT_OLLAMA_MODEL = "gemma3:4b"
 DEFAULT_TIMEOUT_S = 180.0
 
 
@@ -54,6 +58,8 @@ class OllamaLLMClient:
         model: str | None = None,
         base_url: str | None = None,
         timeout_s: float | None = None,
+        temperature: float = 0.0,
+        seed: int = 1337,
         transport: Any | None = None,
     ) -> None:
         self._kb = kb
@@ -65,6 +71,10 @@ class OllamaLLMClient:
             timeout_env = os.environ.get("CANOPY_OLLAMA_TIMEOUT_S")
             timeout = float(timeout_env) if timeout_env else DEFAULT_TIMEOUT_S
         self._timeout_s = timeout
+        self._temperature = temperature
+        self._seed = seed
+        self.validation_events: list[dict[str, Any]] = []
+        self.runtime_events: list[dict[str, Any]] = []
         # Optional transport injection for tests; production code leaves it
         # None and httpx picks the default httpx.AsyncHTTPTransport.
         self._transport = transport
@@ -98,6 +108,7 @@ class OllamaLLMClient:
             user=attribution_user_prompt(anomalies, relevant),
             schema=schema,
         )
+        payload = self._repair_attribution(payload)
         return Attribution(
             anomaly_ids=[a.id for a in anomalies],
             actor=str(payload.get("actor", "Unknown")),
@@ -156,6 +167,7 @@ class OllamaLLMClient:
             user=reconcile_user_prompt(primary, challenge, anomalies, relevant),
             schema=schema,
         )
+        payload = self._repair_attribution(payload)
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
             actor=str(payload.get("actor", primary.actor)),
@@ -199,6 +211,16 @@ class OllamaLLMClient:
             user=decision_user_prompt(attribution),
             schema=schema,
         )
+        raw = dict(payload)
+        payload = validate_and_repair_decision(payload)
+        self.validation_events.append(
+            {
+                "stage": "decision",
+                "raw": raw,
+                "repaired": dict(payload),
+                "flags": [],
+            }
+        )
         return Decision(
             attribution_id=attribution.id,
             action=payload["action"],
@@ -210,6 +232,19 @@ class OllamaLLMClient:
         )
 
     # ---- HTTP plumbing ----------------------------------------------------
+
+    def _repair_attribution(self, payload: dict[str, Any]) -> dict[str, Any]:
+        raw = dict(payload)
+        validation = validate_and_repair_attribution(payload)
+        self.validation_events.append(
+            {
+                "stage": "attribution",
+                "raw": raw,
+                "repaired": dict(validation.repaired),
+                "flags": list(validation.flags),
+            }
+        )
+        return validation.repaired
 
     async def _chat(self, *, system: str, user: str, schema: dict[str, Any]) -> dict:
         # Lazy-import httpx so this client can sit on disk without forcing a
@@ -233,7 +268,7 @@ class OllamaLLMClient:
                 {"role": "user", "content": user_with_schema},
             ],
             "stream": False,
-            "options": {"temperature": 0.2},
+            "options": {"temperature": self._temperature, "seed": self._seed},
         }
 
         # Try schema-typed structured output first (Ollama ≥ 0.5). Fall back
@@ -249,6 +284,20 @@ class OllamaLLMClient:
                     response = await client.post(url, json=body)
                     response.raise_for_status()
                     data = response.json()
+                    self.runtime_events.append(
+                        {
+                            key: data.get(key)
+                            for key in (
+                                "total_duration",
+                                "load_duration",
+                                "prompt_eval_count",
+                                "prompt_eval_duration",
+                                "eval_count",
+                                "eval_duration",
+                            )
+                            if data.get(key) is not None
+                        }
+                    )
                     content = (data.get("message") or {}).get("content", "")
                     if not content:
                         raise ValueError(f"empty content from Ollama: {data}")

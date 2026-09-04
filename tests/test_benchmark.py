@@ -14,7 +14,8 @@ import pytest
 from bench.run import _label_outputs, _run, _seed_labels
 from bench.runner import run_trial
 from bench.specs import load_scenario_registry
-from canopy._engine import build_engine
+from canopy._engine import build_engine, build_llm
+from canopy.services.kb import KB
 
 ROOT = Path(__file__).resolve().parent.parent
 from bench.scoring import (
@@ -64,6 +65,15 @@ def test_seed_labels_loads_at_least_eleven():
 def test_unknown_provider_fails_closed():
     with pytest.raises(ValueError, match="unknown LLM provider"):
         build_engine(provider="stbu")
+
+
+def test_engine_accepts_an_injected_llm_client():
+    kb = KB.load_from_json(ROOT / "data" / "kb_seed_entries.json")
+    client = build_llm(provider="stub", kb=kb)
+
+    engine = build_engine(llm=client, enable_osint=False)
+
+    assert engine.llm is client
 
 
 def test_missing_outputs_are_always_failures():

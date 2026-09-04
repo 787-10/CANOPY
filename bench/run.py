@@ -13,13 +13,15 @@ import argparse
 import asyncio
 import json
 import logging
+import os
 from pathlib import Path
 from typing import Any
 
 from bench import generate as bench_generate
 from bench.artifacts import write_run_bundle
+from bench.model_runtime import hardware_snapshot, preflight_model
 from bench.runner import run_trial
-from bench.specs import load_scenario_registry
+from bench.specs import ModelSpec, load_model_specs, load_scenario_registry
 from bench.scoring import (
     ScenarioResult,
     Scorecard,
@@ -43,6 +45,34 @@ TRIAL_TIMEOUTS_S: dict[str, float] = {
 TRIAL_TIMEOUT_DEFAULT_S = 600.0
 
 log = logging.getLogger(__name__)
+
+
+def _legacy_model_spec(provider: str) -> ModelSpec:
+    """Resolve provider-only flags without changing their env behavior."""
+    if provider == "stub":
+        return load_model_specs()["stub"]
+    if provider == "ollama":
+        from canopy.services.llm.ollama_client import (
+            DEFAULT_OLLAMA_MODEL,
+            DEFAULT_OLLAMA_URL,
+        )
+
+        return ModelSpec(
+            id="legacy-ollama",
+            provider="ollama",
+            model=os.environ.get("CANOPY_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL),
+            endpoint=os.environ.get("CANOPY_OLLAMA_URL", DEFAULT_OLLAMA_URL),
+            timeout_s=float(os.environ.get("CANOPY_OLLAMA_TIMEOUT_S", "180")),
+        )
+    if provider == "anthropic":
+        from canopy.services.llm.anthropic_client import DEFAULT_MODEL
+
+        return ModelSpec(
+            id="legacy-anthropic",
+            provider="anthropic",
+            model=os.environ.get("CANOPY_ANTHROPIC_MODEL", DEFAULT_MODEL),
+        )
+    raise ValueError(f"unknown LLM provider {provider!r}")
 
 
 def _label_outputs(
@@ -151,6 +181,7 @@ def _variant_labels() -> list[dict[str, Any]]:
 async def _run(
     *,
     provider: str,
+    model_spec: ModelSpec | None = None,
     seeds_only: bool,
     limit: int | None,
     multi_agent: bool = True,
@@ -181,6 +212,7 @@ async def _run(
             provider=provider,
             multi_agent=multi_agent,
             timeout_s=trial_timeout,
+            model_spec=model_spec,
         )
         result = _label_outputs(
             label, trial.captured(), trial.elapsed_seconds
@@ -279,11 +311,31 @@ def _print_report(card: Scorecard) -> None:
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser()
-    parser.add_argument("--provider", default=None, help="stub|anthropic|ollama")
+    model_group = parser.add_mutually_exclusive_group()
+    model_group.add_argument(
+        "--model-spec",
+        help="Exact model id from bench/models.yaml (recommended)",
+    )
+    model_group.add_argument(
+        "--provider",
+        default=None,
+        help="Legacy provider selector: stub|anthropic|ollama",
+    )
     parser.add_argument("--seeds-only", action="store_true")
     parser.add_argument("--regenerate-variants", action="store_true")
     parser.add_argument("--variants", type=int, default=4)
     parser.add_argument("--limit", type=int, default=None)
+    parser.add_argument(
+        "--repetitions",
+        type=int,
+        default=None,
+        help="Override repetitions declared by the model spec",
+    )
+    parser.add_argument(
+        "--skip-warmup",
+        action="store_true",
+        help="Skip the unscored warm-up episode for live model specs",
+    )
     parser.add_argument(
         "--no-redteam",
         action="store_true",
@@ -296,33 +348,91 @@ def main() -> int:
     elif not args.seeds_only and not (VARIANTS_DIR / "labels.json").exists():
         bench_generate.generate(variants_per_seed=args.variants)
 
-    provider = resolve_provider(llm_flag=args.provider)
-    card = asyncio.run(
-        _run(
-            provider=provider,
-            seeds_only=args.seeds_only,
-            limit=args.limit,
-            multi_agent=not args.no_redteam,
-        )
-    )
+    specs = load_model_specs()
+    if args.model_spec:
+        if args.model_spec not in specs:
+            parser.error(
+                f"unknown model spec {args.model_spec!r}; "
+                f"choose from: {', '.join(sorted(specs))}"
+            )
+        model_spec = specs[args.model_spec]
+    else:
+        provider = resolve_provider(llm_flag=args.provider)
+        model_spec = specs.get(provider) or _legacy_model_spec(provider)
 
+    runtime = preflight_model(model_spec)
+    if not runtime["available"]:
+        parser.error(
+            f"model preflight failed for {model_spec.id}: {runtime.get('error')}"
+        )
+    repetitions = args.repetitions or model_spec.repetitions
+    hardware = hardware_snapshot()
+    if repetitions < 1:
+        parser.error("--repetitions must be at least 1")
+
+    if model_spec.provider != "stub" and not args.skip_warmup:
+        warmup_case = load_scenario_registry().benchmark_cases()[0]
+        log.info("Running unscored warm-up for %s", model_spec.id)
+        asyncio.run(
+            run_trial(
+                warmup_case,
+                provider=model_spec.provider,
+                model_spec=model_spec,
+                multi_agent=not args.no_redteam,
+                timeout_s=TRIAL_TIMEOUTS_S.get(
+                    model_spec.provider, TRIAL_TIMEOUT_DEFAULT_S
+                ),
+            )
+        )
+
+    cards: list[Scorecard] = []
+    bundles: list[Path] = []
+    for repetition in range(1, repetitions + 1):
+        log.info(
+            "Model spec %s repetition %d/%d",
+            model_spec.id,
+            repetition,
+            repetitions,
+        )
+        card = asyncio.run(
+            _run(
+                provider=model_spec.provider,
+                model_spec=model_spec,
+                seeds_only=args.seeds_only,
+                limit=args.limit,
+                multi_agent=not args.no_redteam,
+            )
+        )
+        cards.append(card)
+        bundles.append(
+            write_run_bundle(
+                card,
+                output_root=BENCH_DIR / "runs",
+                provider=model_spec.provider,
+                model=model_spec.model,
+                suite_id="canopy-public-v1",
+                multi_agent=not args.no_redteam,
+                metadata={
+                    "model_spec": model_spec.model_dump(mode="json"),
+                    "runtime": runtime,
+                    "hardware": hardware,
+                    "repetition": repetition,
+                    "repetitions": repetitions,
+                },
+            )
+        )
+
+    card = cards[-1]
     SCORECARD.write_text(json.dumps(card.to_dict(), indent=2))
-    bundle = write_run_bundle(
-        card,
-        output_root=BENCH_DIR / "runs",
-        provider=provider,
-        model=provider,
-        suite_id="canopy-public-v1",
-        multi_agent=not args.no_redteam,
-    )
     _print_report(card)
     print(f"Scorecard written to {SCORECARD.relative_to(ROOT)}")
-    print(f"Immutable run bundle written to {bundle.relative_to(ROOT)}")
+    for bundle in bundles:
+        print(f"Immutable run bundle written to {bundle.relative_to(ROOT)}")
 
     # The deterministic stub is a pipeline control, not a quality baseline.
     # Its gate verifies complete, policy-valid episodes. Model quality gates
     # apply only to live providers.
-    if provider == "stub":
+    if model_spec.provider == "stub":
         if card.completion_rate() < 1.0:
             log.error("Stub pipeline did not complete every episode")
             return 1

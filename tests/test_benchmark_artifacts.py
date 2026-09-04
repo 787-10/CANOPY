@@ -108,3 +108,29 @@ def test_robustness_metrics_score_parent_variant_relations() -> None:
             "duplicate_signal": {"eligible": 1, "passed": 1, "pass_rate": 1.0},
         },
     }
+
+
+def test_reliability_and_efficiency_use_recorded_adapter_events() -> None:
+    card = Scorecard()
+    card.append(
+        _result(correct=True, confidence=0.8),
+        item={
+            "validation_events": [
+                {
+                    "raw": {"actor": "Example"},
+                    "repaired": {"actor": "Unknown"},
+                }
+            ],
+            "runtime_events": [
+                {
+                    "prompt_eval_count": 100,
+                    "eval_count": 20,
+                    "eval_duration": 2_000_000_000,
+                }
+            ],
+            "errors": [],
+        },
+    )
+
+    assert card.reliability_metrics()["repair_rate"] == 1.0
+    assert card.efficiency_metrics()["tokens_per_second"] == 10.0

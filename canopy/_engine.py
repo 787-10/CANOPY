@@ -45,19 +45,40 @@ class Engine:
     osint_cluster: OsintClusterService | None
 
 
-def build_llm(*, provider: str, kb: KB) -> LLMClient:
+def build_llm(
+    *,
+    provider: str,
+    kb: KB,
+    model: str | None = None,
+    endpoint: str | None = None,
+    timeout_s: float | None = None,
+    temperature: float = 0.0,
+    seed: int = 1337,
+) -> LLMClient:
     if provider == "anthropic":
         from canopy.services.llm.anthropic_client import (
             DEFAULT_MODEL,
             AnthropicLLMClient,
         )
 
-        model = os.environ.get("CANOPY_ANTHROPIC_MODEL") or DEFAULT_MODEL
-        return AnthropicLLMClient(kb, model=model)
+        resolved_model = model or os.environ.get("CANOPY_ANTHROPIC_MODEL") or DEFAULT_MODEL
+        return AnthropicLLMClient(
+            kb,
+            model=resolved_model,
+            temperature=temperature,
+            timeout_s=timeout_s,
+        )
     if provider == "ollama":
         from canopy.services.llm.ollama_client import OllamaLLMClient
 
-        return OllamaLLMClient(kb)
+        return OllamaLLMClient(
+            kb,
+            model=model,
+            base_url=endpoint,
+            timeout_s=timeout_s,
+            temperature=temperature,
+            seed=seed,
+        )
     if provider == "stub":
         from canopy.services.llm.stub import StubLLMClient
 
@@ -88,12 +109,26 @@ def build_engine(
     multi_agent: bool = True,
     enable_osint: bool = True,
     attrib_kb_context: Literal["scenario", "full"] = "scenario",
+    model: str | None = None,
+    endpoint: str | None = None,
+    llm_timeout_s: float | None = None,
+    temperature: float = 0.0,
+    seed: int = 1337,
+    llm: LLMClient | None = None,
 ) -> Engine:
     """Wire up the in-process bus, KB, LLM, and the four async services."""
     bus = InProcessBus()
     kb = KB.load_from_json(kb_path)
     log.info("KB loaded: %d entries from %s", len(kb), kb_path)
-    llm = build_llm(provider=provider, kb=kb)
+    resolved_llm = llm or build_llm(
+        provider=provider,
+        kb=kb,
+        model=model,
+        endpoint=endpoint,
+        timeout_s=llm_timeout_s,
+        temperature=temperature,
+        seed=seed,
+    )
 
     orbit = OrbitService()
     log.info(
@@ -108,7 +143,7 @@ def build_engine(
     )
     attrib = AttribService(
         bus,
-        llm,
+        resolved_llm,
         kb,
         window_s=attrib_window_s,
         tracer=tracer,
@@ -118,7 +153,7 @@ def build_engine(
     )
     decide = DecideService(
         bus,
-        llm,
+        resolved_llm,
         orbit=orbit,
         tracer=tracer,
         tools=tools,
@@ -133,7 +168,7 @@ def build_engine(
         bus=bus,
         kb=kb,
         orbit=orbit,
-        llm=llm,
+        llm=resolved_llm,
         tracer=tracer,
         fusion=fusion,
         attrib=attrib,
