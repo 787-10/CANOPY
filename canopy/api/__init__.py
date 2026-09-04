@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -58,6 +59,7 @@ async def _lifespan(app: FastAPI):
     engine = build_engine(
         provider=provider,
         blocked_domains_provider=lambda: app.state.blocked_domains,
+        enable_osint=not bool(os.environ.get("CANOPY_DISABLE_OSINT")),
     )
     app.state.engine = engine
     app.state.clients = set()
@@ -129,7 +131,7 @@ def create_app() -> FastAPI:
             "clusters_seen": 0,
             "similarity_threshold": None,
         }
-        if engine is not None:
+        if engine is not None and engine.osint_cluster is not None:
             cluster = engine.osint_cluster
             osint["service_attached"] = True
             osint["model_loaded"] = cluster._encoder is not None

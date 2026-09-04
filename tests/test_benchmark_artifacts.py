@@ -108,3 +108,113 @@ def test_robustness_metrics_score_parent_variant_relations() -> None:
             "duplicate_signal": {"eligible": 1, "passed": 1, "pass_rate": 1.0},
         },
     }
+
+
+def test_robustness_pairs_variants_with_their_repetition_parent() -> None:
+    parent_one = _result(correct=True, confidence=0.8)
+    parent_one.case_id = "parent"
+    parent_one.repetition = 1
+    parent_one.predicted_actor = "China"
+    variant_one = _result(correct=True, confidence=0.8)
+    variant_one.parent_id = "parent"
+    variant_one.repetition = 1
+    variant_one.relation = "invariant"
+    variant_one.transformation = "duplicate_signal"
+    variant_one.predicted_actor = "China"
+
+    parent_two = _result(correct=True, confidence=0.8)
+    parent_two.case_id = "parent"
+    parent_two.repetition = 2
+    parent_two.predicted_actor = "Russia"
+    variant_two = _result(correct=True, confidence=0.8)
+    variant_two.parent_id = "parent"
+    variant_two.repetition = 2
+    variant_two.relation = "invariant"
+    variant_two.transformation = "duplicate_signal"
+    variant_two.predicted_actor = "Russia"
+
+    card = Scorecard(
+        results=[parent_one, variant_one, parent_two, variant_two]
+    )
+
+    assert card.robustness_metrics()["pass_rate"] == 1.0
+
+
+def test_reliability_and_efficiency_use_recorded_adapter_events() -> None:
+    card = Scorecard()
+    card.append(
+        _result(correct=True, confidence=0.8),
+        item={
+            "validation_events": [
+                {
+                    "raw": {"actor": "Example"},
+                    "repaired": {"actor": "Unknown"},
+                }
+            ],
+            "runtime_events": [
+                {
+                    "prompt_eval_count": 100,
+                    "eval_count": 20,
+                    "eval_duration": 2_000_000_000,
+                }
+            ],
+            "errors": [],
+        },
+    )
+
+    assert card.reliability_metrics()["repair_rate"] == 1.0
+    assert card.efficiency_metrics()["tokens_per_second"] == 10.0
+
+
+def test_accepted_actor_and_explicit_abstention_drive_secondary_metrics() -> None:
+    accepted = _result(correct=True, confidence=0.8)
+    accepted.expected_actor = "Russia"
+    accepted.expected_actors = ["Russia", "China"]
+    accepted.predicted_actor = "China"
+    accepted.actor_correct = True
+    abstained = _result(correct=True, confidence=0.4)
+    abstained.expected_actor = "Unknown"
+    abstained.expected_actors = ["Unknown"]
+    abstained.expected_abstain = True
+    abstained.predicted_actor = "Unknown"
+
+    card = Scorecard(results=[accepted, abstained])
+
+    assert card.actor_macro_f1() == 1.0
+    assert card.abstention_metrics() == {"precision": 1.0, "recall": 1.0}
+
+
+def test_raw_output_metrics_are_separate_from_repaired_scores() -> None:
+    result = _result(correct=True, confidence=0.8)
+    result.raw_actor_correct = False
+    result.raw_action_correct = True
+    result.raw_authority_correct = True
+    result.raw_attribution_schema_valid = True
+    result.raw_decision_schema_valid = True
+
+    metrics = Scorecard(results=[result]).raw_output_metrics()
+
+    assert metrics == {
+        "scored": 1,
+        "attribution_schema_valid_rate": 1.0,
+        "decision_schema_valid_rate": 1.0,
+        "attribution_accuracy": 0.0,
+        "action_accuracy": 1.0,
+        "authority_accuracy": 1.0,
+    }
+
+
+def test_raw_output_metrics_count_invalid_outputs_as_failures() -> None:
+    result = _result(correct=True, confidence=0.8)
+    result.raw_actor_correct = True
+    result.raw_action_correct = True
+    result.raw_authority_correct = True
+    result.raw_attribution_schema_valid = False
+    result.raw_decision_schema_valid = False
+
+    metrics = Scorecard(results=[result]).raw_output_metrics()
+
+    assert metrics["scored"] == 1
+    assert metrics["attribution_schema_valid_rate"] == 0.0
+    assert metrics["decision_schema_valid_rate"] == 0.0
+    assert metrics["attribution_accuracy"] == 0.0

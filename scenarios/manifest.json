@@ -1,5 +1,41 @@
 {
   "schema_version": 1,
+  "redacted_observable_fields": [
+    "demo_action",
+    "recommended_state",
+    "status_after"
+  ],
+  "common_record_roles": [
+    {
+      "role": "display_only",
+      "event_types": [
+        "alternate_pnt_check",
+        "priority_path_confirmed",
+        "autonomous_relay_handoff",
+        "alternate_pnt_restored",
+        "track_handoff_success",
+        "local_cache_confirmed",
+        "base_defense_posture_change",
+        "backup_asset_ready",
+        "fdir_recovery_action",
+        "ew_bearing_refined",
+        "relay_candidate_ready",
+        "satcom_priority_queue",
+        "isr_product_quality_gate",
+        "maintenance_api_rate_limit",
+        "receiver_holdover_active",
+        "drone_track_custody_split",
+        "satcom_route_shed",
+        "response_action",
+        "space_support_option",
+        "low_rate_mode_active"
+      ]
+    },
+    {
+      "role": "stimulus",
+      "excluded_sources": ["canopy-correlation-engine"]
+    }
+  ],
   "cases": [
     {
       "id": "iran-counter-c5isr-brigade",
