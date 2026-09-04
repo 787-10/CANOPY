@@ -85,19 +85,10 @@ class AttribService:
         self._tracer = tracer
         self._blocked_domains = blocked_domains
         self._multi_agent = multi_agent
+        self._buffer: list[Anomaly] = []
+        self._flush_task: asyncio.Task | None = None
 
     async def run(self) -> None:
-        buffer: list[Anomaly] = []
-        flush_task: asyncio.Task | None = None
-
-        async def flush() -> None:
-            await asyncio.sleep(self._window_s)
-            if not buffer:
-                return
-            batch = list(buffer)
-            buffer.clear()
-            await self._process(batch)
-
         try:
             async for topic, event in self._bus.subscribe("anomalies.*"):
                 if not isinstance(event, Anomaly):
@@ -108,12 +99,36 @@ class AttribService:
                 if self._window_s <= 0:
                     await self._process([event])
                     continue
-                buffer.append(event)
-                if flush_task is None or flush_task.done():
-                    flush_task = asyncio.create_task(flush())
+                self._buffer.append(event)
+                if self._flush_task is None or self._flush_task.done():
+                    self._flush_task = asyncio.create_task(self._flush_after_window())
         finally:
-            if flush_task is not None and not flush_task.done():
-                flush_task.cancel()
+            if self._flush_task is not None and not self._flush_task.done():
+                self._flush_task.cancel()
+
+    async def _flush_after_window(self) -> None:
+        await asyncio.sleep(self._window_s)
+        await self.flush()
+
+    async def flush(self) -> None:
+        """Immediately process the buffered anomaly batch, if any.
+
+        Runtime callers normally rely on the time window. Benchmark episodes
+        use this explicit completion seam after every input signal has drained.
+        """
+        current = asyncio.current_task()
+        if (
+            self._flush_task is not None
+            and self._flush_task is not current
+            and not self._flush_task.done()
+        ):
+            self._flush_task.cancel()
+        self._flush_task = None
+        if not self._buffer:
+            return
+        batch = list(self._buffer)
+        self._buffer.clear()
+        await self._process(batch)
 
     async def _process(self, anomalies: list[Anomaly]) -> None:
         # KB context: union of entries indexed by the source signal ids of

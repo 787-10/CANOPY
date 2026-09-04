@@ -40,6 +40,7 @@ class InProcessBus:
     def __init__(self, *, queue_maxsize: int = 1024) -> None:
         self._queue_maxsize = queue_maxsize
         self._subs: list[_Subscription] = []
+        self._delivery_count = 0
 
     async def publish(self, topic: str, event: BaseModel) -> None:
         for sub in list(self._subs):
@@ -47,6 +48,7 @@ class InProcessBus:
                 continue
             try:
                 sub.queue.put_nowait((topic, event))
+                self._delivery_count += 1
             except asyncio.QueueFull:
                 log.warning(
                     "bus overflow: dropping event topic=%s pattern=%s qsize=%d",
@@ -71,11 +73,35 @@ class InProcessBus:
         try:
             while not sub.closed:
                 item = await sub.queue.get()
-                yield item
+                try:
+                    yield item
+                finally:
+                    sub.queue.task_done()
         finally:
             sub.closed = True
             if sub in self._subs:
                 self._subs.remove(sub)
+
+    async def drain(self) -> None:
+        """Wait until all currently active subscribers finish cascaded work.
+
+        A subscriber may publish another event while handling its current one,
+        so a single queue ``join`` is insufficient.  Wait until two event-loop
+        turns pass without another delivery after every subscription reports
+        its queued work complete.
+        """
+        stable_turns = 0
+        observed_deliveries = self._delivery_count
+        while stable_turns < 2:
+            queues = [sub.queue for sub in list(self._subs) if not sub.closed]
+            if queues:
+                await asyncio.gather(*(queue.join() for queue in queues))
+            await asyncio.sleep(0)
+            if self._delivery_count == observed_deliveries:
+                stable_turns += 1
+            else:
+                stable_turns = 0
+                observed_deliveries = self._delivery_count
 
     def close(self) -> None:
         for sub in self._subs:
