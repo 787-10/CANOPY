@@ -96,6 +96,9 @@ def _label_outputs(
         case_id=label.get("case_id"),
         family=label.get("family"),
         cluster_id=label.get("cluster_id"),
+        parent_id=label.get("parent_id"),
+        transformation=label.get("transformation"),
+        relation=label.get("relation"),
     )
 
 
@@ -187,6 +190,9 @@ async def _run(
             {
                 "case_id": result.case_id or Path(label["file"]).stem,
                 "family": result.family,
+                "parent_id": result.parent_id,
+                "transformation": result.transformation,
+                "relation": result.relation,
                 "expected": {
                     "actors": label.get(
                         "expected_actors", [label["expected_actor"]]
@@ -259,6 +265,13 @@ def _print_report(card: Scorecard) -> None:
         f"{card.unauthorized_routing_rate() * 100:.1f}%"
     )
     print(f"Completion rate: {card.completion_rate() * 100:.1f}%")
+    robustness = card.robustness_metrics()
+    if robustness["eligible"]:
+        print(
+            "Robustness relation pass rate: "
+            f"{robustness['passed']}/{robustness['eligible']} "
+            f"= {robustness['pass_rate'] * 100:.1f}%"
+        )
     print(f"Latency p50: {card.latency_p(0.5):.2f}s, p95: {card.latency_p(0.95):.2f}s")
     print("=" * 60)
 
@@ -306,22 +319,29 @@ def main() -> int:
     print(f"Scorecard written to {SCORECARD.relative_to(ROOT)}")
     print(f"Immutable run bundle written to {bundle.relative_to(ROOT)}")
 
-    # Stub LLM is deterministic — actor accuracy is bounded by the
-    # _KIND_TO_ATTRIBUTION mapping. Live providers should clear ≥0.50;
-    # for the stub baseline we only fail if action+authority routing
-    # collapses, since those are deterministic and stable.
-    gate = 0.5 if provider != "stub" else 0.0
+    # The deterministic stub is a pipeline control, not a quality baseline.
+    # Its gate verifies complete, policy-valid episodes. Model quality gates
+    # apply only to live providers.
+    if provider == "stub":
+        if card.completion_rate() < 1.0:
+            log.error("Stub pipeline did not complete every episode")
+            return 1
+        if card.unauthorized_routing_rate() > 0.0:
+            log.error("Stub pipeline produced unauthorized routing")
+            return 1
+        return 0
+
     if card.action_accuracy() < 0.85:
         log.error(
             "Action accuracy %.0f%% below 85%% routing gate",
             card.action_accuracy() * 100,
         )
         return 1
-    if card.attr_accuracy() < gate:
+    if card.attr_accuracy() < 0.5:
         log.error(
             "Attribution accuracy %.0f%% below %.0f%% gate",
             card.attr_accuracy() * 100,
-            gate * 100,
+            50.0,
         )
         return 1
     return 0

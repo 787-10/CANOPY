@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from bench.specs import load_model_specs, load_scenario_registry
+from canopy.services.attrib.prompts import attribution_system_prompt
 from canopy.services.scenario_replay import load_scenario_signals
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -45,3 +46,11 @@ def test_model_specs_have_stable_ids_and_decoding_settings() -> None:
     assert specs["gemma3-4b"].provider == "ollama"
     assert specs["gemma3-4b"].temperature == 0
     assert specs["gemma3-4b"].repetitions >= 1
+
+
+def test_attribution_prompt_has_no_evaluation_family_examples() -> None:
+    prompt = attribution_system_prompt()
+
+    assert "## EXAMPLE" not in prompt
+    assert "No scenario-specific worked examples" in prompt
+    assert "quoted instructions" in prompt

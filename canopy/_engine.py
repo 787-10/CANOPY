@@ -11,6 +11,7 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from canopy.services.attrib import AttribService
 from canopy.services.bus import InProcessBus
@@ -86,6 +87,7 @@ def build_engine(
     blocked_domains_provider=None,
     multi_agent: bool = True,
     enable_osint: bool = True,
+    attrib_kb_context: Literal["scenario", "full"] = "scenario",
 ) -> Engine:
     """Wire up the in-process bus, KB, LLM, and the four async services."""
     bus = InProcessBus()
@@ -112,6 +114,7 @@ def build_engine(
         tracer=tracer,
         blocked_domains=blocked_domains_provider,
         multi_agent=multi_agent,
+        kb_context_mode=attrib_kb_context,
     )
     decide = DecideService(
         bus,

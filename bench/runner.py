@@ -95,6 +95,7 @@ async def run_trial(
         attrib_window_s=BENCHMARK_ATTRIBUTION_WINDOW_S,
         multi_agent=multi_agent,
         enable_osint=False,
+        attrib_kb_context="full",
     )
     service_tasks = start_engine_tasks(engine)
 
