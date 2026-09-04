@@ -78,6 +78,9 @@ class ScenarioResult:
     case_id: str | None = None
     family: str | None = None
     cluster_id: str | None = None
+    parent_id: str | None = None
+    transformation: str | None = None
+    relation: str | None = None
 
 
 @dataclass
@@ -262,6 +265,53 @@ class Scorecard:
             intervals[metric] = {"low": round(lo, 3), "high": round(hi, 3)}
         return intervals
 
+    def robustness_metrics(self) -> dict:
+        """Score declared metamorphic relations against each parent case."""
+        parents = {
+            result.case_id: result
+            for result in self.results
+            if result.case_id and result.parent_id is None
+        }
+        grouped: dict[str, list[bool]] = {}
+        for result in self.results:
+            if not result.parent_id or not result.relation:
+                continue
+            parent = parents.get(result.parent_id)
+            if parent is None:
+                continue
+            if result.relation == "invariant":
+                passed = (
+                    actor_head(result.predicted_actor or "")
+                    == actor_head(parent.predicted_actor or "")
+                    and result.predicted_action == parent.predicted_action
+                    and result.predicted_authority == parent.predicted_authority
+                )
+            elif result.relation == "confidence_nonincrease":
+                passed = (
+                    result.confidence is not None
+                    and parent.confidence is not None
+                    and result.confidence <= parent.confidence + 1e-9
+                )
+            else:
+                continue
+            grouped.setdefault(result.transformation or "unknown", []).append(passed)
+
+        total = sum(len(values) for values in grouped.values())
+        passed = sum(sum(values) for values in grouped.values())
+        return {
+            "eligible": total,
+            "passed": passed,
+            "pass_rate": passed / total if total else 0.0,
+            "by_transformation": {
+                name: {
+                    "eligible": len(values),
+                    "passed": sum(values),
+                    "pass_rate": sum(values) / len(values),
+                }
+                for name, values in sorted(grouped.items())
+            },
+        }
+
     def latency_p(self, p: float) -> float:
         if not self.results:
             return 0.0
@@ -366,6 +416,7 @@ class Scorecard:
                 for point in self.risk_coverage_curve()
             ],
             "bootstrap_95": self.bootstrap_intervals(),
+            "robustness": self.robustness_metrics(),
             "forbidden_action_rate": round(self.forbidden_action_rate(), 3),
             "unauthorized_routing_rate": round(
                 self.unauthorized_routing_rate(), 3
@@ -399,6 +450,9 @@ class Scorecard:
                     "case_id": r.case_id,
                     "family": r.family,
                     "cluster_id": r.cluster_id,
+                    "parent_id": r.parent_id,
+                    "transformation": r.transformation,
+                    "relation": r.relation,
                 }
                 for r in self.results
             ],

@@ -81,3 +81,30 @@ def test_run_bundle_is_immutable_and_rescoreable(tmp_path) -> None:
         multi_agent=True,
     )
     assert second != bundle
+
+
+def test_robustness_metrics_score_parent_variant_relations() -> None:
+    parent = _result(correct=True, confidence=0.8)
+    parent.case_id = "parent"
+    invariant = _result(correct=True, confidence=0.8)
+    invariant.case_id = "variant-1"
+    invariant.parent_id = "parent"
+    invariant.transformation = "duplicate_signal"
+    invariant.relation = "invariant"
+    degraded = _result(correct=True, confidence=0.7)
+    degraded.case_id = "variant-2"
+    degraded.parent_id = "parent"
+    degraded.transformation = "drop_domain"
+    degraded.relation = "confidence_nonincrease"
+
+    card = Scorecard(results=[parent, invariant, degraded])
+
+    assert card.robustness_metrics() == {
+        "eligible": 2,
+        "passed": 2,
+        "pass_rate": 1.0,
+        "by_transformation": {
+            "drop_domain": {"eligible": 1, "passed": 1, "pass_rate": 1.0},
+            "duplicate_signal": {"eligible": 1, "passed": 1, "pass_rate": 1.0},
+        },
+    }

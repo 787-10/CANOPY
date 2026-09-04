@@ -14,6 +14,7 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_SCHEMA = ROOT / "services" / "bus" / "schemas" / "signal.schema.json"
 DEFAULT_SCENARIOS = ROOT / "scenarios"
+DEFAULT_BENCHMARK_SCENARIOS = ROOT / "bench" / "scenarios"
 
 ALLOWED_DOMAINS = {
     "sda",
@@ -145,9 +146,11 @@ def validate_file(path: Path, validator: Any | None) -> tuple[int, list[str]]:
 def discover_scenarios(paths: list[str]) -> list[Path]:
     if paths:
         return [Path(path).resolve() for path in paths]
-    if not DEFAULT_SCENARIOS.exists():
-        return []
-    return sorted(DEFAULT_SCENARIOS.glob("*.jsonl"))
+    discovered = []
+    for directory in (DEFAULT_SCENARIOS, DEFAULT_BENCHMARK_SCENARIOS):
+        if directory.exists():
+            discovered.extend(directory.glob("*.jsonl"))
+    return sorted(discovered)
 
 
 def main() -> int:
