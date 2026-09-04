@@ -12,6 +12,7 @@ from canopy.services.schemas.events import (
     Anomaly,
     Attribution,
     Decision,
+    ReasoningTrace,
     Signal,
     UIEvent,
 )
@@ -32,6 +33,8 @@ class TrialArtifact:
     attributions: list[Attribution] = field(default_factory=list)
     decisions: list[Decision] = field(default_factory=list)
     ui_events: list[UIEvent] = field(default_factory=list)
+    traces: list[ReasoningTrace] = field(default_factory=list)
+    errors: list[dict[str, str]] = field(default_factory=list)
 
     @property
     def anomaly_source_signal_ids(self) -> list[str]:
@@ -50,6 +53,21 @@ class TrialArtifact:
             "attribution": self.attributions,
             "decision": self.decisions,
             "ui_event": self.ui_events,
+        }
+
+    def to_dict(self) -> dict:
+        return {
+            "scenario": str(self.scenario),
+            "elapsed_seconds": self.elapsed_seconds,
+            "signals": [item.model_dump(mode="json") for item in self.signals],
+            "anomalies": [item.model_dump(mode="json") for item in self.anomalies],
+            "attributions": [
+                item.model_dump(mode="json") for item in self.attributions
+            ],
+            "decisions": [item.model_dump(mode="json") for item in self.decisions],
+            "ui_events": [item.model_dump(mode="json") for item in self.ui_events],
+            "traces": [item.model_dump(mode="json") for item in self.traces],
+            "errors": self.errors,
         }
 
 
@@ -93,6 +111,7 @@ async def run_trial(
         ),
         asyncio.create_task(consume("decisions.*", artifact.decisions, Decision)),
         asyncio.create_task(consume("ui_events.*", artifact.ui_events, UIEvent)),
+        asyncio.create_task(consume("traces.*", artifact.traces, ReasoningTrace)),
     ]
 
     async def execute() -> None:
@@ -114,7 +133,16 @@ async def run_trial(
 
     started = time.perf_counter()
     try:
-        await asyncio.wait_for(execute(), timeout=timeout_s)
+        try:
+            await asyncio.wait_for(execute(), timeout=timeout_s)
+        except TimeoutError:
+            artifact.errors.append(
+                {
+                    "stage": "trial",
+                    "type": "timeout",
+                    "message": f"trial exceeded {timeout_s:.1f}s",
+                }
+            )
     finally:
         artifact.elapsed_seconds = time.perf_counter() - started
         for task in (*capture_tasks, *service_tasks):

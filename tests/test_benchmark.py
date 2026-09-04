@@ -30,6 +30,7 @@ from bench.scoring import (
 def test_actor_match_handles_actor_head():
     assert actor_match("Russia / GRU", "russia")
     assert actor_match("CHINA / PLA SSF", "China")
+    assert actor_match("China / PLA SSF", ["Russia", "China"])
     assert not actor_match("Iran", "Russia")
 
 
