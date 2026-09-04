@@ -45,7 +45,7 @@ The frontend is a React + Cesium + MapLibre console with two views:
 | **N2YO position feed** ([`public/orbital/`](public/orbital/), [`data/tle_cache.json`](data/tle_cache.json)) | orbit / SDA | Per-satellite live position polls for AEHF, MUOS, WGS, SBIRS, GSSAP, GPS-3 (US) and Yaogan / Cosmos (CHN/RUS). Drives the Cesium globe's animated orbital tracks. |
 | **OSINT corpus** | open-source | Sentence-transformer (`all-MiniLM-L6-v2`, 384-dim) embeddings, cosine-clustered at 0.40, PCA-projected to 2D for the embedding panel. |
 | **Hand-authored scenarios** ([`scenarios/*.jsonl`](scenarios/)) | RF/EW, cyber, PNT, SATCOM, drone, HUMINT | 11 deterministic JSONL beats covering CENTCOM, Army, and regional vignettes. |
-| **Procedural variants** ([`bench/scenarios/`](bench/)) | synthetic | ~40 perturbations of the 11 seeds (miss distance, lead time, signal mix) for the benchmark harness. |
+| **Procedural variants** ([`bench/scenarios/`](bench/)) | synthetic | 44 checked-in perturbations of the 11 seeds for the benchmark harness. |
 | **KB** ([`kb/`](kb/), [`data/kb_seed_entries.json`](data/kb_seed_entries.json)) | tradecraft | Actor capabilities, doctrine references, and routing rules used by `kb.lookup`. |
 
 CANOPY can ingest **live** from both the [CelesTrak](https://celestrak.org) and [N2YO](https://www.n2yo.com) public APIs — `scripts/fetch_orbital_cache.py --mode live` refreshes the TLE catalog directly from CelesTrak, and the N2YO position cache is repopulated on demand from the per-NORAD position-feed endpoint. The on-disk caches in `public/orbital/` and `data/` are the offline fixtures used when the box has no backhaul; switching to live is a single flag.
@@ -113,7 +113,7 @@ Replays a scenario through the engine in-process, asserts the expected sense →
 uv run python -m bench.run
 ```
 
-Runs the 51-scenario harness (11 seeds + ~40 procedural variants) and writes a scorecard with attribution accuracy, calibration, and p50/p95 latency.
+Runs the 55-scenario harness (11 seeds + 44 procedural variants) and writes a scorecard with attribution accuracy, calibration, and p50/p95 latency.
 
 ### Stress mode
 
@@ -160,7 +160,7 @@ kb/                    # capability + routing knowledge base
 
 ## Benchmark
 
-CANOPY ships with its own evaluation harness ([`bench/`](bench/)), which contains 11 hand-labelled seed scenarios plus ~40 procedural variants, each with ground-truth `expected_actor` / `expected_action` / `expected_authority` / `expected_band` labels. `bench/run.py` boots the engine in-process, replays every scenario, and produces a scorecard covering attribution accuracy, action match, authority routing, calibration (correct ↔ confidence band), and p50/p95 latency. 
+CANOPY ships with its own evaluation harness ([`bench/`](bench/)), which contains 11 hand-labelled seed scenarios plus 44 procedural variants. The versioned [`scenarios/manifest.json`](scenarios/manifest.json) is the shared source for demo metadata, benchmark expectations, visibility, and input roles. `bench/run.py` boots a fresh engine per case, publishes only stimulus/context records, and produces a scorecard covering attribution accuracy, action match, authority routing, confidence behavior, and p50/p95 latency.
 
 We're aware that small open-weight models leave headroom on multi-domain attribution compared to large cloud-hosted LLMs. We're interested in pursuing further research in this direction and are happy to move forward with the right collaborators on this.
 
