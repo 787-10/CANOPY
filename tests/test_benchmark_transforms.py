@@ -71,13 +71,20 @@ def test_duplicate_and_reorder_are_deterministic() -> None:
     assert len(duplicated) == 3
     assert duplicated[1]["id"].endswith("-duplicate")
     assert [item["id"] for item in reordered] == ["sig-2", "sig-1"]
+    assert [item["ts"] for item in reordered] == [
+        "2026-06-18T14:00:30Z",
+        "2026-06-18T14:00:00Z",
+    ]
 
 
 def test_untrusted_instruction_is_data_not_a_new_record() -> None:
-    transformed = inject_untrusted_instruction(_records(), "sig-1")
+    transformed = inject_untrusted_instruction(
+        _records(), "sig-1", actor="Alternate Actor"
+    )
 
     assert len(transformed) == 2
     assert "Ignore prior instructions" in transformed[0]["payload"]["summary"]
+    assert "Alternate Actor" in transformed[0]["payload"]["summary"]
     assert transformed[0]["provenance"]["notes"] == "adversarial_untrusted_text"
 
 
@@ -107,6 +114,17 @@ def test_distractor_and_actor_swap_are_schema_valid() -> None:
     assert all(Signal.model_validate(record) for record in swapped)
 
 
+def test_actor_swap_constructs_explicit_counterfactual_evidence() -> None:
+    swapped = swap_actor_evidence(
+        _records(), from_actor="Absent Actor", to_actor="Alternate Actor"
+    )
+
+    assert swapped[0]["payload"]["observables"]["actor_assessment"] == (
+        "Alternate Actor"
+    )
+    assert "Alternate Actor" in swapped[0]["payload"]["summary"]
+
+
 def test_generator_builds_four_controlled_variants_per_parent(tmp_path) -> None:
     labels = generate(variants_per_seed=4, seed=1337, output_dir=tmp_path)
 
@@ -116,9 +134,24 @@ def test_generator_builds_four_controlled_variants_per_parent(tmp_path) -> None:
         "reorder_within",
         "drop_domain",
         "inject_untrusted_instruction",
+        "delay_signal",
+        "degrade_provenance",
+        "inject_distractor",
+        "swap_actor_evidence",
+        "perturb_threshold",
     }
     assert all(label["parent_id"] for label in labels)
     assert all(label["relation"] for label in labels)
+    for label in labels:
+        accepted = {
+            actor.split("/", 1)[0].strip().lower()
+            for actor in label["expected_actors"]
+        }
+        if label["transformation"] == "inject_untrusted_instruction":
+            assert label["parameters"]["actor"].lower() not in accepted
+        if label["transformation"] == "swap_actor_evidence":
+            assert label["relation"] == "counterfactual_actor"
+            assert label["expected_actors"] == [label["parameters"]["to_actor"]]
 
     for label in labels:
         path = tmp_path / label["filename"]

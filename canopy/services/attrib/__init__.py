@@ -90,6 +90,16 @@ class AttribService:
         self._kb_context_mode = kb_context_mode
         self._buffer: list[Anomaly] = []
         self._flush_task: asyncio.Task | None = None
+        self.errors: list[dict[str, str]] = []
+
+    def _record_error(self, stage: str, exc: Exception) -> None:
+        self.errors.append(
+            {
+                "stage": stage,
+                "type": exc.__class__.__name__,
+                "message": str(exc),
+            }
+        )
 
     async def run(self) -> None:
         try:
@@ -157,7 +167,8 @@ class AttribService:
         # is pulling its weight against single-pass attribution.
         try:
             primary = await self._llm.attribute_primary(anomalies, context)
-        except Exception:
+        except Exception as exc:
+            self._record_error("attribute_primary", exc)
             log.exception(
                 "attrib: attribute_primary failed for batch of %d", len(anomalies)
             )
@@ -179,7 +190,8 @@ class AttribService:
                 challenge = await self._llm.attribute_redteam(
                     primary, anomalies, context
                 )
-            except Exception:
+            except Exception as exc:
+                self._record_error("attribute_redteam", exc)
                 log.exception(
                     "attrib: attribute_redteam failed for primary=%s", primary.id
                 )
@@ -200,7 +212,8 @@ class AttribService:
                     attribution = await self._llm.reconcile(
                         primary, challenge, anomalies, context
                     )
-                except Exception:
+                except Exception as exc:
+                    self._record_error("reconcile", exc)
                     log.exception(
                         "attrib: reconcile failed for primary=%s", primary.id
                     )

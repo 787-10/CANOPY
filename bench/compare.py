@@ -1,7 +1,7 @@
-"""Run the benchmark across multiple LLM providers (and optionally with
+"""Run the benchmark across versioned model specs (and optionally with
 the red-team loop disabled) and print a side-by-side comparison.
 
-Provider names accept an optional ``+single`` / ``+multi`` suffix:
+Model spec ids accept an optional ``+single`` / ``+multi`` suffix:
 
   ``anthropic``         — multi-agent (primary + redteam + reconcile)
   ``anthropic+single``  — single-pass (primary only — no redteam, no reconcile)
@@ -18,8 +18,8 @@ seeds + variants.
 
 Usage:
 
-    uv run python -m bench.compare                                        # stub vs anthropic-multi
-    uv run python -m bench.compare --providers stub anthropic+single anthropic+multi
+    uv run python -m bench.compare                                        # stub control only
+    uv run python -m bench.compare --models stub gemma3-4b+single gemma3-4b+multi
     uv run python -m bench.compare --full                                 # all 55 scenarios
     uv run python -m bench.compare --skip-stub                            # only re-run anthropic
 """
@@ -29,7 +29,6 @@ import argparse
 import asyncio
 import json
 import logging
-import os
 import sys
 import time
 from pathlib import Path
@@ -37,8 +36,16 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from bench import generate as bench_generate
-from bench.run import _run, BENCH_DIR
+from bench.artifacts import write_run_bundle
+from bench.model_runtime import (
+    benchmark_provenance,
+    hardware_snapshot,
+    preflight_model,
+)
+from bench.run import _aggregate_scorecards, _episode_timeout, _run, BENCH_DIR
+from bench.runner import run_trial
 from bench.scoring import Scorecard
+from bench.specs import ModelSpec, load_model_specs, load_scenario_registry
 
 # Pull ANTHROPIC_API_KEY (and any other provider creds) out of .env at the
 # repo root before we check for them. Mirrors canopy.api lifespan behaviour.
@@ -279,17 +286,18 @@ def _parse_label(label: str) -> tuple[str, bool, str]:
 
 
 async def _run_one(
-    label: str, provider: str, multi_agent: bool, *, seeds_only: bool
+    label: str, model_spec: ModelSpec, multi_agent: bool, *, seeds_only: bool
 ) -> Scorecard:
     log.info("=" * 60)
     log.info(
         "Running label=%s provider=%s multi_agent=%s seeds_only=%s",
-        label, provider, multi_agent, seeds_only,
+        label, model_spec.provider, multi_agent, seeds_only,
     )
     log.info("=" * 60)
     t0 = time.perf_counter()
     card = await _run(
-        provider=provider,
+        provider=model_spec.provider,
+        model_spec=model_spec,
         seeds_only=seeds_only,
         limit=None,
         multi_agent=multi_agent,
@@ -305,23 +313,20 @@ async def _run_one(
     return card
 
 
-def _check_credentials(providers: list[str]) -> None:
-    bare_providers = {p.split("+", 1)[0] for p in providers}
-    if "anthropic" in bare_providers and not os.environ.get("ANTHROPIC_API_KEY"):
-        raise SystemExit(
-            "ANTHROPIC_API_KEY not set — required for --providers anthropic. "
-            "Add it to .env at the repo root and retry."
-        )
-
-
 def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
+        "--models",
+        nargs="+",
+        default=None,
+        help="Model ids from bench/models.yaml (default: stub)",
+    )
+    parser.add_argument(
         "--providers",
         nargs="+",
-        default=["stub", "anthropic"],
-        help="Providers to compare (default: stub anthropic)",
+        default=None,
+        help="Deprecated alias for --models",
     )
     parser.add_argument(
         "--full",
@@ -341,7 +346,8 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    _check_credentials(args.providers)
+    selected = args.models or args.providers or ["stub"]
+    specs = load_model_specs()
     seeds_only = not args.full
 
     if args.full:
@@ -349,23 +355,96 @@ def main() -> int:
 
     COMPARE_DIR.mkdir(parents=True, exist_ok=True)
     scorecards: dict[str, Scorecard] = {}
+    runtimes: dict[str, dict] = {}
+    attempts: dict[str, list[dict]] = {}
+    hardware = hardware_snapshot()
+    provenance = benchmark_provenance()
 
-    for raw_label in args.providers:
-        provider, multi_agent, label = _parse_label(raw_label)
+    for raw_label in selected:
+        model_id, multi_agent, label = _parse_label(raw_label)
+        legacy_aliases = {
+            "anthropic": "anthropic-reference",
+            "ollama": "gemma3-4b",
+        }
+        model_id = legacy_aliases.get(model_id, model_id)
+        if model_id not in specs:
+            parser.error(
+                f"unknown model spec {model_id!r}; "
+                f"choose from: {', '.join(sorted(specs))}"
+            )
+        model_spec = specs[model_id]
+        runtime = preflight_model(model_spec)
+        if not runtime["available"]:
+            parser.error(
+                f"model preflight failed for {model_id}: {runtime.get('error')}"
+            )
+        runtimes[label] = runtime
         cache_path = COMPARE_DIR / f"scorecard_{label}.json"
 
         if (
             args.skip_stub
-            and provider == "stub"
+            and model_spec.provider == "stub"
             and cache_path.exists()
         ):
             log.info("Reusing cached %s scorecard at %s", label, cache_path)
             payload = json.loads(cache_path.read_text())
             card = _scorecard_from_dict(payload)
+            attempts[label] = [{"cached": True, "scorecard": card.to_dict()}]
         else:
-            card = asyncio.run(
-                _run_one(label, provider, multi_agent, seeds_only=seeds_only)
-            )
+            if model_spec.provider != "stub":
+                warmup = load_scenario_registry().benchmark_cases()[0]
+                log.info("Running unscored warm-up for %s", label)
+                asyncio.run(
+                    run_trial(
+                        warmup,
+                        provider=model_spec.provider,
+                        model_spec=model_spec,
+                        multi_agent=multi_agent,
+                        timeout_s=_episode_timeout(
+                            model_spec.provider,
+                            model_spec,
+                            multi_agent=multi_agent,
+                        ),
+                    )
+                )
+            attempt_rows = []
+            attempt_cards = []
+            for repetition in range(1, model_spec.repetitions + 1):
+                card = asyncio.run(
+                    _run_one(
+                        label,
+                        model_spec,
+                        multi_agent,
+                        seeds_only=seeds_only,
+                    )
+                )
+                attempt_cards.append(card)
+                bundle = write_run_bundle(
+                    card,
+                    output_root=BENCH_DIR / "runs",
+                    provider=model_spec.provider,
+                    model=model_spec.model,
+                    suite_id="canopy-public-v1",
+                    multi_agent=multi_agent,
+                    metadata={
+                        "model_spec": model_spec.model_dump(mode="json"),
+                        "runtime": runtime,
+                        "hardware": hardware,
+                        "benchmark_provenance": provenance,
+                        "comparison_label": label,
+                        "repetition": repetition,
+                        "repetitions": model_spec.repetitions,
+                    },
+                )
+                attempt_rows.append(
+                    {
+                        "repetition": repetition,
+                        "bundle": str(bundle.relative_to(ROOT)),
+                        "scorecard": card.to_dict(),
+                    }
+                )
+            card = _aggregate_scorecards(attempt_cards)
+            attempts[label] = attempt_rows
             cache_path.write_text(json.dumps(card.to_dict(), indent=2))
             log.info("Wrote %s", cache_path)
 
@@ -377,7 +456,16 @@ def main() -> int:
     summary_path = COMPARE_DIR / "comparison.json"
     summary_path.write_text(
         json.dumps(
-            {p: c.to_dict() for p, c in scorecards.items()},
+            {
+                "models": {
+                    label: {
+                        "runtime": runtimes[label],
+                        "attempts": attempts[label],
+                        "display_scorecard": scorecards[label].to_dict(),
+                    }
+                    for label in scorecards
+                }
+            },
             indent=2,
         )
     )
@@ -413,6 +501,22 @@ def _scorecard_from_dict(payload: dict) -> Scorecard:
                 case_id=r.get("case_id"),
                 family=r.get("family"),
                 cluster_id=r.get("cluster_id"),
+                parent_id=r.get("parent_id"),
+                transformation=r.get("transformation"),
+                relation=r.get("relation"),
+                expected_actors=r.get("expected_actors", []),
+                expected_abstain=r.get("expected_abstain", False),
+                raw_predicted_actor=r.get("raw_predicted_actor"),
+                raw_predicted_action=r.get("raw_predicted_action"),
+                raw_predicted_authority=r.get("raw_predicted_authority"),
+                raw_actor_correct=r.get("raw_actor_correct"),
+                raw_action_correct=r.get("raw_action_correct"),
+                raw_authority_correct=r.get("raw_authority_correct"),
+                raw_attribution_schema_valid=r.get(
+                    "raw_attribution_schema_valid"
+                ),
+                raw_decision_schema_valid=r.get("raw_decision_schema_valid"),
+                repetition=r.get("repetition"),
             )
         )
     return card

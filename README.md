@@ -60,7 +60,7 @@ Every record — real, live, fixture, or synthetic — flows through the same ca
 
 - Python ≥ 3.11 with [`uv`](https://github.com/astral-sh/uv). 
 - Node ≥ 20.
-- [Ollama](https://ollama.com) running locally with **Gemma 4 E2B** pulled.
+- [Ollama](https://ollama.com) running locally with **Gemma 3 4B** pulled.
 - One NVIDIA RTX 3090 (or any GPU with ~12 GB VRAM) for inference.
 
 ### Environment setup
@@ -73,11 +73,11 @@ uv sync
 ### Start the local LLM
 
 ```bash
-ollama pull gemma4:e2b
+ollama pull gemma3:4b
 ollama serve
 ```
 
-CANOPY reads `CANOPY_OLLAMA_URL` (default `http://localhost:11434`) and `CANOPY_OLLAMA_MODEL` (set this to `gemma4:e2b`).
+CANOPY reads `CANOPY_OLLAMA_URL` (default `http://localhost:11434`) and `CANOPY_OLLAMA_MODEL` (default `gemma3:4b`).
 
 ### Backend gateway
 In one terminal, run the following to start the backend:
@@ -110,10 +110,10 @@ Replays a scenario through the engine in-process, asserts the expected sense →
 ### Benchmark
 
 ```bash
-uv run python -m bench.run
+uv run python -m bench.run --model-spec stub
 ```
 
-Runs the 55-scenario harness (11 seeds + 44 procedural variants) and writes a scorecard with attribution accuracy, calibration, and p50/p95 latency.
+Runs the 55-scenario harness (11 seeds + 44 controlled variants) through a fresh production engine per case. Each invocation writes an immutable bundle under `bench/runs/` with the resolved model spec, runtime preflight, hardware snapshot, raw and repaired adapter outputs, traces, errors, item-level records, and a summary scorecard.
 
 ### Stress mode
 
@@ -136,7 +136,7 @@ The reasoning panel will surface `[stress] PNT data unavailable, lowering confid
 | No reliable backhaul at the edge | Full pipeline runs on a single GPU; no API calls leave the box. |
 | Adversarial denial of comms | Stress-mode degrades gracefully; reasoning panel narrates the loss. |
 | Sensitive sensor data | Nothing is sent to a hyperscaler because Ollama hosts the model in-process. |
-| Time-critical decisions | <20 s sense-to-decide on Gemma 4 E2B. |
+| Time-critical decisions | Stage and end-to-end latency are measured in every benchmark run. |
 
 ---
 
@@ -160,7 +160,32 @@ kb/                    # capability + routing knowledge base
 
 ## Benchmark
 
-CANOPY ships with its own evaluation harness ([`bench/`](bench/)), which contains 11 hand-labelled seed scenarios plus 44 procedural variants. The versioned [`scenarios/manifest.json`](scenarios/manifest.json) is the shared source for demo metadata, benchmark expectations, visibility, and input roles. `bench/run.py` boots a fresh engine per case, publishes only stimulus/context records, and produces a scorecard covering attribution accuracy, action match, authority routing, confidence behavior, and p50/p95 latency.
+CANOPY ships with its own evaluation harness ([`bench/`](bench/)), which contains 11 hand-labelled seed scenarios plus 44 deterministic, named variants. The versioned [`scenarios/manifest.json`](scenarios/manifest.json) is the shared source for demo metadata, benchmark expectations, visibility, and input roles. `bench/run.py` boots a fresh engine per case, publishes only stimulus/context records, and reports acceptable-set attribution, calibration, decision safety, completion, repair rate, efficiency, and parent/variant robustness with family-clustered intervals.
+
+The model matrix is versioned in [`bench/models.yaml`](bench/models.yaml). A model tag must resolve during preflight; CANOPY records the runtime digest instead of silently substituting a model. Local runs are sequential, begin with an unscored warm-up, and retain every declared repetition:
+
+```bash
+# Fast pipeline-control smoke (never a quality baseline)
+uv run python -m bench.run --model-spec stub --limit 4
+
+# Small local baselines (pull explicitly; the harness never downloads models)
+ollama pull llama3.2:1b
+ollama pull gemma3:4b
+uv run python -m bench.run --model-spec llama3.2-1b --seeds-only
+uv run python -m bench.run --model-spec gemma3-4b
+
+# Same case order through single-pass and red-team/reconcile paths
+uv run python -m bench.compare --models gemma3-4b+single gemma3-4b+multi --full
+```
+
+Regenerate and schema-check the public controlled families with:
+
+```bash
+uv run python -m bench.generate --variants 4 --seed 1337
+uv run python scripts/validate_scenarios.py
+```
+
+The implementation roadmap, publication protocol, held-out-suite boundary, and distillation-data separation are documented in [`docs/benchmark_expansion_plan.md`](docs/benchmark_expansion_plan.md).
 
 We're aware that small open-weight models leave headroom on multi-domain attribution compared to large cloud-hosted LLMs. We're interested in pursuing further research in this direction and are happy to move forward with the right collaborators on this.
 

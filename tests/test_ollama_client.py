@@ -82,10 +82,14 @@ def test_constructor_uses_explicit_args_over_env(monkeypatch) -> None:
         model="explicit-model",
         base_url="http://explicit-host:99",
         timeout_s=42.0,
+        temperature=0.0,
+        seed=7,
     )
     assert client._model == "explicit-model"
     assert client._base_url == "http://explicit-host:99"
     assert client._timeout_s == 42.0
+    assert client._temperature == 0.0
+    assert client._seed == 7
 
 
 def test_constructor_picks_up_env_when_no_args(monkeypatch) -> None:
@@ -152,6 +156,7 @@ async def test_attribute_speaks_correct_wire_format() -> None:
     assert req["messages"][1]["role"] == "user"
     # Schema-typed structured output (Ollama ≥ 0.5)
     assert isinstance(req["format"], dict)
+    assert req["options"] == {"temperature": 0.0, "seed": 1337}
     # The user prompt should echo the schema as a markdown fence so smaller
     # models that ignore the format hint still have it in context.
     assert "```json" in req["messages"][1]["content"]
@@ -213,3 +218,23 @@ async def test_attribute_falls_back_to_plain_json_format_if_schema_rejected() ->
     assert len(seen_formats) == 2
     assert isinstance(seen_formats[0], dict)
     assert seen_formats[1] == "json"
+
+
+async def test_ollama_applies_common_attribution_repair() -> None:
+    transport = _FakeOllamaTransport(
+        {
+            "actor": "Example Actor",
+            "confidence": 0.9,
+            "evidence": [],
+            "kb_citations": [],
+        }
+    )
+    client = OllamaLLMClient(_kb(), transport=transport)
+
+    attribution = await client.attribute([_anomaly()])
+
+    assert attribution.actor == "Unknown"
+    assert attribution.confidence == 0.49
+    assert client.validation_events[-1]["stage"] == "attribution"
+    assert client.validation_events[-1]["raw"]["actor"] == "Example Actor"
+    assert client.validation_events[-1]["repaired"]["actor"] == "Unknown"

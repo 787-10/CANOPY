@@ -34,12 +34,38 @@ class AnthropicLLMClient:
     lazily so stub-only runs do not require an API key.
     """
 
-    def __init__(self, kb: KB, *, model: str = DEFAULT_MODEL) -> None:
+    def __init__(
+        self,
+        kb: KB,
+        *,
+        model: str = DEFAULT_MODEL,
+        temperature: float = 0.0,
+        timeout_s: float | None = None,
+    ) -> None:
         from anthropic import AsyncAnthropic
 
         self._kb = kb
         self._model = model
-        self._client = AsyncAnthropic(api_key=os.environ.get("ANTHROPIC_API_KEY"))
+        client_kwargs: dict[str, Any] = {
+            "api_key": os.environ.get("ANTHROPIC_API_KEY")
+        }
+        if timeout_s is not None:
+            client_kwargs["timeout"] = timeout_s
+        self._client = AsyncAnthropic(**client_kwargs)
+        self._temperature = temperature
+        self.validation_events: list[dict[str, Any]] = []
+        self.runtime_events: list[dict[str, Any]] = []
+
+    def _record_usage(self, response: Any) -> None:
+        usage = getattr(response, "usage", None)
+        if usage is None:
+            return
+        self.runtime_events.append(
+            {
+                "input_tokens": getattr(usage, "input_tokens", None),
+                "output_tokens": getattr(usage, "output_tokens", None),
+            }
+        )
 
     async def attribute(
         self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
@@ -60,6 +86,7 @@ class AnthropicLLMClient:
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
+            temperature=self._temperature,
             system=attribution_system_prompt(),
             tools=[ATTRIBUTION_TOOL],
             tool_choice={"type": "tool", "name": ATTRIBUTION_TOOL["name"]},
@@ -70,8 +97,18 @@ class AnthropicLLMClient:
                 }
             ],
         )
+        self._record_usage(response)
         payload = _extract_tool_input(response, ATTRIBUTION_TOOL["name"])
+        raw = dict(payload)
         validation = validate_and_repair_attribution(payload)
+        self.validation_events.append(
+            {
+                "stage": "attribution",
+                "raw": raw,
+                "repaired": dict(validation.repaired),
+                "flags": list(validation.flags),
+            }
+        )
         payload = validation.repaired
         return Attribution(
             anomaly_ids=[a.id for a in anomalies],
@@ -103,6 +140,7 @@ class AnthropicLLMClient:
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
+            temperature=self._temperature,
             system=redteam_system_prompt(),
             tools=[REDTEAM_TOOL],
             tool_choice={"type": "tool", "name": REDTEAM_TOOL["name"]},
@@ -113,6 +151,7 @@ class AnthropicLLMClient:
                 }
             ],
         )
+        self._record_usage(response)
         payload = _extract_tool_input(response, REDTEAM_TOOL["name"])
         return AttributionChallenge(
             primary_attribution_id=primary.id,
@@ -140,6 +179,7 @@ class AnthropicLLMClient:
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
+            temperature=self._temperature,
             system=reconcile_system_prompt(),
             tools=[ATTRIBUTION_TOOL],
             tool_choice={"type": "tool", "name": ATTRIBUTION_TOOL["name"]},
@@ -152,8 +192,18 @@ class AnthropicLLMClient:
                 }
             ],
         )
+        self._record_usage(response)
         payload = _extract_tool_input(response, ATTRIBUTION_TOOL["name"])
+        raw = dict(payload)
         validation = validate_and_repair_attribution(payload)
+        self.validation_events.append(
+            {
+                "stage": "attribution",
+                "raw": raw,
+                "repaired": dict(validation.repaired),
+                "flags": list(validation.flags),
+            }
+        )
         payload = validation.repaired
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
@@ -195,6 +245,7 @@ class AnthropicLLMClient:
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
+            temperature=self._temperature,
             system=decision_system_prompt(),
             tools=[DECISION_TOOL],
             tool_choice={"type": "tool", "name": DECISION_TOOL["name"]},
@@ -202,8 +253,18 @@ class AnthropicLLMClient:
                 {"role": "user", "content": decision_user_prompt(attribution)}
             ],
         )
+        self._record_usage(response)
         payload = _extract_tool_input(response, DECISION_TOOL["name"])
+        raw = dict(payload)
         payload = validate_and_repair_decision(payload)
+        self.validation_events.append(
+            {
+                "stage": "decision",
+                "raw": raw,
+                "repaired": dict(payload),
+                "flags": [],
+            }
+        )
         return Decision(
             attribution_id=attribution.id,
             action=payload["action"],

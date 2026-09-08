@@ -53,6 +53,7 @@ class ScenarioReplayService:
         max_delay_s: float | None = None,
         stop_when_done: asyncio.Event | None = None,
         signal_filter: Callable[[Signal], bool] | None = None,
+        signal_transform: Callable[[Signal], Signal] | None = None,
     ) -> None:
         if isinstance(scenarios, (str, Path)):
             self._paths = [Path(scenarios)]
@@ -65,6 +66,7 @@ class ScenarioReplayService:
         self._max_delay_s = max_delay_s
         self._stop_when_done = stop_when_done
         self._signal_filter = signal_filter
+        self._signal_transform = signal_transform
 
     async def run(self) -> None:
         try:
@@ -81,6 +83,8 @@ class ScenarioReplayService:
         for signal in load_scenario_signals(path):
             if self._signal_filter is not None and not self._signal_filter(signal):
                 continue
+            if self._signal_transform is not None:
+                signal = self._signal_transform(signal)
             if previous_ts is not None:
                 delay = (signal.ts - previous_ts).total_seconds() / self._speed
                 if self._max_delay_s is not None:

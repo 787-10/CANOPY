@@ -11,11 +11,16 @@ from typing import Any
 
 from bench.specs import load_scenario_registry
 from bench.transforms import (
+    degrade_provenance,
+    delay_signal,
     drop_domain,
     duplicate_signal,
+    inject_distractor,
     inject_untrusted_instruction,
     namespace_records,
+    perturb_threshold,
     reorder_within,
+    swap_actor_evidence,
 )
 from canopy.services.scenario_replay import load_scenario_signals
 from canopy.services.schemas.events import Signal
@@ -28,7 +33,7 @@ log = logging.getLogger(__name__)
 
 def _source_records(case) -> list[dict[str, Any]]:
     return [
-        signal.model_dump(mode="json", exclude_none=True)
+        case.sanitize_input(signal).model_dump(mode="json", exclude_none=True)
         for signal in load_scenario_signals(case.scenario_path)
         if case.includes_as_input(signal)
     ]
@@ -46,10 +51,19 @@ def _least_represented_domain(records: list[dict[str, Any]]) -> str:
     return min(counts, key=lambda domain: (counts[domain], domain))
 
 
+def _unaccepted_actor(accepted_actors: list[str]) -> str:
+    accepted = {actor.split("/", 1)[0].strip().lower() for actor in accepted_actors}
+    for candidate in ("China", "Russia", "Iran", "DPRK", "United States"):
+        if candidate.lower() not in accepted:
+            return candidate
+    raise ValueError("no adversarial actor is outside the accepted actor set")
+
+
 def _transform(
-    records: list[dict[str, Any]], index: int
+    records: list[dict[str, Any]], index: int, *, accepted_actors: list[str]
 ) -> tuple[str, str, dict[str, Any], list[dict[str, Any]]]:
-    kind = index % 4
+    kind = index % 9
+    injected_actor = _unaccepted_actor(accepted_actors)
     if kind == 0:
         target = records[0]["id"]
         return (
@@ -76,12 +90,54 @@ def _transform(
             {"domain": domain},
             transformed,
         )
-    target = _target_for_untrusted(records)
+    if kind == 3:
+        target = _target_for_untrusted(records)
+        return (
+            "inject_untrusted_instruction",
+            "invariant",
+            {"signal_id": target, "actor": injected_actor},
+            inject_untrusted_instruction(records, target, actor=injected_actor),
+        )
+    if kind == 4:
+        target = records[-1]["id"]
+        return (
+            "delay_signal",
+            "invariant",
+            {"signal_id": target, "seconds": 30},
+            delay_signal(records, target, seconds=30),
+        )
+    if kind == 5:
+        target = records[0]["id"]
+        return (
+            "degrade_provenance",
+            "confidence_nonincrease",
+            {"signal_id": target, "confidence_delta": 0.2},
+            degrade_provenance(records, target, confidence_delta=0.2),
+        )
+    if kind == 6:
+        return (
+            "inject_distractor",
+            "invariant",
+            {"actor": injected_actor},
+            inject_distractor(records, actor=injected_actor),
+        )
+    if kind == 7:
+        source_actor = accepted_actors[0]
+        return (
+            "swap_actor_evidence",
+            "counterfactual_actor",
+            {"from_actor": source_actor, "to_actor": injected_actor},
+            swap_actor_evidence(
+                records, from_actor=source_actor, to_actor=injected_actor
+            ),
+        )
+    target = records[0]["id"]
+    value = round(max(0.05, float(records[0]["confidence"]) - 0.1), 3)
     return (
-        "inject_untrusted_instruction",
-        "invariant",
-        {"signal_id": target},
-        inject_untrusted_instruction(records, target),
+        "perturb_threshold",
+        "confidence_nonincrease",
+        {"signal_id": target, "field": "confidence", "value": value},
+        perturb_threshold(records, target, field="confidence", value=value),
     )
 
 
@@ -98,14 +154,16 @@ def generate(
     rng = random.Random(seed)
     labels: list[dict[str, Any]] = []
 
-    for case in registry.benchmark_cases():
+    for case_index, case in enumerate(registry.benchmark_cases()):
         records = _source_records(case)
         if not records:
             log.warning("benchmark parent has no stimulus records: %s", case.id)
             continue
         for index in range(variants_per_seed):
             transformation, relation, parameters, transformed = _transform(
-                records, index
+                records,
+                case_index * variants_per_seed + index,
+                accepted_actors=case.expected.actors,
             )
             # The RNG is recorded and consumed so future stochastic named
             # transforms remain reproducible without changing this contract.
@@ -122,6 +180,11 @@ def generate(
                     handle.write("\n")
 
             expected = case.expected
+            expected_actors = (
+                [parameters["to_actor"]]
+                if relation == "counterfactual_actor"
+                else expected.actors
+            )
             labels.append(
                 {
                     "schema_version": 1,
@@ -135,13 +198,14 @@ def generate(
                     "relation": relation,
                     "parameters": parameters,
                     "seed": variant_seed,
-                    "expected_actor": expected.actors[0],
-                    "expected_actors": expected.actors,
+                    "expected_actor": expected_actors[0],
+                    "expected_actors": expected_actors,
                     "expected_action": expected.actions[0],
                     "expected_actions": expected.actions,
                     "expected_authority": expected.authorities[0],
                     "expected_authorities": expected.authorities,
                     "confidence_band": expected.confidence_band,
+                    "abstain": expected.abstain,
                     "forbidden_actions": expected.forbidden_actions,
                 }
             )
