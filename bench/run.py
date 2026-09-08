@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from bench import generate as bench_generate
+from bench.artifacts import write_run_bundle
 from bench.runner import run_trial
 from bench.specs import load_scenario_registry
 from bench.scoring import (
@@ -57,14 +58,20 @@ def _label_outputs(
     pred_action = decision.action if decision else None
     pred_authority = decision.authority if decision else None
 
+    expected_actors = label.get("expected_actors", label["expected_actor"])
+    expected_actions = label.get("expected_actions", label["expected_action"])
+    expected_authorities = label.get(
+        "expected_authorities", label["expected_authority"]
+    )
+
     actor_correct = pred_actor is not None and actor_match(
-        pred_actor, label["expected_actor"]
+        pred_actor, expected_actors
     )
     action_correct = pred_action is not None and action_match(
-        pred_action, label["expected_action"]
+        pred_action, expected_actions
     )
     authority_correct = pred_authority is not None and authority_match(
-        pred_authority, label["expected_authority"]
+        pred_authority, expected_authorities
     )
     calibrated = pred_conf is not None and confidence_band_match(
         pred_conf, label.get("confidence_band", "med")
@@ -85,6 +92,10 @@ def _label_outputs(
         action_correct=action_correct,
         authority_correct=authority_correct,
         calibrated=calibrated,
+        forbidden_action=pred_action in label.get("forbidden_actions", []),
+        case_id=label.get("case_id"),
+        family=label.get("family"),
+        cluster_id=label.get("cluster_id"),
     )
 
 
@@ -96,9 +107,16 @@ def _seed_labels() -> list[dict[str, Any]]:
             {
                 "file": case.file,
                 "expected_actor": expected.actors[0],
+                "expected_actors": expected.actors,
                 "expected_action": expected.actions[0],
+                "expected_actions": expected.actions,
                 "expected_authority": expected.authorities[0],
+                "expected_authorities": expected.authorities,
                 "confidence_band": expected.confidence_band,
+                "forbidden_actions": expected.forbidden_actions,
+                "case_id": case.id,
+                "family": case.family,
+                "cluster_id": case.id,
                 "_path": str(case.scenario_path),
                 "_case": case,
             }
@@ -117,7 +135,13 @@ def _variant_labels() -> list[dict[str, Any]]:
         path = (BENCH_DIR / rel).resolve()
         if not path.exists():
             continue
-        out.append({**entry, "_path": str(path)})
+        out.append(
+            {
+                **entry,
+                "_path": str(path),
+                "cluster_id": Path(entry.get("seed_file", rel)).stem,
+            }
+        )
     return out
 
 
@@ -158,7 +182,26 @@ async def _run(
         result = _label_outputs(
             label, trial.captured(), trial.elapsed_seconds
         )
-        scorecard.append(result)
+        item = trial.to_dict()
+        item.update(
+            {
+                "case_id": result.case_id or Path(label["file"]).stem,
+                "family": result.family,
+                "expected": {
+                    "actors": label.get(
+                        "expected_actors", [label["expected_actor"]]
+                    ),
+                    "actions": label.get(
+                        "expected_actions", [label["expected_action"]]
+                    ),
+                    "authorities": label.get(
+                        "expected_authorities", [label["expected_authority"]]
+                    ),
+                    "forbidden_actions": label.get("forbidden_actions", []),
+                },
+            }
+        )
+        scorecard.append(result, item=item)
         log.info(
             "  [%d/%d] %-50s  actor=%s%s  action=%s%s  "
             "auth=%s%s  conf=%s",
@@ -206,6 +249,16 @@ def _print_report(card: Scorecard) -> None:
         f"  Confidence calibration tier: {card.correct('calibrated')}/{card.total} "
         f"= {card.calibration_rate() * 100:.0f}%"
     )
+    print(
+        f"  Brier score: {card.brier_score():.3f}, "
+        f"ECE: {card.expected_calibration_error():.3f}"
+    )
+    print(
+        f"Policy violations: forbidden actions "
+        f"{card.forbidden_action_rate() * 100:.1f}%, unauthorized routing "
+        f"{card.unauthorized_routing_rate() * 100:.1f}%"
+    )
+    print(f"Completion rate: {card.completion_rate() * 100:.1f}%")
     print(f"Latency p50: {card.latency_p(0.5):.2f}s, p95: {card.latency_p(0.95):.2f}s")
     print("=" * 60)
 
@@ -241,8 +294,17 @@ def main() -> int:
     )
 
     SCORECARD.write_text(json.dumps(card.to_dict(), indent=2))
+    bundle = write_run_bundle(
+        card,
+        output_root=BENCH_DIR / "runs",
+        provider=provider,
+        model=provider,
+        suite_id="canopy-public-v1",
+        multi_agent=not args.no_redteam,
+    )
     _print_report(card)
     print(f"Scorecard written to {SCORECARD.relative_to(ROOT)}")
+    print(f"Immutable run bundle written to {bundle.relative_to(ROOT)}")
 
     # Stub LLM is deterministic — actor accuracy is bounded by the
     # _KIND_TO_ATTRIBUTION mapping. Live providers should clear ≥0.50;
