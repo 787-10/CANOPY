@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from pathlib import Path
 
 from canopy.services.bus import Bus
@@ -52,6 +52,7 @@ class ScenarioReplayService:
         speed: float = 1.0,
         max_delay_s: float | None = None,
         stop_when_done: asyncio.Event | None = None,
+        signal_filter: Callable[[Signal], bool] | None = None,
     ) -> None:
         if isinstance(scenarios, (str, Path)):
             self._paths = [Path(scenarios)]
@@ -63,6 +64,7 @@ class ScenarioReplayService:
         self._speed = speed
         self._max_delay_s = max_delay_s
         self._stop_when_done = stop_when_done
+        self._signal_filter = signal_filter
 
     async def run(self) -> None:
         try:
@@ -77,6 +79,8 @@ class ScenarioReplayService:
         previous_ts = None
         published = 0
         for signal in load_scenario_signals(path):
+            if self._signal_filter is not None and not self._signal_filter(signal):
+                continue
             if previous_ts is not None:
                 delay = (signal.ts - previous_ts).total_seconds() / self._speed
                 if self._max_delay_s is not None:

@@ -1,0 +1,94 @@
+schema_version: 1
+models:
+  - id: stub
+    provider: stub
+    model: deterministic-control
+    temperature: 0
+    repetitions: 1
+
+  - id: llama3.2-1b
+    provider: ollama
+    model: llama3.2:1b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 180
+    quantization: registry-default
+    repetitions: 3
+
+  - id: qwen3-1.7b
+    provider: ollama
+    model: qwen3:1.7b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 180
+    quantization: registry-default
+    repetitions: 3
+
+  - id: gemma3-4b
+    provider: ollama
+    model: gemma3:4b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 180
+    quantization: registry-default
+    repetitions: 3
+
+  - id: qwen3-4b
+    provider: ollama
+    model: qwen3:4b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 180
+    quantization: registry-default
+    repetitions: 3
+
+  - id: qwen3-8b
+    provider: ollama
+    model: qwen3:8b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 240
+    quantization: registry-default
+    repetitions: 3
+
+  - id: gemma3-12b
+    provider: ollama
+    model: gemma3:12b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 300
+    quantization: registry-default
+    repetitions: 3
+
+  - id: qwen3-14b
+    provider: ollama
+    model: qwen3:14b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 360
+    quantization: registry-default
+    repetitions: 3
+
+  - id: gemma3-27b
+    provider: ollama
+    model: gemma3:27b
+    endpoint: http://localhost:11434
+    temperature: 0
+    seed: 1337
+    timeout_s: 480
+    quantization: registry-default
+    repetitions: 3
+
+  - id: anthropic-reference
+    provider: anthropic
+    model: claude-sonnet-4-6
+    temperature: 0
+    timeout_s: 180
+    repetitions: 3

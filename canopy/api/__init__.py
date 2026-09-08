@@ -27,11 +27,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from canopy._engine import build_engine, resolve_provider, start_engine_tasks
 from canopy.services.scenario_replay import ScenarioReplayService
 from canopy.services.schemas.events import Signal
+from bench.specs import load_scenario_registry
 
 log = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = ROOT / "scenarios"
+SCENARIO_REGISTRY = load_scenario_registry()
 
 # Topic patterns we forward to clients, paired with the kind tag they get
 # tagged with in the WebSocket envelope.
@@ -146,9 +148,17 @@ def create_app() -> FastAPI:
 
     @app.get("/scenarios")
     async def list_scenarios() -> list[str]:
-        if not SCENARIOS_DIR.exists():
-            return []
-        return sorted(p.name for p in SCENARIOS_DIR.glob("*.jsonl"))
+        return sorted(case.file for case in SCENARIO_REGISTRY.demo_cases())
+
+    @app.get("/scenario-registry")
+    async def get_scenario_registry() -> dict[str, Any]:
+        return {
+            "schema_version": SCENARIO_REGISTRY.schema_version,
+            "cases": [
+                case.model_dump(mode="json")
+                for case in SCENARIO_REGISTRY.demo_cases()
+            ],
+        }
 
     @app.get("/kb")
     async def get_kb() -> dict[str, Any]:
@@ -175,9 +185,13 @@ def create_app() -> FastAPI:
 
     @app.post("/scenarios/{name}/replay")
     async def replay_scenario(name: str, speed: float = 5.0) -> dict[str, Any]:
-        path = SCENARIOS_DIR / name
-        if not path.exists() or not path.is_file():
+        try:
+            case = SCENARIO_REGISTRY.by_file(name)
+        except KeyError:
             raise HTTPException(status_code=404, detail=f"scenario not found: {name}")
+        if "demo" not in case.visibility:
+            raise HTTPException(status_code=404, detail=f"scenario not found: {name}")
+        path = case.scenario_path
 
         prev = app.state.replay_task
         if prev is not None and not prev.done():

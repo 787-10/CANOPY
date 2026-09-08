@@ -16,10 +16,9 @@ import logging
 from pathlib import Path
 from typing import Any
 
-import yaml
-
 from bench import generate as bench_generate
 from bench.runner import run_trial
+from bench.specs import load_scenario_registry
 from bench.scoring import (
     ScenarioResult,
     Scorecard,
@@ -32,8 +31,6 @@ from canopy._engine import resolve_provider
 from canopy.services.schemas.events import Attribution, Decision
 
 ROOT = Path(__file__).resolve().parent.parent
-SEEDS_YAML = Path(__file__).resolve().parent / "seeds.yaml"
-SOURCE_DIR = ROOT / "scenarios"
 BENCH_DIR = Path(__file__).resolve().parent
 VARIANTS_DIR = BENCH_DIR / "scenarios"
 SCORECARD = BENCH_DIR / "scorecard.json"
@@ -92,13 +89,20 @@ def _label_outputs(
 
 
 def _seed_labels() -> list[dict[str, Any]]:
-    config = yaml.safe_load(SEEDS_YAML.read_text())
     out: list[dict[str, Any]] = []
-    for seed in config["seeds"]:
-        path = SOURCE_DIR / seed["file"]
-        if not path.exists():
-            continue
-        out.append({**seed, "_path": str(path), "file": seed["file"]})
+    for case in load_scenario_registry().benchmark_cases():
+        expected = case.expected
+        out.append(
+            {
+                "file": case.file,
+                "expected_actor": expected.actors[0],
+                "expected_action": expected.actions[0],
+                "expected_authority": expected.authorities[0],
+                "confidence_band": expected.confidence_band,
+                "_path": str(case.scenario_path),
+                "_case": case,
+            }
+        )
     return out
 
 
@@ -146,7 +150,7 @@ async def _run(
     for i, label in enumerate(labels, start=1):
         path = Path(label["_path"])
         trial = await run_trial(
-            path,
+            label.get("_case", path),
             provider=provider,
             multi_agent=multi_agent,
             timeout_s=trial_timeout,

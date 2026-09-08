@@ -13,6 +13,7 @@ import pytest
 
 from bench.run import _label_outputs, _run, _seed_labels
 from bench.runner import run_trial
+from bench.specs import load_scenario_registry
 from canopy._engine import build_engine
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -112,6 +113,20 @@ def test_trials_are_isolated_and_repeatable():
     assert [item.actor for item in first.attributions] == [
         item.actor for item in second.attributions
     ]
+
+
+def test_trial_publishes_only_manifest_input_roles():
+    case = load_scenario_registry().by_file(
+        "army_multidomain_attack_chain.jsonl"
+    )
+    trial = asyncio.run(run_trial(case, provider="stub"))
+
+    assert trial.signals
+    assert all(
+        signal.source != "canopy-correlation-engine"
+        for signal in trial.signals
+    )
+    assert "army-chain-008" not in {signal.id for signal in trial.signals}
 
 
 def test_bench_run_against_subset_produces_scorecard():

@@ -15,6 +15,7 @@ from canopy.services.schemas.events import (
     Signal,
     UIEvent,
 )
+from bench.specs import ScenarioSpec
 
 BENCHMARK_ATTRIBUTION_WINDOW_S = 3600.0
 DEFAULT_TRIAL_TIMEOUT_S = 600.0
@@ -53,14 +54,23 @@ class TrialArtifact:
 
 
 async def run_trial(
-    scenario: str | Path,
+    scenario: str | Path | ScenarioSpec,
     *,
     provider: str,
     multi_agent: bool = True,
     timeout_s: float = DEFAULT_TRIAL_TIMEOUT_S,
 ) -> TrialArtifact:
     """Replay and fully drain one scenario through a fresh production engine."""
-    path = Path(scenario)
+    if isinstance(scenario, ScenarioSpec):
+        path = scenario.scenario_path
+        signal_filter = scenario.includes_as_input
+    else:
+        path = Path(scenario)
+        # Legacy generated variants predate record roles. Their embedded
+        # CANOPY assessments are oracle/display records, never model inputs.
+        signal_filter = lambda signal: (
+            signal.source != "canopy-correlation-engine"
+        )
     artifact = TrialArtifact(scenario=path)
     engine = build_engine(
         provider=provider,
@@ -95,6 +105,7 @@ async def run_trial(
             path,
             speed=10000.0,
             max_delay_s=0.0,
+            signal_filter=signal_filter,
         )
         await replay.run()
         await engine.bus.drain()

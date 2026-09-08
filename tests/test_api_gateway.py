@@ -35,6 +35,17 @@ def test_list_scenarios(client: TestClient) -> None:
     assert "army_multidomain_attack_chain.jsonl" in scenarios
 
 
+def test_scenario_registry_exposes_demo_metadata(client: TestClient) -> None:
+    response = client.get("/scenario-registry")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["schema_version"] == 1
+    by_file = {case["file"]: case for case in payload["cases"]}
+    assert by_file["beat47.jsonl"]["short_name"] == "SATCOM gateway"
+    assert "demo" in by_file["beat47.jsonl"]["visibility"]
+
+
 def test_replay_unknown_scenario_404(client: TestClient) -> None:
     response = client.post("/scenarios/does_not_exist.jsonl/replay")
     assert response.status_code == 404
