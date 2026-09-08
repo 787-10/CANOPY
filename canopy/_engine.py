@@ -41,7 +41,7 @@ class Engine:
     attrib: AttribService
     decide: DecideService
     ui_events: UIEventService
-    osint_cluster: OsintClusterService
+    osint_cluster: OsintClusterService | None
 
 
 def build_llm(*, provider: str, kb: KB) -> LLMClient:
@@ -57,9 +57,13 @@ def build_llm(*, provider: str, kb: KB) -> LLMClient:
         from canopy.services.llm.ollama_client import OllamaLLMClient
 
         return OllamaLLMClient(kb)
-    from canopy.services.llm.stub import StubLLMClient
+    if provider == "stub":
+        from canopy.services.llm.stub import StubLLMClient
 
-    return StubLLMClient(kb)
+        return StubLLMClient(kb)
+    raise ValueError(
+        f"unknown LLM provider {provider!r}; expected one of {LLM_PROVIDERS}"
+    )
 
 
 def resolve_provider(*, llm_flag: str | None, live_flag: bool = False) -> str:
@@ -81,6 +85,7 @@ def build_engine(
     attrib_window_s: float = 2.0,
     blocked_domains_provider=None,
     multi_agent: bool = True,
+    enable_osint: bool = True,
 ) -> Engine:
     """Wire up the in-process bus, KB, LLM, and the four async services."""
     bus = InProcessBus()
@@ -117,7 +122,9 @@ def build_engine(
         tool_ctx=tool_ctx,
     )
     ui_events = UIEventService(bus)
-    osint_cluster = OsintClusterService(bus, tracer=tracer)
+    osint_cluster = (
+        OsintClusterService(bus, tracer=tracer) if enable_osint else None
+    )
 
     return Engine(
         bus=bus,
@@ -135,10 +142,14 @@ def build_engine(
 
 def start_engine_tasks(engine: Engine) -> list[asyncio.Task]:
     """Launch the service runners. Returns the tasks for cancellation."""
-    return [
+    tasks = [
         asyncio.create_task(engine.fusion.run(), name="fusion"),
         asyncio.create_task(engine.attrib.run(), name="attrib"),
         asyncio.create_task(engine.decide.run(), name="decide"),
         asyncio.create_task(engine.ui_events.run(), name="ui_events"),
-        asyncio.create_task(engine.osint_cluster.run(), name="osint_cluster"),
     ]
+    if engine.osint_cluster is not None:
+        tasks.append(
+            asyncio.create_task(engine.osint_cluster.run(), name="osint_cluster")
+        )
+    return tasks

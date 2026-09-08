@@ -13,36 +13,23 @@ import argparse
 import asyncio
 import json
 import logging
-import time
 from pathlib import Path
 from typing import Any
 
 import yaml
 
 from bench import generate as bench_generate
+from bench.runner import run_trial
 from bench.scoring import (
     ScenarioResult,
     Scorecard,
     action_match,
     actor_match,
     authority_match,
-    confidence_band,
     confidence_band_match,
 )
-from canopy._engine import (
-    Engine,
-    build_engine,
-    resolve_provider,
-    start_engine_tasks,
-)
-from canopy.services.scenario_replay import ScenarioReplayService
-from canopy.services.schemas.events import (
-    Anomaly,
-    Attribution,
-    Decision,
-    Signal,
-    UIEvent,
-)
+from canopy._engine import resolve_provider
+from canopy.services.schemas.events import Attribution, Decision
 
 ROOT = Path(__file__).resolve().parent.parent
 SEEDS_YAML = Path(__file__).resolve().parent / "seeds.yaml"
@@ -50,88 +37,14 @@ SOURCE_DIR = ROOT / "scenarios"
 BENCH_DIR = Path(__file__).resolve().parent
 VARIANTS_DIR = BENCH_DIR / "scenarios"
 SCORECARD = BENCH_DIR / "scorecard.json"
-PER_SCENARIO_TIMEOUT = 15.0
-# Maximum time to wait after replay finishes for the engine to produce a
-# Decision. Stub takes <1ms; Anthropic does primary+redteam+reconcile+decide
-# (4 LLM calls) so allow ~90s. Polled — exits as soon as a Decision lands.
-DRAIN_BUDGETS_S: dict[str, float] = {
-    "stub": 1.0,
-    "anthropic": 90.0,
-    "ollama": 120.0,
+TRIAL_TIMEOUTS_S: dict[str, float] = {
+    "stub": 30.0,
+    "anthropic": 360.0,
+    "ollama": 900.0,
 }
-DRAIN_DEFAULT_S = 1.0
-DRAIN_POLL_S = 0.1
+TRIAL_TIMEOUT_DEFAULT_S = 600.0
 
 log = logging.getLogger(__name__)
-
-
-async def _run_scenario(
-    engine: Engine,
-    path: Path,
-    *,
-    timeout_s: float = PER_SCENARIO_TIMEOUT,
-    drain_budget_s: float = DRAIN_DEFAULT_S,
-) -> dict[str, list]:
-    """Replay one scenario and capture engine outputs."""
-    captured: dict[str, list] = {
-        "signal": [],
-        "anomaly": [],
-        "attribution": [],
-        "decision": [],
-        "ui_event": [],
-    }
-
-    async def consume(pattern: str, kind: str, expected_type) -> None:
-        async for _, event in engine.bus.subscribe(pattern):
-            if isinstance(event, expected_type):
-                captured[kind].append(event)
-
-    consumers = [
-        asyncio.create_task(consume("signals.*", "signal", Signal)),
-        asyncio.create_task(consume("anomalies.*", "anomaly", Anomaly)),
-        asyncio.create_task(consume("attributions.*", "attribution", Attribution)),
-        asyncio.create_task(consume("decisions.*", "decision", Decision)),
-        asyncio.create_task(consume("ui_events.*", "ui_event", UIEvent)),
-    ]
-
-    replay_done = asyncio.Event()
-    replay = ScenarioReplayService(
-        engine.bus,
-        path,
-        speed=10000.0,  # blast through historical timestamps
-        max_delay_s=0.0,
-        stop_when_done=replay_done,
-    )
-    replay_task = asyncio.create_task(replay.run())
-
-    try:
-        await asyncio.wait_for(replay_done.wait(), timeout=timeout_s)
-    except asyncio.TimeoutError:
-        log.warning("replay timed out for %s", path.name)
-
-    # Drain: poll until we see a Decision (the last stage of the pipeline)
-    # or the budget runs out. Anthropic's three attribution calls + decide
-    # take ~10-30s, so the previous fixed 0.5s drain captured nothing for
-    # live providers and falsely reported them as wrong.
-    drain_t0 = time.perf_counter()
-    while time.perf_counter() - drain_t0 < drain_budget_s:
-        if captured["decision"]:
-            # Give one more poll cycle for the decision to fan out to
-            # ui_events before we cut the consumers.
-            await asyncio.sleep(DRAIN_POLL_S)
-            break
-        await asyncio.sleep(DRAIN_POLL_S)
-
-    replay_task.cancel()
-    for c in consumers:
-        c.cancel()
-    for t in (replay_task, *consumers):
-        try:
-            await t
-        except asyncio.CancelledError:
-            pass
-
-    return captured
 
 
 def _label_outputs(
@@ -147,25 +60,17 @@ def _label_outputs(
     pred_action = decision.action if decision else None
     pred_authority = decision.authority if decision else None
 
-    actor_correct = (
-        actor_match(pred_actor or "", label["expected_actor"])
-        if pred_actor is not None
-        else label["expected_actor"].lower() == "unknown"
+    actor_correct = pred_actor is not None and actor_match(
+        pred_actor, label["expected_actor"]
     )
-    action_correct = (
-        action_match(pred_action or "", label["expected_action"])
-        if pred_action is not None
-        else label["expected_action"] in ("any", "*")
+    action_correct = pred_action is not None and action_match(
+        pred_action, label["expected_action"]
     )
-    authority_correct = (
-        authority_match(pred_authority or "", label["expected_authority"])
-        if pred_authority is not None
-        else label["expected_authority"] in ("any", "*")
+    authority_correct = pred_authority is not None and authority_match(
+        pred_authority, label["expected_authority"]
     )
-    calibrated = (
-        confidence_band_match(pred_conf, label.get("confidence_band", "med"))
-        if pred_conf is not None
-        else label.get("confidence_band", "med") == "low"
+    calibrated = pred_conf is not None and confidence_band_match(
+        pred_conf, label.get("confidence_band", "med")
     )
 
     return ScenarioResult(
@@ -222,11 +127,6 @@ async def _run(
     log.info(
         "Building engine (llm=%s, multi_agent=%s)", provider, multi_agent
     )
-    engine = build_engine(
-        provider=provider, attrib_window_s=0.0, multi_agent=multi_agent
-    )
-    tasks = start_engine_tasks(engine)
-
     scorecard = Scorecard()
 
     labels: list[dict[str, Any]] = []
@@ -236,42 +136,39 @@ async def _run(
     if limit is not None:
         labels = labels[:limit]
 
-    drain_budget = DRAIN_BUDGETS_S.get(provider, DRAIN_DEFAULT_S)
+    trial_timeout = TRIAL_TIMEOUTS_S.get(provider, TRIAL_TIMEOUT_DEFAULT_S)
     log.info(
-        "Scoring %d scenarios (drain budget per scenario: %.0fs)",
+        "Scoring %d scenarios (trial timeout: %.0fs)",
         len(labels),
-        drain_budget,
+        trial_timeout,
     )
 
-    try:
-        for i, label in enumerate(labels, start=1):
-            path = Path(label["_path"])
-            t0 = time.perf_counter()
-            captured = await _run_scenario(
-                engine, path, drain_budget_s=drain_budget
-            )
-            elapsed = time.perf_counter() - t0
-            result = _label_outputs(label, captured, elapsed)
-            scorecard.append(result)
-            log.info(
-                "  [%d/%d] %-50s  actor=%s%s  action=%s%s  "
-                "auth=%s%s  conf=%s",
-                i,
-                len(labels),
-                Path(label["file"]).name,
-                result.predicted_actor or "—",
-                "✓" if result.actor_correct else "✗",
-                result.predicted_action or "—",
-                "✓" if result.action_correct else "✗",
-                result.predicted_authority or "—",
-                "✓" if result.authority_correct else "✗",
-                f"{result.confidence:.2f}" if result.confidence is not None else "—",
-            )
-    finally:
-        for t in tasks:
-            t.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        engine.bus.close()
+    for i, label in enumerate(labels, start=1):
+        path = Path(label["_path"])
+        trial = await run_trial(
+            path,
+            provider=provider,
+            multi_agent=multi_agent,
+            timeout_s=trial_timeout,
+        )
+        result = _label_outputs(
+            label, trial.captured(), trial.elapsed_seconds
+        )
+        scorecard.append(result)
+        log.info(
+            "  [%d/%d] %-50s  actor=%s%s  action=%s%s  "
+            "auth=%s%s  conf=%s",
+            i,
+            len(labels),
+            Path(label["file"]).name,
+            result.predicted_actor or "—",
+            "✓" if result.actor_correct else "✗",
+            result.predicted_action or "—",
+            "✓" if result.action_correct else "✗",
+            result.predicted_authority or "—",
+            "✓" if result.authority_correct else "✗",
+            f"{result.confidence:.2f}" if result.confidence is not None else "—",
+        )
 
     return scorecard
 

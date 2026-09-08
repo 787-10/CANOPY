@@ -36,7 +36,7 @@ def confidence_band_match(confidence: float, expected: ConfidenceBand) -> bool:
 
 def action_match(predicted: str, expected: str) -> bool:
     if expected in ("any", "*"):
-        return predicted != ""
+        return predicted not in ("", "threat_warning")
     return predicted == expected
 
 
