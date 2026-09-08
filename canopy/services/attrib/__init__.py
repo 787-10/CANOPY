@@ -4,6 +4,7 @@ import asyncio
 import logging
 
 from collections.abc import Callable
+from typing import Literal
 
 from canopy.services.bus import Bus
 from canopy.services.kb import KB
@@ -77,6 +78,7 @@ class AttribService:
         tracer: Tracer | None = None,
         blocked_domains: Callable[[], set[Domain]] | None = None,
         multi_agent: bool = True,
+        kb_context_mode: Literal["scenario", "full"] = "scenario",
     ) -> None:
         self._bus = bus
         self._llm = llm
@@ -85,6 +87,7 @@ class AttribService:
         self._tracer = tracer
         self._blocked_domains = blocked_domains
         self._multi_agent = multi_agent
+        self._kb_context_mode = kb_context_mode
         self._buffer: list[Anomaly] = []
         self._flush_task: asyncio.Task | None = None
 
@@ -135,13 +138,14 @@ class AttribService:
         # this batch. Falls back to all entries if no scenario hits.
         seen: set[str] = set()
         context = []
-        for a in anomalies:
-            for sid in a.source_signal_ids:
-                for entry in self._kb.by_scenario_signal_id(sid):
-                    if entry.id not in seen:
-                        context.append(entry)
-                        seen.add(entry.id)
-        if not context:
+        if self._kb_context_mode == "scenario":
+            for a in anomalies:
+                for sid in a.source_signal_ids:
+                    for entry in self._kb.by_scenario_signal_id(sid):
+                        if entry.id not in seen:
+                            context.append(entry)
+                            seen.add(entry.id)
+        if self._kb_context_mode == "full" or not context:
             context = self._kb.all_entries()
 
         # Multi-agent attribution loop: primary → red-team → reconcile.
