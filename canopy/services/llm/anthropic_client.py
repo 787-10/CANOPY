@@ -24,6 +24,18 @@ log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
 
+# Output cap per call. The attribution payload (evidence chain, citations,
+# verdict evidence) ran past the old 1024-token cap on claude-sonnet-4-6, and
+# the API returns a tool input cut off at max_tokens as a silently partial
+# object: the missing fields are simply absent, so the validator saw no
+# citations and downgraded a correctly named actor to Unknown.
+DEFAULT_MAX_TOKENS = 4096
+TRUNCATION_RETRY_FACTOR = 2
+
+
+class TruncatedOutputError(ValueError):
+    """The model stopped on ``max_tokens`` mid tool input twice in a row."""
+
 
 def _verdict_fields(payload: dict[str, Any]) -> dict[str, Any]:
     """Verdict lane fields from a validated attribution payload (spec §5)."""
@@ -51,6 +63,7 @@ class AnthropicLLMClient:
         model: str = DEFAULT_MODEL,
         temperature: float = 0.0,
         timeout_s: float | None = None,
+        max_tokens: int | None = None,
     ) -> None:
         from anthropic import AsyncAnthropic
 
@@ -62,19 +75,56 @@ class AnthropicLLMClient:
         if timeout_s is not None:
             client_kwargs["timeout"] = timeout_s
         self._client = AsyncAnthropic(**client_kwargs)
+        # Kept for provenance only: the anthropic SDK 1.x removed the sampling
+        # parameters from messages.create(); current models reject them anyway.
         self._temperature = temperature
+        self._max_tokens = int(
+            max_tokens
+            or os.environ.get("CANOPY_ANTHROPIC_MAX_TOKENS")
+            or DEFAULT_MAX_TOKENS
+        )
         self.validation_events: list[dict[str, Any]] = []
         self.runtime_events: list[dict[str, Any]] = []
 
-    def _record_usage(self, response: Any) -> None:
+    def _record_usage(self, response: Any, **context: Any) -> None:
         usage = getattr(response, "usage", None)
-        if usage is None:
-            return
-        self.runtime_events.append(
-            {
-                "input_tokens": getattr(usage, "input_tokens", None),
-                "output_tokens": getattr(usage, "output_tokens", None),
-            }
+        event: dict[str, Any] = {
+            "input_tokens": getattr(usage, "input_tokens", None),
+            "output_tokens": getattr(usage, "output_tokens", None),
+            "stop_reason": getattr(response, "stop_reason", None),
+        }
+        event.update(context)
+        self.runtime_events.append(event)
+
+    async def _create(self, *, stage: str, **kwargs: Any) -> Any:
+        """``messages.create`` with the output cap and a truncation guard.
+
+        A response that stops on ``max_tokens`` carries a partial tool input
+        that still parses as a valid object, which the validator would then
+        repair into a downgrade. Retry once with a larger cap; raise if the
+        second attempt is cut off as well rather than use a partial payload.
+        """
+        max_tokens = self._max_tokens
+        for attempt in (1, 2):
+            response = await self._client.messages.create(
+                model=self._model, max_tokens=max_tokens, **kwargs
+            )
+            self._record_usage(
+                response, stage=stage, max_tokens=max_tokens, attempt=attempt
+            )
+            if getattr(response, "stop_reason", None) != "max_tokens":
+                return response
+            log.warning(
+                "ANTHROPIC: %s output truncated at max_tokens=%d (attempt %d)",
+                stage,
+                max_tokens,
+                attempt,
+            )
+            max_tokens *= TRUNCATION_RETRY_FACTOR
+        raise TruncatedOutputError(
+            f"Anthropic {stage} output stopped on max_tokens twice "
+            f"(last cap {max_tokens // TRUNCATION_RETRY_FACTOR}); "
+            "refusing to use a partial tool input"
         )
 
     async def attribute(
@@ -98,10 +148,8 @@ class AnthropicLLMClient:
         relevant = self._resolve_kb_context(anomalies, kb_context)
         tool = attribution_tool(rule_verdict)
 
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            temperature=self._temperature,
+        response = await self._create(
+            stage="attribution_primary",
             system=attribution_system_prompt(),
             tools=[tool],
             tool_choice={"type": "tool", "name": tool["name"]},
@@ -112,7 +160,6 @@ class AnthropicLLMClient:
                 }
             ],
         )
-        self._record_usage(response)
         payload = _extract_tool_input(response, tool["name"])
         raw = dict(payload)
         validation = validate_and_repair_attribution(payload, rule_verdict)
@@ -153,10 +200,8 @@ class AnthropicLLMClient:
 
         relevant = self._resolve_kb_context(anomalies, kb_context)
 
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            temperature=self._temperature,
+        response = await self._create(
+            stage="attribution_redteam",
             system=redteam_system_prompt(),
             tools=[REDTEAM_TOOL],
             tool_choice={"type": "tool", "name": REDTEAM_TOOL["name"]},
@@ -167,7 +212,6 @@ class AnthropicLLMClient:
                 }
             ],
         )
-        self._record_usage(response)
         payload = _extract_tool_input(response, REDTEAM_TOOL["name"])
         return AttributionChallenge(
             primary_attribution_id=primary.id,
@@ -195,10 +239,8 @@ class AnthropicLLMClient:
         relevant = self._resolve_kb_context(anomalies, kb_context)
         tool = attribution_tool(rule_verdict)
 
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            temperature=self._temperature,
+        response = await self._create(
+            stage="attribution_reconcile",
             system=reconcile_system_prompt(),
             tools=[tool],
             tool_choice={"type": "tool", "name": tool["name"]},
@@ -211,7 +253,6 @@ class AnthropicLLMClient:
                 }
             ],
         )
-        self._record_usage(response)
         payload = _extract_tool_input(response, tool["name"])
         raw = dict(payload)
         validation = validate_and_repair_attribution(payload, rule_verdict)
@@ -262,10 +303,8 @@ class AnthropicLLMClient:
             decision_user_prompt,
         )
 
-        response = await self._client.messages.create(
-            model=self._model,
-            max_tokens=1024,
-            temperature=self._temperature,
+        response = await self._create(
+            stage="decision",
             system=decision_system_prompt(),
             tools=[DECISION_TOOL],
             tool_choice={"type": "tool", "name": DECISION_TOOL["name"]},
@@ -273,7 +312,6 @@ class AnthropicLLMClient:
                 {"role": "user", "content": decision_user_prompt(attribution)}
             ],
         )
-        self._record_usage(response)
         payload = _extract_tool_input(response, DECISION_TOOL["name"])
         raw = dict(payload)
         payload = validate_and_repair_decision(payload)
