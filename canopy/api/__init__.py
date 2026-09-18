@@ -7,10 +7,13 @@ Endpoints:
 * ``POST /scenarios/{name}/replay``    — start a ScenarioReplayService for that beat
 * ``POST /signals``                    — accept a Signal and publish to the bus
 * ``WS   /ws``                         — fan out every bus event as a JSON envelope:
-                                         ``{topic, kind, data}``
+                                         ``{topic, kind, data}`` (the spec §10
+                                         envelope from ``canopy.services.bus.codec``)
 
-The app boots an in-process engine in its lifespan; every connected WebSocket
-gets the same firehose. Brigade vs Operator filtering is the client's job.
+The app boots an engine in its lifespan; every connected WebSocket gets the
+same firehose. Brigade vs Operator filtering is the client's job. The bus
+backend follows ``CANOPY_BUS`` (``memory``, the default, or ``nats`` with
+``CANOPY_NATS_URL``), mirroring the CLI's ``--bus`` / ``--nats-url``.
 """
 from __future__ import annotations
 
@@ -25,7 +28,13 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
-from canopy._engine import build_engine, resolve_provider, start_engine_tasks
+from canopy._engine import (
+    build_engine,
+    resolve_bus_backend,
+    resolve_provider,
+    start_engine_tasks,
+)
+from canopy.services.bus import codec
 from canopy.services.scenario_replay import ScenarioReplayService
 from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
@@ -41,16 +50,17 @@ SCENARIO_REGISTRY = load_scenario_registry()
 # here once lagged the literal by two domains).
 _ALLOWED_DOMAINS: frozenset[str] = frozenset(get_args(Domain))
 
-# Topic patterns we forward to clients, paired with the kind tag they get
-# tagged with in the WebSocket envelope.
-_FANOUT_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("signals.*", "signal"),
-    ("anomalies.*", "anomaly"),
-    ("attributions.*", "attribution"),
-    ("decisions.*", "decision"),
-    ("ui_events.*", "ui_event"),
-    ("traces.*", "trace"),
-    ("embeddings.*", "embedding"),
+# Topic patterns we forward to clients. The ``kind`` tag in the envelope
+# comes from the event's class through the bus codec registry, so the
+# WebSocket and the NATS backend can never disagree about a tag.
+_FANOUT_PATTERNS: tuple[str, ...] = (
+    "signals.*",
+    "anomalies.*",
+    "attributions.*",
+    "decisions.*",
+    "ui_events.*",
+    "traces.*",
+    "embeddings.*",
 )
 
 
@@ -58,13 +68,16 @@ _FANOUT_PATTERNS: tuple[tuple[str, str], ...] = (
 async def _lifespan(app: FastAPI):
     load_dotenv()
     provider = resolve_provider(llm_flag=None)
-    log.info("CANOPY API starting (llm=%s)", provider)
+    bus_backend = resolve_bus_backend(bus_flag=None)
+    log.info("CANOPY API starting (llm=%s bus=%s)", provider, bus_backend)
 
     app.state.blocked_domains: set[str] = set()
     engine = build_engine(
         provider=provider,
         blocked_domains_provider=lambda: app.state.blocked_domains,
         enable_osint=not bool(os.environ.get("CANOPY_DISABLE_OSINT")),
+        bus_backend=bus_backend,
+        nats_url=os.environ.get("CANOPY_NATS_URL"),
     )
     app.state.engine = engine
     app.state.clients = set()
@@ -72,10 +85,10 @@ async def _lifespan(app: FastAPI):
     app.state.engine_tasks = start_engine_tasks(engine)
     app.state.fanout_tasks = [
         asyncio.create_task(
-            _fanout(engine.bus, pattern, kind, app.state.clients),
-            name=f"fanout-{kind}",
+            _fanout(engine.bus, pattern, app.state.clients),
+            name=f"fanout-{pattern}",
         )
-        for pattern, kind in _FANOUT_PATTERNS
+        for pattern in _FANOUT_PATTERNS
     ]
 
     try:
@@ -92,17 +105,19 @@ async def _lifespan(app: FastAPI):
             *(t for t in app.state.engine_tasks),
             return_exceptions=True,
         )
-        engine.bus.close()
+        await engine.bus.close()
 
 
-async def _fanout(bus, pattern: str, kind: str, clients: set[WebSocket]) -> None:
+async def _fanout(bus, pattern: str, clients: set[WebSocket]) -> None:
     """Forward every bus event matching *pattern* to every connected client."""
     async for topic, event in bus.subscribe(pattern):
-        if hasattr(event, "model_dump"):
-            data: Any = event.model_dump(mode="json")
-        else:
-            data = event
-        envelope = {"topic": topic, "kind": kind, "data": data}
+        try:
+            envelope = codec.envelope(topic, event)
+        except codec.CodecError:
+            log.warning(
+                "fanout: dropping unregistered event on %s: %r", topic, type(event)
+            )
+            continue
         # Iterate over a snapshot — clients can disconnect mid-fanout.
         for ws in list(clients):
             try:

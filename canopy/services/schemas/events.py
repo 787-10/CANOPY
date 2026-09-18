@@ -248,6 +248,11 @@ class Attribution(_Event):
     verdict_basis: VerdictBasis | None = None
     verdict_evidence: list[str] = Field(default_factory=list)
     satellite_id: str | None = None
+    # Fast lane (wave 3A): a provisional attribution is the rule lane's call,
+    # published before any LLM runs; the reasoning lane republishes the same
+    # id with ``provisional=False`` and ``revision`` incremented.
+    provisional: bool = False
+    revision: int = 0
 
 
 class RecoveryBlock(BaseModel):
@@ -279,6 +284,9 @@ class Decision(_Event):
     # Set iff ``action == "recovery_recommendation"`` (docs/INTERFACE-SPEC.md
     # §6); such a decision is local authority with no request packet.
     recovery: RecoveryBlock | None = None
+    # Mirrors the revision of the attribution the decision was made for; the
+    # decision id is stable across revisions (wave 3A).
+    revision: int = 0
 
 
 class Recommendation(BaseModel):

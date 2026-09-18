@@ -45,8 +45,16 @@ export type ManeuverDemo = {
   demoType?: 'evasion' | 'strike' | 'interdiction';
 };
 
-function pushBounded<T>(buffer: T[], item: T): T[] {
-  const next = [item, ...buffer];
+// Newest-first ring buffer. An item whose id is already present replaces the
+// stored one (moved to the front as the newest arrival) instead of being
+// added again: the engine republishes attributions, decisions and UI events
+// under the same id when the reasoning lane revises a provisional verdict
+// (wave 3A).
+function pushBounded<T extends { id: string }>(buffer: T[], item: T): T[] {
+  const rest = buffer.some((existing) => existing.id === item.id)
+    ? buffer.filter((existing) => existing.id !== item.id)
+    : buffer;
+  const next = [item, ...rest];
   if (next.length > RING_BUFFER) next.length = RING_BUFFER;
   return next;
 }

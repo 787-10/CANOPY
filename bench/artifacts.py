@@ -9,7 +9,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from uuid import uuid4
 
-from bench.scoring import Scorecard
+from bench.scoring import RECOVERY_ACTION, Scorecard
 
 
 def _git_sha() -> str:
@@ -67,11 +67,20 @@ def write_run_bundle(
     failures_dir = run_dir / "failures"
     failures_dir.mkdir()
     for result, item in zip(card.results, card.items, strict=False):
+        # A wrong three-way verdict and a recovery recommended under an
+        # expected hostile verdict (a safety miss) are failures too (wave 3D).
+        verdict_miss = result.expected_verdict is not None and not result.verdict_correct
+        recovery_under_hostile = (
+            result.expected_verdict == "hostile_external"
+            and result.predicted_action == RECOVERY_ACTION
+        )
         if (
             result.actor_correct
             and result.action_correct
             and result.authority_correct
             and not result.forbidden_action
+            and not verdict_miss
+            and not recovery_under_hostile
         ):
             continue
         case_id = result.case_id or Path(result.file).stem

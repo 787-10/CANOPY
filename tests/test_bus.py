@@ -3,7 +3,6 @@ from __future__ import annotations
 import asyncio
 
 import pytest
-
 from canopy.services.bus import InProcessBus
 from canopy.services.schemas.events import Location, Provenance, Signal
 
@@ -175,3 +174,116 @@ async def test_drain_waits_for_cascaded_publications() -> None:
     relay_task.cancel()
     collect_task.cancel()
     await asyncio.gather(relay_task, collect_task, return_exceptions=True)
+
+
+# ---- Bus protocol: drain() and close() (docs/INTERFACE-SPEC.md §10) --------
+
+
+def test_inprocess_bus_satisfies_the_protocol() -> None:
+    from canopy.services.bus import Bus
+
+    bus = InProcessBus()
+    for member in ("publish", "subscribe", "drain", "close"):
+        assert callable(getattr(Bus, member))
+        assert callable(getattr(bus, member))
+
+
+async def test_close_is_awaitable_and_still_closes_synchronously() -> None:
+    bus = InProcessBus()
+    bus.subscribe("signals.*")
+    assert len(bus._subs) == 1  # type: ignore[attr-defined]
+
+    result = bus.close()  # legacy un-awaited form still closes at once
+    assert len(bus._subs) == 0  # type: ignore[attr-defined]
+    await result  # protocol form
+
+    bus.subscribe("signals.*")
+    await bus.close()  # and awaiting directly works too
+    assert len(bus._subs) == 0  # type: ignore[attr-defined]
+
+
+async def test_drain_on_idle_bus_returns() -> None:
+    bus = InProcessBus()
+    await asyncio.wait_for(bus.drain(), timeout=1.0)
+
+
+# ---- Engine wiring: Engine.bus is any Bus ---------------------------------
+
+
+def test_engine_bus_is_typed_as_the_protocol() -> None:
+    from canopy._engine import Engine
+    from canopy.services.bus import Bus
+
+    assert Engine.__dataclass_fields__["bus"].type in (Bus, "Bus")
+
+
+async def test_build_engine_accepts_an_injected_bus() -> None:
+    from canopy._engine import build_engine
+
+    bus = InProcessBus()
+    engine = build_engine(bus=bus, enable_osint=False)
+    assert engine.bus is bus
+    await engine.bus.close()
+
+
+def test_build_bus_memory_default_and_backend_resolution(monkeypatch) -> None:
+    from canopy._engine import build_bus, resolve_bus_backend
+
+    assert isinstance(build_bus(), InProcessBus)
+    assert isinstance(build_bus("memory"), InProcessBus)
+
+    monkeypatch.delenv("CANOPY_BUS", raising=False)
+    assert resolve_bus_backend(bus_flag=None) == "memory"
+    assert resolve_bus_backend(bus_flag="nats") == "nats"
+    monkeypatch.setenv("CANOPY_BUS", "NATS")
+    assert resolve_bus_backend(bus_flag=None) == "nats"
+    with pytest.raises(ValueError):
+        resolve_bus_backend(bus_flag="kafka")
+    with pytest.raises(ValueError):
+        build_bus("kafka")  # type: ignore[arg-type]
+
+
+def test_build_engine_nats_backend_is_lazy_and_forwards_the_url(monkeypatch) -> None:
+    """The nats branch imports ``megalith.bus`` only when selected.
+
+    CANOPY's own environment has neither nats-py nor megalith, so a fake
+    module stands in; what matters is that the constructor receives the URL
+    and the stream and that nothing is imported on the memory path.
+    """
+    import sys
+    import types
+
+    from canopy._engine import build_engine
+
+    calls: list[tuple] = []
+
+    class FakeNatsBus(InProcessBus):
+        def __init__(self, url, *, stream, consumer_prefix=None):
+            super().__init__()
+            calls.append((url, stream, consumer_prefix))
+
+    fake_pkg = types.ModuleType("megalith")
+    fake_bus = types.ModuleType("megalith.bus")
+    fake_bus.NatsBus = FakeNatsBus  # type: ignore[attr-defined]
+    fake_pkg.bus = fake_bus  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "megalith", fake_pkg)
+    monkeypatch.setitem(sys.modules, "megalith.bus", fake_bus)
+    monkeypatch.delenv("CANOPY_NATS_URL", raising=False)
+
+    engine = build_engine(
+        bus_backend="nats",
+        nats_url="nats://broker:4222",
+        nats_stream="canopy",
+        consumer_prefix="engine",
+        enable_osint=False,
+    )
+    assert isinstance(engine.bus, FakeNatsBus)
+    assert calls == [("nats://broker:4222", "canopy", "engine")]
+
+    monkeypatch.setenv("CANOPY_NATS_URL", "nats://from-env:4222")
+    build_engine(bus_backend="nats", enable_osint=False)
+    assert calls[-1][0] == "nats://from-env:4222"
+
+    calls.clear()
+    build_engine(enable_osint=False)  # default stays memory
+    assert calls == []

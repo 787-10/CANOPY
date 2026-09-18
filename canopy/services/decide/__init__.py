@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
 from collections import OrderedDict
+from collections.abc import Callable
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
@@ -59,6 +61,9 @@ _ORBIT_ENRICHED_ACTIONS: set[Action] = {
 _AUTHORIZATION_LATENCY = timedelta(seconds=60)
 
 _ANOMALY_CACHE_SIZE = 256
+# attribution id → decision id, so every revision of an attribution keeps
+# the decision id its first revision got (wave 3A).
+_DECISION_ID_CACHE_SIZE = 256
 
 # How far around the cluster's time the gate looks for threat context on the
 # same satellite (docs/INTERFACE-SPEC.md §7, matches the bus_health look-back
@@ -110,6 +115,14 @@ class DecideService:
        decision plus every recent anomaly on the same satellite. A block is
        republished as a local ``threat_warning`` with the reason code in the
        rationale and a warn trace; an authority mismatch is repaired.
+
+    Revisions (wave 3A). A provisional attribution and every reasoning-lane
+    revision of it share an attribution id; the decisions made for them share
+    a decision id (keyed by that attribution id) and carry the attribution's
+    ``revision``. The whole chain above, gate included, runs again on every
+    revision because the context may have changed. Every decide trace is
+    stamped with ``latency_ms`` (since the cluster's first anomaly arrived)
+    and ``stage_ms`` (since this attribution reached the decide stage).
     """
 
     def __init__(
@@ -125,11 +138,13 @@ class DecideService:
         kb=None,
         gate: Gate | None = None,
         lookback_s: float = DEFAULT_GATE_LOOKBACK_S,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._bus = bus
         self._llm = llm
         self._orbit = orbit
         self._tracer = tracer
+        self._clock = clock
         # If the caller didn't pre-build a tool registry, build a minimal one
         # using the orbit service alone — that's enough for the maneuver
         # enrichment path used by the snapshot tests and direct callers that
@@ -148,6 +163,11 @@ class DecideService:
         self._lookback = timedelta(seconds=float(lookback_s))
         self._anomaly_cache: OrderedDict[str, Anomaly] = OrderedDict()
         self._cache_size = anomaly_cache_size
+        self._arrivals: OrderedDict[str, float] = OrderedDict()
+        self._decision_ids: OrderedDict[str, str] = OrderedDict()
+        # Timing of the attribution being handled (the consumer loop handles
+        # one at a time): (t0 of its cluster, when it reached this stage).
+        self._timing: tuple[float | None, float] | None = None
         self.errors: list[dict[str, str]] = []
 
     @property
@@ -163,10 +183,41 @@ class DecideService:
         async for _, event in self._bus.subscribe("anomalies.*"):
             if not isinstance(event, Anomaly):
                 continue
+            self._note_arrival(event)
             self._anomaly_cache[event.id] = event
             self._anomaly_cache.move_to_end(event.id)
             while len(self._anomaly_cache) > self._cache_size:
                 self._anomaly_cache.popitem(last=False)
+
+    def _note_arrival(self, anomaly: Anomaly) -> None:
+        """Stamp when the anomaly reached this stage; the tracer's mark wins."""
+        now = self._clock()
+        if self._tracer is not None:
+            now = self._tracer.mark(anomaly.id, now)
+        if anomaly.id not in self._arrivals:
+            self._arrivals[anomaly.id] = now
+            while len(self._arrivals) > self._cache_size:
+                self._arrivals.popitem(last=False)
+
+    def _t0_for(self, attribution: Attribution, cluster: list[Anomaly]) -> float | None:
+        """When the attribution's cluster first entered the pipeline, if known."""
+        known = [self._arrivals[a.id] for a in cluster if a.id in self._arrivals]
+        if self._tracer is not None:
+            traced = self._tracer.t0_for(attribution.id, *attribution.anomaly_ids)
+            if traced is not None:
+                known.append(traced)
+        return min(known) if known else None
+
+    def _shared_decision_id(self, attribution: Attribution, decision: Decision) -> str:
+        """The decision id for this attribution id: the first revision's, reused."""
+        existing = self._decision_ids.get(attribution.id)
+        if existing is not None:
+            self._decision_ids.move_to_end(attribution.id)
+            return existing
+        self._decision_ids[attribution.id] = decision.id
+        while len(self._decision_ids) > _DECISION_ID_CACHE_SIZE:
+            self._decision_ids.popitem(last=False)
+        return decision.id
 
     async def _consume_attributions(self) -> None:
         async for topic, event in self._bus.subscribe("attributions.*"):
@@ -175,7 +226,9 @@ class DecideService:
                     "decide received non-Attribution on %s: %r", topic, type(event)
                 )
                 continue
+            stage_t0 = self._clock()
             cluster = self._cluster_anomalies(event)
+            self._timing = (self._t0_for(event, cluster), stage_t0)
             recovery = recovery_context(event, cluster)
             llm_input = event if recovery is None else with_recovery_context(event, recovery)
             try:
@@ -192,16 +245,26 @@ class DecideService:
                     "decide: LLMClient.decide failed for attribution=%s", event.id
                 )
                 continue
+            decision = decision.model_copy(
+                update={
+                    "id": self._shared_decision_id(event, decision),
+                    "revision": event.revision,
+                }
+            )
             decision = await self._route_recovery(decision, event, recovery)
             decision = await self._maybe_enrich_with_tools(decision, event)
             decision = await self._validate_routing(decision, event)
             decision = await self._apply_gate(decision, event, cluster)
+            t0 = self._timing[0] if self._timing is not None else None
+            if self._tracer is not None and t0 is not None:
+                self._tracer.mark(decision.id, t0)
             await self._bus.publish(f"decisions.{decision.authority}", decision)
             log.info(
-                "decide published id=%s action=%s authority=%s",
+                "decide published id=%s action=%s authority=%s revision=%d",
                 decision.id,
                 decision.action,
                 decision.authority,
+                decision.revision,
             )
             if self._tracer is not None:
                 await self._tracer.emit(
@@ -211,9 +274,14 @@ class DecideService:
                     f"{decision.action} authority={decision.authority} "
                     f"target={decision.target}",
                     ref_id=decision.id,
+                    t0=t0,
+                    stage_t0=stage_t0,
                     attribution_id=event.id,
                     actor=event.actor,
+                    revision=decision.revision,
+                    provisional=event.provisional,
                 )
+            self._timing = None
 
     # ---- Cluster and threat context ----------------------------------------
 
@@ -425,12 +493,16 @@ class DecideService:
     ) -> None:
         if self._tracer is None:
             return
+        t0, stage_t0 = self._timing if self._timing is not None else (None, None)
         await self._tracer.emit(
             "decide",
             level,  # type: ignore[arg-type]
             message,
             ref_id=decision.id,
+            t0=t0,
+            stage_t0=stage_t0,
             attribution_id=attribution.id,
+            revision=attribution.revision,
             **payload,
         )
 

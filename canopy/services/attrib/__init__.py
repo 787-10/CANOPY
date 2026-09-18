@@ -3,9 +3,11 @@ from __future__ import annotations
 import asyncio
 import inspect
 import logging
+import time
 
 from collections import OrderedDict, deque
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from typing import Any, Literal
 
@@ -17,7 +19,7 @@ from canopy.services.llm.validation import (
     VerdictResolution,
     resolve_verdict,
 )
-from canopy.services.schemas.events import Anomaly, Attribution, Domain
+from canopy.services.schemas.events import Anomaly, Attribution, Domain, _new_id
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
@@ -37,6 +39,12 @@ VERDICT_LOOKAHEAD_S = 120
 CONTEXT_MAX_PER_SATELLITE = 64
 CONTEXT_MAX_SATELLITES = 128
 CONTEXT_HORIZON_S = 2 * VERDICT_LOOKBACK_S
+# Wall-clock arrival stamps kept for per-stage timing (anomaly id → monotonic).
+ARRIVALS_SIZE = 4096
+# Evidence line every provisional attribution carries (wave 3A).
+PROVISIONAL_NOTE = (
+    "Provisional: rule lane only; the reasoning lane will revise this attribution."
+)
 
 # Map anomaly kinds to the input domains they implicitly rely on. When an
 # input domain is blocked, attributions backed primarily by that domain
@@ -227,6 +235,34 @@ def _verdict_evidence_line(resolution: VerdictResolution, rule: RuleVerdictLike)
     return f"Verdict (rule): {resolution.verdict}. {head}.{detail}"
 
 
+@dataclass
+class _SatelliteCluster:
+    """One satellite's open anomaly cluster on the fast lane (wave 3A).
+
+    Opened by the first batch on a satellite that contains a ``bus_*``
+    anomaly; every later anomaly on the same satellite joins it while it is
+    open. ``attribution_id`` is shared by the provisional attribution and by
+    every reasoning-lane revision. The cluster closes once the reasoning task
+    has nothing left to do and ``window_s`` has passed without a new arrival
+    (or immediately on :meth:`AttribService.flush`).
+    """
+
+    satellite_id: str
+    attribution_id: str
+    anomalies: list[Anomaly]
+    t0: float
+    revision: int = 0
+    dirty: bool = False
+    closing: bool = False
+    closed: bool = False
+    task: asyncio.Task | None = None
+    joined: asyncio.Event = field(default_factory=asyncio.Event)
+
+    @property
+    def anomaly_ids(self) -> set[str]:
+        return {a.id for a in self.anomalies}
+
+
 class AttribService:
     """Attribution-stage service.
 
@@ -245,6 +281,19 @@ class AttribService:
     by citing evidence. ``rule_verdict`` defaults to ``megalith.verdict``
     when that package is importable and to "lane off" otherwise; pass
     ``None`` to disable it explicitly.
+
+    Fast lane (plan §4, wave 3A). A batch keyed by ``satellite_id`` that
+    contains a ``bus_*`` anomaly does not wait for the window or for any
+    LLM: the rule verdict is published at once as a *provisional*
+    Attribution (``provisional=True``, ``revision=0``) from the consumer
+    loop, and the reasoning lane (primary → red-team → reconcile → haircut →
+    verdict prior, exactly as for every other batch) runs in its own task
+    and republishes the same attribution id with ``provisional=False`` and
+    ``revision=1``. Anomalies on the same satellite that arrive while that
+    task runs join the cluster and are attributed together as the next
+    revision; one reasoning task per satellite is in flight at any time.
+    Batches without a ``satellite_id``, without a bus anomaly, or with the
+    rule lane off keep the windowed, synchronous behaviour unchanged.
 
     ``bus_health_registry`` names the satellites that have internal-diagnosis
     telemetry. A batch on one of them with no bus anomaly in the batch or in
@@ -266,6 +315,8 @@ class AttribService:
         kb_context_mode: Literal["scenario", "full"] = "scenario",
         rule_verdict: RuleVerdictFn | None | _DefaultRule = DEFAULT_RULE_VERDICT,
         bus_health_registry: Callable[[], set[str]] | None = None,
+        fast_lane: bool = True,
+        clock: Callable[[], float] = time.monotonic,
     ) -> None:
         self._bus = bus
         self._llm = llm
@@ -281,16 +332,25 @@ class AttribService:
             else rule_verdict
         )
         self._bus_health_registry = bus_health_registry
+        self._fast_lane = fast_lane
+        self._clock = clock
         self._buffer: list[Anomaly] = []
         self._flush_task: asyncio.Task | None = None
         self._recent: OrderedDict[str | None, deque[Anomaly]] = OrderedDict()
         self._latest_ts: datetime | None = None
         self._llm_accepts_rule: dict[str, bool] = {}
+        self._arrivals: OrderedDict[str, float] = OrderedDict()
+        self._clusters: dict[str, _SatelliteCluster] = {}
         self.errors: list[dict[str, str]] = []
 
     @property
     def verdict_lane_enabled(self) -> bool:
         return self._rule_verdict is not None
+
+    @property
+    def fast_lane_enabled(self) -> bool:
+        """The fast lane needs the rule lane: no rule, no provisional verdict."""
+        return self._fast_lane and self._rule_verdict is not None
 
     def _record_error(self, stage: str, exc: Exception) -> None:
         self.errors.append(
@@ -309,7 +369,10 @@ class AttribService:
                         "attrib received non-Anomaly on %s: %r", topic, type(event)
                     )
                     continue
+                self._note_arrival(event)
                 self._remember(event)
+                if await self._try_fast_lane(event):
+                    continue
                 if self._window_s <= 0:
                     await self._process([event])
                     continue
@@ -319,17 +382,31 @@ class AttribService:
         finally:
             if self._flush_task is not None and not self._flush_task.done():
                 self._flush_task.cancel()
+            for cluster in list(self._clusters.values()):
+                if cluster.task is not None and not cluster.task.done():
+                    cluster.task.cancel()
 
     async def _flush_after_window(self) -> None:
         await asyncio.sleep(self._window_s)
-        await self.flush()
+        # The legacy timer flushes only the windowed buffer: it must never
+        # wait on a reasoning task, or a slow model would delay the next
+        # legacy batch.
+        await self._flush_buffer()
 
     async def flush(self) -> None:
-        """Immediately process the buffered anomaly batch, if any.
+        """Process the buffered batch and settle the fast lane.
 
         Runtime callers normally rely on the time window. Benchmark episodes
-        use this explicit completion seam after every input signal has drained.
+        and tests use this explicit completion seam after every input signal
+        has drained: it attributes whatever is buffered, lets every in-flight
+        reasoning task finish (including the coalesced revision for anomalies
+        that joined meanwhile) and closes the satellite clusters, so the next
+        batch on a satellite starts a new attribution.
         """
+        await self._flush_buffer()
+        await self.settle()
+
+    async def _flush_buffer(self) -> None:
         current = asyncio.current_task()
         if (
             self._flush_task is not None
@@ -343,6 +420,218 @@ class AttribService:
         batch = list(self._buffer)
         self._buffer.clear()
         await self._process(batch)
+
+    async def settle(self) -> None:
+        """Wait for every in-flight reasoning task and close the clusters."""
+        while self._clusters:
+            pending: list[asyncio.Task] = []
+            for cluster in list(self._clusters.values()):
+                cluster.closing = True
+                cluster.joined.set()
+                if cluster.task is not None and not cluster.task.done():
+                    pending.append(cluster.task)
+                else:
+                    self._close_cluster(cluster)
+            if pending:
+                await asyncio.gather(*pending, return_exceptions=True)
+
+    @property
+    def open_clusters(self) -> dict[str, list[str]]:
+        """Satellite → anomaly ids of every open fast-lane cluster (diagnostics)."""
+        return {
+            sat: [a.id for a in cluster.anomalies]
+            for sat, cluster in self._clusters.items()
+            if not cluster.closed
+        }
+
+    # ---- Arrival timing -----------------------------------------------------
+
+    def _note_arrival(self, anomaly: Anomaly) -> float:
+        """Remember when ``anomaly`` reached this stage (monotonic seconds).
+
+        The shared tracer's first-wins mark keeps an earlier origin (fusion's
+        signal arrival) when one was recorded, so ``latency_ms`` on every
+        trace measures from the earliest moment the pipeline knows about.
+        """
+        now = self._clock()
+        if self._tracer is not None:
+            now = self._tracer.mark(anomaly.id, now)
+        if anomaly.id not in self._arrivals:
+            self._arrivals[anomaly.id] = now
+            while len(self._arrivals) > ARRIVALS_SIZE:
+                self._arrivals.popitem(last=False)
+        return now
+
+    def _batch_t0(self, anomalies: Sequence[Anomaly]) -> float | None:
+        """When the batch's first anomaly arrived, if this service saw it arrive."""
+        known = [self._arrivals[a.id] for a in anomalies if a.id in self._arrivals]
+        if self._tracer is not None:
+            traced = self._tracer.t0_for(*(a.id for a in anomalies))
+            if traced is not None:
+                known.append(traced)
+        return min(known) if known else None
+
+    # ---- Fast lane (wave 3A) ------------------------------------------------
+
+    async def _try_fast_lane(self, anomaly: Anomaly) -> bool:
+        """Route ``anomaly`` through the fast lane when it is satellite-keyed.
+
+        Returns ``True`` when the anomaly was consumed (it joined an open
+        cluster, or opened one and a provisional attribution went out);
+        ``False`` hands it to the legacy windowed path untouched.
+        """
+        if not self.fast_lane_enabled:
+            return False
+        satellite_id = _satellite_of(anomaly)
+        if satellite_id is None:
+            return False
+        cluster = self._clusters.get(satellite_id)
+        if cluster is not None and not cluster.closed:
+            # A cluster that is closing (flush) still takes late joiners: the
+            # reasoning task drains ``dirty`` before it closes, so they are
+            # attributed as the next revision rather than lost.
+            if anomaly.id not in cluster.anomaly_ids:
+                cluster.anomalies.append(anomaly)
+            cluster.dirty = True
+            cluster.joined.set()
+            self._ensure_reasoning_task(cluster)
+            return True
+        # A new cluster: this anomaly plus whatever is waiting in the window
+        # for the same satellite. Only a batch with a bus anomaly qualifies.
+        pending = [a for a in self._buffer if _satellite_of(a) == satellite_id]
+        batch = [*pending, anomaly]
+        if not any(_is_bus_kind(a.kind) for a in batch):
+            return False
+        recent = self.recent_context(satellite_id)
+        rule = self._compute_rule_verdict(batch, recent)
+        if rule is None:
+            return False  # the rule failed: the legacy path still attributes it
+        self._buffer = [a for a in self._buffer if _satellite_of(a) != satellite_id]
+        t0 = self._batch_t0(batch)
+        cluster = _SatelliteCluster(
+            satellite_id=satellite_id,
+            attribution_id=_new_id(),
+            anomalies=batch,
+            t0=self._clock() if t0 is None else t0,
+        )
+        self._clusters[satellite_id] = cluster
+        await self._publish_provisional(cluster, rule)
+        cluster.dirty = True
+        self._ensure_reasoning_task(cluster)
+        return True
+
+    def _ensure_reasoning_task(self, cluster: _SatelliteCluster) -> None:
+        if cluster.task is None or cluster.task.done():
+            cluster.task = asyncio.create_task(
+                self._reason(cluster), name=f"attrib-reasoning-{cluster.satellite_id}"
+            )
+
+    async def _reason(self, cluster: _SatelliteCluster) -> None:
+        """The reasoning lane for one cluster: one revision per dirty batch.
+
+        Runs until the cluster has been quiet for ``window_s`` (or is told to
+        close), attributing the whole cluster again whenever anomalies
+        joined since the last pass started. Each pass republishes the same
+        attribution id with the next revision.
+        """
+        try:
+            while True:
+                while cluster.dirty:
+                    cluster.dirty = False
+                    cluster.joined.clear()
+                    cluster.revision += 1
+                    await self._process(list(cluster.anomalies), cluster=cluster)
+                if cluster.closing or self._window_s <= 0:
+                    break
+                try:
+                    await asyncio.wait_for(cluster.joined.wait(), timeout=self._window_s)
+                except TimeoutError:
+                    break
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:  # noqa: BLE001 - one cluster must not kill the lane
+            self._record_error("reasoning_lane", exc)
+            log.exception(
+                "attrib: reasoning lane failed for %s", cluster.satellite_id
+            )
+        finally:
+            self._close_cluster(cluster)
+
+    def _close_cluster(self, cluster: _SatelliteCluster) -> None:
+        cluster.closed = True
+        if self._clusters.get(cluster.satellite_id) is cluster:
+            del self._clusters[cluster.satellite_id]
+
+    async def _publish_provisional(
+        self, cluster: _SatelliteCluster, rule: RuleVerdictLike
+    ) -> None:
+        """Publish the rule lane's call for the cluster, before any LLM runs.
+
+        Verdict, confidence and basis come from the rule; the actor follows
+        the §5 convention (no actor has been attributed yet, so a hostile
+        verdict carries ``Unknown`` and the §5 cap applies). The id is the
+        cluster's, which every reasoning-lane revision reuses.
+        """
+        anomalies = cluster.anomalies
+        resolution = resolve_verdict(
+            proposed=None,
+            cited_evidence=None,
+            confidence=rule.confidence,
+            actor="Unknown",
+            rule=rule,
+        )
+        physics_consistency = _max_physics_consistency(anomalies)
+        source_ids = list(dict.fromkeys(sid for a in anomalies for sid in a.source_signal_ids))
+        attribution = Attribution(
+            id=cluster.attribution_id,
+            anomaly_ids=[a.id for a in anomalies],
+            actor=resolution.actor,
+            confidence=round(resolution.confidence, 3),
+            evidence=[
+                _verdict_evidence_line(resolution, rule),
+                PROVISIONAL_NOTE,
+            ],
+            source_signal_ids=source_ids,
+            verdict=resolution.verdict,
+            physics_consistency=physics_consistency,
+            verdict_basis=resolution.basis,
+            verdict_evidence=[],
+            satellite_id=rule.satellite_id or cluster.satellite_id,
+            provisional=True,
+            revision=cluster.revision,
+        )
+        if self._tracer is not None:
+            self._tracer.mark(attribution.id, cluster.t0)
+        await self._bus.publish(f"attributions.{_country_topic(attribution.actor)}", attribution)
+        log.info(
+            "attrib published provisional id=%s verdict=%s confidence=%.2f satellite=%s",
+            attribution.id,
+            attribution.verdict,
+            attribution.confidence,
+            attribution.satellite_id,
+        )
+        if self._tracer is not None:
+            await self._tracer.emit(
+                "attrib_primary",
+                "decision",
+                f"provisional verdict={attribution.verdict} "
+                f"confidence={attribution.confidence:.2f} basis=rule "
+                f"pc={_fmt_pc(physics_consistency)} (fast lane, no LLM)",
+                ref_id=attribution.id,
+                t0=cluster.t0,
+                stage_t0=cluster.t0,
+                actor=attribution.actor,
+                confidence=attribution.confidence,
+                verdict=attribution.verdict,
+                verdict_basis="rule",
+                physics_consistency=physics_consistency,
+                rule_confidence=rule.confidence,
+                basis=list(rule.basis),
+                satellite_id=attribution.satellite_id,
+                provisional=True,
+                revision=attribution.revision,
+                anomaly_ids=list(attribution.anomaly_ids),
+            )
 
     # ---- Recent-anomaly context -------------------------------------------
 
@@ -459,11 +748,22 @@ class AttribService:
 
     # ---- Pipeline -------------------------------------------------------------
 
-    async def _process(self, anomalies: list[Anomaly]) -> None:
+    async def _process(
+        self, anomalies: list[Anomaly], *, cluster: _SatelliteCluster | None = None
+    ) -> None:
+        """Attribute one batch: the reasoning lane.
+
+        ``cluster`` is set when the batch is a fast-lane cluster: the result
+        then reuses the cluster's attribution id and carries its revision.
+        Everything between the rule verdict and the published attribution is
+        the same on both paths.
+        """
         # Direct callers (tests, benchmark seams) may bypass run(); make sure
         # the batch is part of its own context either way.
         for a in anomalies:
             self._remember(a)
+        t0 = cluster.t0 if cluster is not None else self._batch_t0(anomalies)
+        revision = cluster.revision if cluster is not None else 0
         satellite_id = _batch_satellite_id(anomalies)
         recent = self.recent_context(satellite_id)
         rule = self._compute_rule_verdict(anomalies, recent)
@@ -493,6 +793,7 @@ class AttribService:
         # disabled (benchmark mode), we publish the primary attribution
         # directly so the comparison isolates whether the red-team loop
         # is pulling its weight against single-pass attribution.
+        stage_t0 = self._clock()
         try:
             primary = await self._llm.attribute_primary(
                 anomalies, context, **self._rule_kwargs("attribute_primary", rule)
@@ -503,6 +804,9 @@ class AttribService:
                 "attrib: attribute_primary failed for batch of %d", len(anomalies)
             )
             return
+        if cluster is not None:
+            # Every trace and revision of a fast-lane cluster shares its id.
+            primary = primary.model_copy(update={"id": cluster.attribution_id})
         if self._tracer is not None:
             provisional = rule.verdict if rule is not None else None
             await self._tracer.emit(
@@ -512,6 +816,8 @@ class AttribService:
                 f"verdict={provisional} basis={'rule' if rule is not None else None} "
                 f"pc={_fmt_pc(physics_consistency)}",
                 ref_id=primary.id,
+                t0=t0,
+                stage_t0=stage_t0,
                 actor=primary.actor,
                 confidence=primary.confidence,
                 verdict=provisional,
@@ -520,11 +826,13 @@ class AttribService:
                 rule_confidence=rule.confidence if rule is not None else None,
                 basis=list(rule.basis) if rule is not None else [],
                 satellite_id=satellite_id,
+                revision=revision,
             )
 
         if not self._multi_agent:
             attribution = primary
         else:
+            stage_t0 = self._clock()
             try:
                 challenge = await self._llm.attribute_redteam(
                     primary, anomalies, context
@@ -543,10 +851,14 @@ class AttribService:
                         "warn" if challenge.confidence_delta < 0 else "info",
                         f"challenge: {challenge.rationale}",
                         ref_id=primary.id,
+                        t0=t0,
+                        stage_t0=stage_t0,
                         alternative_actor=alt,
                         confidence_delta=challenge.confidence_delta,
                         objections=challenge.objections,
+                        revision=revision,
                     )
+                stage_t0 = self._clock()
                 try:
                     attribution = await self._llm.reconcile(
                         primary,
@@ -566,7 +878,11 @@ class AttribService:
         # this anomaly cluster is blocked, lower confidence and surface the
         # degradation in the trace stream.
         attribution = await self._apply_stress_haircut(
-            attribution, anomalies, missing_bus_for=missing_bus_for
+            attribution,
+            anomalies,
+            missing_bus_for=missing_bus_for,
+            t0=t0,
+            stage_t0=stage_t0,
         )
         # Verdict prior: the rule verdict is the floor; the reasoning lane
         # may leave it only with cited evidence, inside bounded confidence.
@@ -576,17 +892,30 @@ class AttribService:
             rule,
             physics_consistency=physics_consistency,
             satellite_id=satellite_id,
+            t0=t0,
+            stage_t0=stage_t0,
         )
+        if cluster is not None:
+            attribution = attribution.model_copy(
+                update={
+                    "id": cluster.attribution_id,
+                    "provisional": False,
+                    "revision": cluster.revision,
+                }
+            )
 
+        if self._tracer is not None and t0 is not None:
+            self._tracer.mark(attribution.id, t0)
         country = _country_topic(attribution.actor)
         await self._bus.publish(f"attributions.{country}", attribution)
         log.info(
-            "attrib published id=%s actor=%s confidence=%.2f verdict=%s signals=%d",
+            "attrib published id=%s actor=%s confidence=%.2f verdict=%s signals=%d revision=%d",
             attribution.id,
             attribution.actor,
             attribution.confidence,
             attribution.verdict,
             len(attribution.source_signal_ids),
+            attribution.revision,
         )
         if self._tracer is not None:
             await self._tracer.emit(
@@ -596,6 +925,8 @@ class AttribService:
                 f"verdict={attribution.verdict} basis={attribution.verdict_basis} "
                 f"pc={_fmt_pc(attribution.physics_consistency)}",
                 ref_id=attribution.id,
+                t0=t0,
+                stage_t0=stage_t0,
                 actor=attribution.actor,
                 confidence=attribution.confidence,
                 verdict=attribution.verdict,
@@ -604,6 +935,8 @@ class AttribService:
                 basis=list(rule.basis) if rule is not None else [],
                 verdict_evidence=list(attribution.verdict_evidence),
                 satellite_id=attribution.satellite_id,
+                provisional=attribution.provisional,
+                revision=attribution.revision,
             )
 
     async def _apply_stress_haircut(
@@ -612,6 +945,8 @@ class AttribService:
         anomalies: list[Anomaly],
         *,
         missing_bus_for: str | None = None,
+        t0: float | None = None,
+        stage_t0: float | None = None,
     ) -> Attribution:
         blocked: set[Domain] = set()
         if self._blocked_domains is not None:
@@ -642,6 +977,8 @@ class AttribService:
                 f"{sorted(intersection)} blocked — lowering confidence "
                 f"{attribution.confidence:.2f} → {new_confidence:.2f}",
                 ref_id=attribution.id,
+                t0=t0,
+                stage_t0=stage_t0,
                 blocked=sorted(intersection),
                 before=attribution.confidence,
                 after=new_confidence,
@@ -659,6 +996,8 @@ class AttribService:
         *,
         physics_consistency: float | None,
         satellite_id: str | None,
+        t0: float | None = None,
+        stage_t0: float | None = None,
     ) -> Attribution:
         """Enforce spec §5.2 on the reconciled attribution.
 
@@ -689,6 +1028,8 @@ class AttribService:
                     f"verdict repair: {attribution.verdict} proposed without "
                     f"verdict_evidence; rule verdict {resolution.verdict} stands",
                     ref_id=attribution.id,
+                    t0=t0,
+                    stage_t0=stage_t0,
                     proposed=attribution.verdict,
                     verdict=resolution.verdict,
                     verdict_basis=resolution.basis,

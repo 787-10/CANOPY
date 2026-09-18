@@ -1,10 +1,73 @@
 {
+  "belief_note": "every bus record was scored with a diagnostic belief: update_belief(previous, {measurement: window}, onboard_context, family=event_type) threaded through the symptom records (the nominal record's belief stands alone); onboard_context holds only ONBOARD_CONTEXT_KEYS (megalith.diagnosis.evidence), never an external cue",
   "epoch_utc": "2026-09-17T14:00:00Z",
   "generator": "megalith.scenarios.generate",
   "satellite_id_note": "satellite_id is the flight identity published on every record; sim_identity is the simulated asset that produced the series",
   "scenarios": {
     "heldout-attitude-disturbance-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "attitude_disturbance",
+        "onboard_keys": [
+          "wheel_bearing_temperature_delta_k"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.27683946502837375,
+            "sim_time_s": 194.0,
+            "window_start_s": 74.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
+            "physics_consistency": 0.1977973568873685,
+            "sim_time_s": 496.0,
+            "window_start_s": 424.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.02;external=0.92;unknown=0.06;top=proximity_torque:0.87;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
+            "physics_consistency": 0.11206897013114778,
+            "sim_time_s": 587.0,
+            "window_start_s": 424.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.97;unknown=0.02;top=proximity_torque:0.91;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.38;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.08270989762067524,
+            "sim_time_s": 682.0,
+            "window_start_s": 424.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=proximity_torque:0.93;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.55;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.0791484411245819,
+            "sim_time_s": 799.0,
+            "window_start_s": 424.0
+          }
+        ],
+        "relations": {
+          "wheel_bearing_temperature_delta_k": "bearing dissipation P = dI x V_bus = 1.8 x 1.5 A x severity x 28 V across ~0.5 K/W gives dT_ss = 40 K x severity, lagged 30 s; severity recovered from the model's load_fraction = 0.25 + 0.75 x severity in the wear arm; zero when the load channel carries an external torque (drag, close approach), which does not heat the bearing"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-attitude-disturbance-hostile-005",
         "heldout-attitude-disturbance-hostile-006",
@@ -27,15 +90,16 @@
       "onset_sim_time_s": 484.0,
       "onset_ts": "2026-09-17T14:08:04Z",
       "physics_basis": [
-        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.38;row=attitude_disturbance;rate=linear_fit",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.55;row=attitude_disturbance;rate=linear_fit"
+        "belief:internal=0.00;external=0.99;unknown=0.01;top=proximity_torque:0.93;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.55;row=attitude_disturbance;rate=linear_fit",
+        "belief:internal=0.01;external=0.97;unknown=0.02;top=proximity_torque:0.91;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.38;row=attitude_disturbance;rate=linear_fit",
+        "belief:internal=0.02;external=0.92;unknown=0.06;top=proximity_torque:0.87;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
+        "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.25,
-        0.25,
-        0.5,
-        0.5
+        0.1977973568873685,
+        0.11206897013114778,
+        0.08270989762067524,
+        0.0791484411245819
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -62,6 +126,68 @@
     },
     "heldout-attitude-disturbance-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "attitude_disturbance",
+        "onboard_keys": [
+          "wheel_bearing_temperature_delta_k"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.27683946502837375,
+            "sim_time_s": 38.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 3.893
+            },
+            "physics_basis": "belief:internal=0.52;external=0.39;unknown=0.10;top=reaction_wheel_friction:0.44;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.6494310986668737,
+            "sim_time_s": 345.0,
+            "window_start_s": 275.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 8.064
+            },
+            "physics_basis": "belief:internal=0.70;external=0.24;unknown=0.06;top=reaction_wheel_friction:0.69;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.97;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.6696044478924192,
+            "sim_time_s": 446.0,
+            "window_start_s": 275.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 14.052
+            },
+            "physics_basis": "belief:internal=0.86;external=0.12;unknown=0.02;top=reaction_wheel_friction:0.86;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.8565080082245144,
+            "sim_time_s": 585.0,
+            "window_start_s": 275.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 20.094
+            },
+            "physics_basis": "belief:internal=0.93;external=0.06;unknown=0.00;top=reaction_wheel_friction:0.93;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.8999525318161425,
+            "sim_time_s": 728.0,
+            "window_start_s": 275.0
+          }
+        ],
+        "relations": {
+          "wheel_bearing_temperature_delta_k": "bearing dissipation P = dI x V_bus = 1.8 x 1.5 A x severity x 28 V across ~0.5 K/W gives dT_ss = 40 K x severity, lagged 30 s; severity recovered from the model's load_fraction = 0.25 + 0.75 x severity in the wear arm; zero when the load channel carries an external torque (drag, close approach), which does not heat the bearing"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-attitude-disturbance-internal-003",
         "heldout-attitude-disturbance-internal-004",
@@ -81,16 +207,16 @@
       "onset_sim_time_s": 335.0,
       "onset_ts": "2026-09-17T14:05:35Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.88;row=attitude_disturbance;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=attitude_disturbance;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.97;row=attitude_disturbance;rate=linear_fit"
+        "belief:internal=0.52;external=0.39;unknown=0.10;top=reaction_wheel_friction:0.44;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+        "belief:internal=0.70;external=0.24;unknown=0.06;top=reaction_wheel_friction:0.69;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.97;row=attitude_disturbance;rate=linear_fit",
+        "belief:internal=0.86;external=0.12;unknown=0.02;top=reaction_wheel_friction:0.86;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=attitude_disturbance;rate=slope",
+        "belief:internal=0.93;external=0.06;unknown=0.00;top=reaction_wheel_friction:0.93;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.5,
-        0.85,
-        0.85
+        0.6494310986668737,
+        0.6696044478924192,
+        0.8565080082245144,
+        0.8999525318161425
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -264,6 +390,68 @@
     },
     "heldout-attitude-disturbance-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "attitude_disturbance",
+        "onboard_keys": [
+          "wheel_bearing_temperature_delta_k"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=attitude_disturbance;rate=linear_fit",
+            "physics_consistency": 0.27683946502837375,
+            "sim_time_s": 115.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval",
+            "physics_consistency": 0.1977973568873685,
+            "sim_time_s": 386.0,
+            "window_start_s": 314.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.11;external=0.80;unknown=0.09;top=proximity_torque:0.43;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.96;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.3875055938247392,
+            "sim_time_s": 491.0,
+            "window_start_s": 314.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.10;external=0.86;unknown=0.04;top=aerodynamic_torque:0.64;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.98;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.3802033326517006,
+            "sim_time_s": 608.0,
+            "window_start_s": 314.0
+          },
+          {
+            "event_type": "attitude_disturbance",
+            "onboard_context": {
+              "wheel_bearing_temperature_delta_k": 0.0
+            },
+            "physics_basis": "belief:internal=0.07;external=0.92;unknown=0.01;top=aerodynamic_torque:0.83;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+            "physics_consistency": 0.36205475060977743,
+            "sim_time_s": 721.0,
+            "window_start_s": 314.0
+          }
+        ],
+        "relations": {
+          "wheel_bearing_temperature_delta_k": "bearing dissipation P = dI x V_bus = 1.8 x 1.5 A x severity x 28 V across ~0.5 K/W gives dT_ss = 40 K x severity, lagged 30 s; severity recovered from the model's load_fraction = 0.25 + 0.75 x severity in the wear arm; zero when the load channel carries an external torque (drag, close approach), which does not heat the bearing"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-attitude-disturbance-natural-005",
         "heldout-attitude-disturbance-natural-006",
@@ -286,16 +474,16 @@
       "onset_sim_time_s": 374.0,
       "onset_ts": "2026-09-17T14:06:14Z",
       "physics_basis": [
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.88;row=attitude_disturbance;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.96;row=attitude_disturbance;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.98;row=attitude_disturbance;rate=slope",
-        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval"
+        "belief:internal=0.07;external=0.92;unknown=0.01;top=aerodynamic_torque:0.83;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+        "belief:internal=0.10;external=0.86;unknown=0.04;top=aerodynamic_torque:0.64;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.98;row=attitude_disturbance;rate=slope",
+        "belief:internal=0.11;external=0.80;unknown=0.09;top=proximity_torque:0.43;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.96;row=attitude_disturbance;rate=slope",
+        "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.25,
-        0.8,
-        0.8,
-        0.8
+        0.1977973568873685,
+        0.3875055938247392,
+        0.3802033326517006,
+        0.36205475060977743
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -402,6 +590,68 @@
     },
     "heldout-link-margin-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153845570062,
+            "sim_time_s": 143.0,
+            "window_start_s": 23.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.1672897196261682,
+            "sim_time_s": 466.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.96;unknown=0.03;top=uplink_interference:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.10312757432560228,
+            "sim_time_s": 558.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=uplink_interference:0.98;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.1001293305742977,
+            "sim_time_s": 652.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.00;external=1.00;unknown=0.00;top=uplink_interference:0.99;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.10000621966188286,
+            "sim_time_s": 756.0,
+            "window_start_s": 394.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-link-margin-hostile-005",
         "heldout-link-margin-hostile-006",
@@ -424,13 +674,16 @@
       "onset_sim_time_s": 454.0,
       "onset_ts": "2026-09-17T14:07:34Z",
       "physics_basis": [
-        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval"
+        "belief:internal=0.00;external=0.99;unknown=0.01;top=uplink_interference:0.98;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.00;external=1.00;unknown=0.00;top=uplink_interference:0.99;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.01;external=0.96;unknown=0.03;top=uplink_interference:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.25,
-        0.25,
-        0.25,
-        0.25
+        0.1672897196261682,
+        0.10312757432560228,
+        0.1001293305742977,
+        0.10000621966188286
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -456,6 +709,58 @@
     },
     "heldout-link-margin-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.43;external=0.36;unknown=0.21;top=amplifier_degradation:0.26;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.35868263433301917,
+            "sim_time_s": 304.0,
+            "window_start_s": 184.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.69;external=0.20;unknown=0.11;top=amplifier_degradation:0.59;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.91;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.7313970584287981,
+            "sim_time_s": 563.0,
+            "window_start_s": 485.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.95;external=0.02;unknown=0.04;top=amplifier_degradation:0.94;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.97;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.907313942809086,
+            "sim_time_s": 654.0,
+            "window_start_s": 485.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=amplifier_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.9344641219891732,
+            "sim_time_s": 792.0,
+            "window_start_s": 485.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-link-margin-internal-003",
         "heldout-link-margin-internal-004",
@@ -474,14 +779,14 @@
       "onset_sim_time_s": 545.0,
       "onset_ts": "2026-09-17T14:09:05Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.97;row=link_margin_drop;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.91;row=link_margin_drop;rate=slope"
+        "belief:internal=0.69;external=0.20;unknown=0.11;top=amplifier_degradation:0.59;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.91;row=link_margin_drop;rate=slope",
+        "belief:internal=0.95;external=0.02;unknown=0.04;top=amplifier_degradation:0.94;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.97;row=link_margin_drop;rate=slope",
+        "belief:internal=0.99;external=0.00;unknown=0.01;top=amplifier_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope"
       ],
       "physics_consistency": [
-        0.8,
-        0.85,
-        0.85
+        0.7313970584287981,
+        0.907313942809086,
+        0.9344641219891732
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -641,6 +946,68 @@
     },
     "heldout-link-margin-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153845570062,
+            "sim_time_s": 169.0,
+            "window_start_s": 49.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 2.5423
+            },
+            "physics_basis": "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.6833406313118826,
+            "sim_time_s": 466.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.35;external=0.59;unknown=0.06;top=solar_radio_burst_noise:0.54;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.5278650447996005,
+            "sim_time_s": 573.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.12;external=0.87;unknown=0.02;top=solar_radio_burst_noise:0.84;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.85;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.3910161885365676,
+            "sim_time_s": 673.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.03;external=0.97;unknown=0.01;top=solar_radio_burst_noise:0.94;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.43;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.0999129825617937,
+            "sim_time_s": 772.0,
+            "window_start_s": 394.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-link-margin-natural-005",
         "heldout-link-margin-natural-006",
@@ -663,16 +1030,16 @@
       "onset_sim_time_s": 454.0,
       "onset_ts": "2026-09-17T14:07:34Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.85;row=link_margin_drop;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.43;row=link_margin_drop;rate=linear_fit"
+        "belief:internal=0.03;external=0.97;unknown=0.01;top=solar_radio_burst_noise:0.94;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.43;row=link_margin_drop;rate=linear_fit",
+        "belief:internal=0.12;external=0.87;unknown=0.02;top=solar_radio_burst_noise:0.84;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.85;row=link_margin_drop;rate=slope",
+        "belief:internal=0.35;external=0.59;unknown=0.06;top=solar_radio_burst_noise:0.54;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
+        "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.8,
-        0.8,
-        0.5
+        0.6833406313118826,
+        0.5278650447996005,
+        0.3910161885365676,
+        0.0999129825617937
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -766,6 +1133,72 @@
     },
     "heldout-orbit-decay-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "orbit_decay",
+        "onboard_keys": [
+          "burn_performance_deviation",
+          "burn_performance_ratio"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {},
+            "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
+            "physics_consistency": 0.5303571428571429,
+            "sim_time_s": 182.0,
+            "window_start_s": 62.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.2590279765290702,
+            "sim_time_s": 511.0,
+            "window_start_s": 442.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.09198551290978131,
+            "sim_time_s": 642.0,
+            "window_start_s": 442.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.75;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.0612246280300906,
+            "sim_time_s": 754.0,
+            "window_start_s": 442.0
+          },
+          {
+            "event_type": "safe_mode_entry",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.57;row=orbit_decay;rate=linear_fit",
+            "physics_consistency": 0.07570523205531055,
+            "sim_time_s": 880.0,
+            "window_start_s": 442.0
+          }
+        ],
+        "relations": {
+          "burn_performance_deviation": "|burn_performance_ratio - 1|",
+          "burn_performance_ratio": "onboard burn accounting: achieved delta-v (measured thrust integrated over the spacecraft mass from the commanded start for as long as the thrust is continuous) over commanded delta-v (expected thrust over the commanded interval); a valve stuck open keeps the achieved side growing past the commanded end, a clean burn reads 1.0; drag and the spoofed maneuver start no commanded burn; absent before the first burn"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-orbit-decay-hostile-005",
         "heldout-orbit-decay-hostile-006",
@@ -788,15 +1221,16 @@
       "onset_sim_time_s": 502.0,
       "onset_ts": "2026-09-17T14:08:22Z",
       "physics_basis": [
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=0.75;row=unexpected_reset;rate=step_per_interval",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.57;row=orbit_decay;rate=linear_fit"
+        "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.57;row=orbit_decay;rate=linear_fit",
+        "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.75;row=orbit_decay;rate=step_per_interval",
+        "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+        "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.375,
-        0.375,
-        0.375,
-        0.5
+        0.2590279765290702,
+        0.09198551290978131,
+        0.0612246280300906,
+        0.07570523205531055
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -823,6 +1257,72 @@
     },
     "heldout-orbit-decay-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "orbit_decay",
+        "onboard_keys": [
+          "burn_performance_deviation",
+          "burn_performance_ratio"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {},
+            "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
+            "physics_consistency": 0.5303571428571429,
+            "sim_time_s": 82.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.2833,
+              "burn_performance_ratio": 1.2833
+            },
+            "physics_basis": "belief:internal=0.59;external=0.28;unknown=0.13;top=propulsion_valve_stuck_open:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.55690445026178,
+            "sim_time_s": 376.0,
+            "window_start_s": 302.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 1.8333,
+              "burn_performance_ratio": 2.8333
+            },
+            "physics_basis": "belief:internal=0.83;external=0.10;unknown=0.07;top=propulsion_valve_stuck_open:0.82;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.7637200916815744,
+            "sim_time_s": 469.0,
+            "window_start_s": 302.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 4.1167,
+              "burn_performance_ratio": 5.1167
+            },
+            "physics_basis": "belief:internal=0.94;external=0.04;unknown=0.02;top=propulsion_valve_stuck_open:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.8564836452990455,
+            "sim_time_s": 606.0,
+            "window_start_s": 302.0
+          },
+          {
+            "event_type": "safe_mode_entry",
+            "onboard_context": {
+              "burn_performance_deviation": 6.05,
+              "burn_performance_ratio": 7.05
+            },
+            "physics_basis": "belief:internal=0.98;external=0.01;unknown=0.01;top=propulsion_valve_stuck_open:0.98;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.8898615923233312,
+            "sim_time_s": 722.0,
+            "window_start_s": 302.0
+          }
+        ],
+        "relations": {
+          "burn_performance_deviation": "|burn_performance_ratio - 1|",
+          "burn_performance_ratio": "onboard burn accounting: achieved delta-v (measured thrust integrated over the spacecraft mass from the commanded start for as long as the thrust is continuous) over commanded delta-v (expected thrust over the commanded interval); a valve stuck open keeps the achieved side growing past the commanded end, a clean burn reads 1.0; drag and the spoofed maneuver start no commanded burn; absent before the first burn"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-orbit-decay-internal-003",
         "heldout-orbit-decay-internal-004",
@@ -842,14 +1342,16 @@
       "onset_sim_time_s": 362.0,
       "onset_ts": "2026-09-17T14:06:02Z",
       "physics_basis": [
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+        "belief:internal=0.59;external=0.28;unknown=0.13;top=propulsion_valve_stuck_open:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+        "belief:internal=0.83;external=0.10;unknown=0.07;top=propulsion_valve_stuck_open:0.82;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+        "belief:internal=0.94;external=0.04;unknown=0.02;top=propulsion_valve_stuck_open:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+        "belief:internal=0.98;external=0.01;unknown=0.01;top=propulsion_valve_stuck_open:0.98;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.375,
-        0.375,
-        0.375,
-        0.375
+        0.55690445026178,
+        0.7637200916815744,
+        0.8564836452990455,
+        0.8898615923233312
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -875,6 +1377,72 @@
     },
     "heldout-orbit-decay-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "orbit_decay",
+        "onboard_keys": [
+          "burn_performance_deviation",
+          "burn_performance_ratio"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {},
+            "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
+            "physics_consistency": 0.5303571428571429,
+            "sim_time_s": 172.0,
+            "window_start_s": 52.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.83;row=orbit_decay;rate=step_per_interval",
+            "physics_consistency": 0.2590279765290702,
+            "sim_time_s": 452.0,
+            "window_start_s": 379.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.96;row=orbit_decay;rate=linear_fit",
+            "physics_consistency": 0.11073551290978131,
+            "sim_time_s": 565.0,
+            "window_start_s": 379.0
+          },
+          {
+            "event_type": "orbit_decay",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=orbit_decay;rate=slope",
+            "physics_consistency": 0.10247462803009061,
+            "sim_time_s": 711.0,
+            "window_start_s": 379.0
+          },
+          {
+            "event_type": "safe_mode_entry",
+            "onboard_context": {
+              "burn_performance_deviation": 0.0,
+              "burn_performance_ratio": 1.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.68;row=orbit_decay;rate=slope",
+            "physics_consistency": 0.09820523205531055,
+            "sim_time_s": 805.0,
+            "window_start_s": 379.0
+          }
+        ],
+        "relations": {
+          "burn_performance_deviation": "|burn_performance_ratio - 1|",
+          "burn_performance_ratio": "onboard burn accounting: achieved delta-v (measured thrust integrated over the spacecraft mass from the commanded start for as long as the thrust is continuous) over commanded delta-v (expected thrust over the commanded interval); a valve stuck open keeps the achieved side growing past the commanded end, a clean burn reads 1.0; drag and the spoofed maneuver start no commanded burn; absent before the first burn"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-orbit-decay-natural-006",
         "heldout-orbit-decay-natural-007",
@@ -899,16 +1467,16 @@
       "onset_sim_time_s": 439.0,
       "onset_ts": "2026-09-17T14:07:19Z",
       "physics_basis": [
-        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.68;row=orbit_decay;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=0.83;row=unexpected_reset;rate=step_per_interval",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.96;row=unexpected_reset;rate=linear_fit"
+        "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.68;row=orbit_decay;rate=slope",
+        "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=orbit_decay;rate=slope",
+        "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.96;row=orbit_decay;rate=linear_fit",
+        "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.83;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.375,
-        0.5,
-        0.65,
-        0.65
+        0.2590279765290702,
+        0.11073551290978131,
+        0.10247462803009061,
+        0.09820523205531055
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1016,6 +1584,82 @@
     },
     "heldout-power-thermal-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "power_thermal_excursion",
+        "onboard_keys": [
+          "absorbed_power_residual_w",
+          "array_power_residual_fraction",
+          "capacity_fade_fraction",
+          "radiator_rejection_residual_fraction",
+          "shadow_geometry_predicted"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.0,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.59;external=0.27;unknown=0.14;top=radiator_degradation:0.18;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=power_thermal_excursion;rate=linear_fit",
+            "physics_consistency": 0.5724462862908668,
+            "sim_time_s": 252.0,
+            "window_start_s": 132.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 25.042,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.5507677674809212,
+            "sim_time_s": 517.0,
+            "window_start_s": 443.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 25.042,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.42341659843856505,
+            "sim_time_s": 623.0,
+            "window_start_s": 443.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 25.042,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.3443662697303224,
+            "sim_time_s": 755.0,
+            "window_start_s": 443.0
+          }
+        ],
+        "relations": {
+          "absorbed_power_residual_w": "onboard energy balance: C x dT/dt + rejected_heat_w - 12 W nominal equipment dissipation - heater readback x 15 W, with C = 300 J/K; zero under radiator degradation, 50 W x severity of extra absorbed heat under storm or RF heating",
+          "array_power_residual_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "capacity_fade_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "radiator_rejection_residual_fraction": "onboard thermal model: rejected_heat_w / (k_nominal x (T - T_sink)) - 1 with k_nominal = 0.5 W/K and T_sink = 270 K; radiator degradation lowers the effective conductance (-0.9 x severity), extra absorbed heat leaves it at zero",
+          "shadow_geometry_predicted": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-power-thermal-hostile-005",
         "heldout-power-thermal-hostile-006",
@@ -1037,13 +1681,14 @@
       "onset_sim_time_s": 503.0,
       "onset_ts": "2026-09-17T14:08:23Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+        "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.85,
-        0.8
+        0.5507677674809212,
+        0.42341659843856505,
+        0.3443662697303224
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1070,6 +1715,96 @@
     },
     "heldout-power-thermal-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "power_thermal_excursion",
+        "onboard_keys": [
+          "absorbed_power_residual_w",
+          "array_power_residual_fraction",
+          "capacity_fade_fraction",
+          "radiator_rejection_residual_fraction",
+          "shadow_geometry_predicted"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.0,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": -0.0216,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.75;external=0.14;unknown=0.10;top=radiator_degradation:0.30;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.7926749169322236,
+            "sim_time_s": 179.0,
+            "window_start_s": 59.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.003,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": -0.2592,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.89;external=0.06;unknown=0.05;top=radiator_degradation:0.65;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.8712932090312011,
+            "sim_time_s": 505.0,
+            "window_start_s": 428.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.004,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": -0.3456,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=radiator_degradation:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.9357648941113905,
+            "sim_time_s": 619.0,
+            "window_start_s": 428.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.004,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": -0.432,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.9396753988495397,
+            "sim_time_s": 734.0,
+            "window_start_s": 428.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.004,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": -0.5184,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:1.00;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.9399737685100991,
+            "sim_time_s": 867.0,
+            "window_start_s": 428.0
+          }
+        ],
+        "relations": {
+          "absorbed_power_residual_w": "onboard energy balance: C x dT/dt + rejected_heat_w - 12 W nominal equipment dissipation - heater readback x 15 W, with C = 300 J/K; zero under radiator degradation, 50 W x severity of extra absorbed heat under storm or RF heating",
+          "array_power_residual_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "capacity_fade_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "radiator_rejection_residual_fraction": "onboard thermal model: rejected_heat_w / (k_nominal x (T - T_sink)) - 1 with k_nominal = 0.5 W/K and T_sink = 270 K; radiator degradation lowers the effective conductance (-0.9 x severity), extra absorbed heat leaves it at zero",
+          "shadow_geometry_predicted": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-power-thermal-internal-003",
         "heldout-power-thermal-internal-004",
@@ -1089,14 +1824,16 @@
       "onset_sim_time_s": 488.0,
       "onset_ts": "2026-09-17T14:08:08Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+        "belief:internal=0.89;external=0.06;unknown=0.05;top=radiator_degradation:0.65;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.99;external=0.00;unknown=0.01;top=radiator_degradation:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:1.00;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.85,
-        0.85,
-        0.85
+        0.8712932090312011,
+        0.9357648941113905,
+        0.9396753988495397,
+        0.9399737685100991
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1290,6 +2027,96 @@
     },
     "heldout-power-thermal-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "power_thermal_excursion",
+        "onboard_keys": [
+          "absorbed_power_residual_w",
+          "array_power_residual_fraction",
+          "capacity_fade_fraction",
+          "radiator_rejection_residual_fraction",
+          "shadow_geometry_predicted"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "absorbed_power_residual_w": 0.0,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.59;external=0.27;unknown=0.14;top=radiator_degradation:0.18;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=power_thermal_excursion;rate=linear_fit",
+            "physics_consistency": 0.5724462862908668,
+            "sim_time_s": 136.0,
+            "window_start_s": 16.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 9.146,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.550772188216061,
+            "sim_time_s": 450.0,
+            "window_start_s": 373.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 14.892,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.4234194930138047,
+            "sim_time_s": 585.0,
+            "window_start_s": 373.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 14.892,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.34436722233404227,
+            "sim_time_s": 702.0,
+            "window_start_s": 373.0
+          },
+          {
+            "event_type": "power_thermal_excursion",
+            "onboard_context": {
+              "absorbed_power_residual_w": 14.892,
+              "array_power_residual_fraction": 0.0,
+              "capacity_fade_fraction": 0.0,
+              "radiator_rejection_residual_fraction": 0.0,
+              "shadow_geometry_predicted": false
+            },
+            "physics_basis": "belief:internal=0.01;external=0.98;unknown=0.01;top=rf_heating:0.98;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+            "physics_consistency": 0.32652132682504914,
+            "sim_time_s": 821.0,
+            "window_start_s": 373.0
+          }
+        ],
+        "relations": {
+          "absorbed_power_residual_w": "onboard energy balance: C x dT/dt + rejected_heat_w - 12 W nominal equipment dissipation - heater readback x 15 W, with C = 300 J/K; zero under radiator degradation, 50 W x severity of extra absorbed heat under storm or RF heating",
+          "array_power_residual_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "capacity_fade_fraction": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)",
+          "radiator_rejection_residual_fraction": "onboard thermal model: rejected_heat_w / (k_nominal x (T - T_sink)) - 1 with k_nominal = 0.5 W/K and T_sink = 270 K; radiator degradation lowers the effective conductance (-0.9 x severity), extra absorbed heat leaves it at zero",
+          "shadow_geometry_predicted": "battery charge accounting, array current against the illumination model and the onboard ephemeris: nominal in every arm of this row (no cause touches the power subsystem; sunlit, no predicted occultation)"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-power-thermal-natural-004",
         "heldout-power-thermal-natural-005",
@@ -1311,15 +2138,16 @@
       "onset_sim_time_s": 433.0,
       "onset_ts": "2026-09-17T14:07:13Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+        "belief:internal=0.01;external=0.98;unknown=0.01;top=rf_heating:0.98;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.85,
-        0.8,
-        0.8
+        0.550772188216061,
+        0.4234194930138047,
+        0.34436722233404227,
+        0.32652132682504914
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1426,6 +2254,75 @@
     },
     "heldout-sensor-saturation-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "sensor_saturation",
+        "onboard_keys": [
+          "detector_temperature_delta_k",
+          "sun_angle_deg"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.41737183757722235,
+            "sim_time_s": 219.0,
+            "window_start_s": 99.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.21;external=0.67;unknown=0.11;top=laser_dazzling:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
+            "physics_consistency": 0.2284916561454129,
+            "sim_time_s": 481.0,
+            "window_start_s": 412.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.05;external=0.91;unknown=0.04;top=laser_dazzling:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
+            "physics_consistency": 0.12800688447728384,
+            "sim_time_s": 623.0,
+            "window_start_s": 412.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.04;external=0.95;unknown=0.01;top=laser_dazzling:0.95;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.44;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.10878944482289526,
+            "sim_time_s": 760.0,
+            "window_start_s": 412.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.04;external=0.96;unknown=0.00;top=laser_dazzling:0.96;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.61;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.10490928308269025,
+            "sim_time_s": 887.0,
+            "window_start_s": 412.0
+          }
+        ],
+        "relations": {
+          "detector_temperature_delta_k": "instrument thermistor against the 289 K set point: solar loading on the focal plane warms it 14 K x lobe during the crossing, in phase with the saturation; aging and dazzling leave it at the set point",
+          "sun_angle_deg": "angle between the detector boresight and the sun from the onboard ephemeris and attitude: 128 deg with the sun outside the field of regard (aging, dazzling); 128 - 116 sqrt(lobe) during the crossing, 12 deg at the peak"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-sensor-saturation-hostile-004",
         "heldout-sensor-saturation-hostile-005",
@@ -1447,15 +2344,16 @@
       "onset_sim_time_s": 472.0,
       "onset_ts": "2026-09-17T14:07:52Z",
       "physics_basis": [
-        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.44;row=sensor_saturation;rate=linear_fit",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.61;row=sensor_saturation;rate=linear_fit"
+        "belief:internal=0.04;external=0.95;unknown=0.01;top=laser_dazzling:0.95;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.44;row=sensor_saturation;rate=linear_fit",
+        "belief:internal=0.04;external=0.96;unknown=0.00;top=laser_dazzling:0.96;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.61;row=sensor_saturation;rate=linear_fit",
+        "belief:internal=0.05;external=0.91;unknown=0.04;top=laser_dazzling:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
+        "belief:internal=0.21;external=0.67;unknown=0.11;top=laser_dazzling:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.25,
-        0.25,
-        0.5,
-        0.5
+        0.2284916561454129,
+        0.12800688447728384,
+        0.10878944482289526,
+        0.10490928308269025
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1482,6 +2380,75 @@
     },
     "heldout-sensor-saturation-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "sensor_saturation",
+        "onboard_keys": [
+          "detector_temperature_delta_k",
+          "sun_angle_deg"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.41737183757722235,
+            "sim_time_s": 30.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.30;unknown=0.11;top=detector_aging:0.50;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.6922530977948229,
+            "sim_time_s": 345.0,
+            "window_start_s": 268.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.85;external=0.10;unknown=0.04;top=detector_aging:0.85;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.8525001922026507,
+            "sim_time_s": 465.0,
+            "window_start_s": 268.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.95;external=0.04;unknown=0.01;top=detector_aging:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.9118353499564116,
+            "sim_time_s": 604.0,
+            "window_start_s": 268.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.99;external=0.01;unknown=0.00;top=detector_aging:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.931024358909091,
+            "sim_time_s": 718.0,
+            "window_start_s": 268.0
+          }
+        ],
+        "relations": {
+          "detector_temperature_delta_k": "instrument thermistor against the 289 K set point: solar loading on the focal plane warms it 14 K x lobe during the crossing, in phase with the saturation; aging and dazzling leave it at the set point",
+          "sun_angle_deg": "angle between the detector boresight and the sun from the onboard ephemeris and attitude: 128 deg with the sun outside the field of regard (aging, dazzling); 128 - 116 sqrt(lobe) during the crossing, 12 deg at the peak"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-sensor-saturation-internal-003",
         "heldout-sensor-saturation-internal-004",
@@ -1501,13 +2468,16 @@
       "onset_sim_time_s": 328.0,
       "onset_ts": "2026-09-17T14:05:28Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope"
+        "belief:internal=0.59;external=0.30;unknown=0.11;top=detector_aging:0.50;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+        "belief:internal=0.85;external=0.10;unknown=0.04;top=detector_aging:0.85;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+        "belief:internal=0.95;external=0.04;unknown=0.01;top=detector_aging:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
+        "belief:internal=0.99;external=0.01;unknown=0.00;top=detector_aging:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.85,
-        0.85,
-        0.85
+        0.6922530977948229,
+        0.8525001922026507,
+        0.9118353499564116,
+        0.931024358909091
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1533,6 +2503,75 @@
     },
     "heldout-sensor-saturation-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "sensor_saturation",
+        "onboard_keys": [
+          "detector_temperature_delta_k",
+          "sun_angle_deg"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "detector_temperature_delta_k": 0.0,
+              "sun_angle_deg": 128.0
+            },
+            "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.41737183757722235,
+            "sim_time_s": 157.0,
+            "window_start_s": 37.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 1.88,
+              "sun_angle_deg": 85.5
+            },
+            "physics_basis": "belief:internal=0.52;external=0.36;unknown=0.12;top=detector_aging:0.43;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.6533347910234673,
+            "sim_time_s": 423.0,
+            "window_start_s": 356.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 14.0,
+              "sun_angle_deg": 12.0
+            },
+            "physics_basis": "belief:internal=0.52;external=0.42;unknown=0.06;top=detector_aging:0.51;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.6312205987463094,
+            "sim_time_s": 568.0,
+            "window_start_s": 356.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 14.0,
+              "sun_angle_deg": 12.0
+            },
+            "physics_basis": "belief:internal=0.25;external=0.73;unknown=0.01;top=sun_in_field_of_regard:0.73;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.86;row=sensor_saturation;rate=slope",
+            "physics_consistency": 0.47197356781455313,
+            "sim_time_s": 666.0,
+            "window_start_s": 356.0
+          },
+          {
+            "event_type": "sensor_saturation",
+            "onboard_context": {
+              "detector_temperature_delta_k": 14.0,
+              "sun_angle_deg": 12.0
+            },
+            "physics_basis": "belief:internal=0.08;external=0.92;unknown=0.00;top=sun_in_field_of_regard:0.92;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.39;row=sensor_saturation;rate=linear_fit",
+            "physics_consistency": 0.14108418052256816,
+            "sim_time_s": 810.0,
+            "window_start_s": 356.0
+          }
+        ],
+        "relations": {
+          "detector_temperature_delta_k": "instrument thermistor against the 289 K set point: solar loading on the focal plane warms it 14 K x lobe during the crossing, in phase with the saturation; aging and dazzling leave it at the set point",
+          "sun_angle_deg": "angle between the detector boresight and the sun from the onboard ephemeris and attitude: 128 deg with the sun outside the field of regard (aging, dazzling); 128 - 116 sqrt(lobe) during the crossing, 12 deg at the peak"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-sensor-saturation-natural-004",
         "heldout-sensor-saturation-natural-005",
@@ -1540,7 +2579,7 @@
         "heldout-sensor-saturation-natural-007"
       ],
       "cause": "sun in the field of regard (low sun angle, warm detector)",
-      "environment_input": "sun-elevation lobe on the saturated fraction and detector temperature",
+      "environment_input": "sun-crossing lobe on the saturated fraction, sun angle and detector temperature",
       "epoch_utc": "2026-09-17T14:00:00Z",
       "event_type": "sensor_saturation",
       "external_signals": [
@@ -1554,16 +2593,16 @@
       "onset_sim_time_s": 416.0,
       "onset_ts": "2026-09-17T14:06:56Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=sensor_saturation;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.86;row=sensor_saturation;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope",
-        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.39;row=sensor_saturation;rate=linear_fit"
+        "belief:internal=0.08;external=0.92;unknown=0.00;top=sun_in_field_of_regard:0.92;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.39;row=sensor_saturation;rate=linear_fit",
+        "belief:internal=0.25;external=0.73;unknown=0.01;top=sun_in_field_of_regard:0.73;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.86;row=sensor_saturation;rate=slope",
+        "belief:internal=0.52;external=0.36;unknown=0.12;top=detector_aging:0.43;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=sensor_saturation;rate=slope",
+        "belief:internal=0.52;external=0.42;unknown=0.06;top=detector_aging:0.51;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope"
       ],
       "physics_consistency": [
-        0.85,
-        0.8,
-        0.8,
-        0.5
+        0.6533347910234673,
+        0.6312205987463094,
+        0.47197356781455313,
+        0.14108418052256816
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1594,6 +2633,68 @@
     },
     "heldout-unexpected-reset-hostile": {
       "arm": "hostile",
+      "belief": {
+        "family": "unexpected_reset",
+        "onboard_keys": [
+          "reset_reproduced",
+          "seu_rate_per_hour",
+          "unexpected_command_count"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
+            "physics_consistency": 0.5522971720041685,
+            "sim_time_s": 220.0,
+            "window_start_s": 100.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 20.0
+            },
+            "physics_basis": "belief:internal=0.40;external=0.49;unknown=0.11;top=cyber_intrusion:0.35;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
+            "physics_consistency": 0.39494395440241953,
+            "sim_time_s": 491.0,
+            "window_start_s": 420.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": false,
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 32.0
+            },
+            "physics_basis": "belief:internal=0.11;external=0.83;unknown=0.06;top=cyber_intrusion:0.81;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.98;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.19069783257055892,
+            "sim_time_s": 637.0,
+            "window_start_s": 420.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": false,
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 50.0
+            },
+            "physics_basis": "belief:internal=0.02;external=0.96;unknown=0.02;top=cyber_intrusion:0.96;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.91;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.11318536334861129,
+            "sim_time_s": 783.0,
+            "window_start_s": 420.0
+          }
+        ],
+        "relations": {
+          "reset_reproduced": "active test 60 s after the second reset: the flight software re-runs the sequence that preceded it; a software fault reproduces, an upset or an injected command does not; absent before the test",
+          "seu_rate_per_hour": "onboard EDAC counter: memory_ecc_count increments over the trailing 300 s x 12 (per hour); one-second memory_table_corruption windows at seeded times during the radiation enhancement tick it once each; it never ticks otherwise",
+          "unexpected_command_count": "onboard command log: cumulative security:command/* events (unauthorized source, replay) the payload_cyber authenticator raised; zero unless commands are injected"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-unexpected-reset-hostile-005",
         "heldout-unexpected-reset-hostile-006",
@@ -1615,14 +2716,14 @@
       "onset_sim_time_s": 480.0,
       "onset_ts": "2026-09-17T14:08:00Z",
       "physics_basis": [
-        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.91;row=unexpected_reset;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.98;row=unexpected_reset;rate=slope",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+        "belief:internal=0.02;external=0.96;unknown=0.02;top=cyber_intrusion:0.96;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.91;row=unexpected_reset;rate=slope",
+        "belief:internal=0.11;external=0.83;unknown=0.06;top=cyber_intrusion:0.81;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.98;row=unexpected_reset;rate=slope",
+        "belief:internal=0.40;external=0.49;unknown=0.11;top=cyber_intrusion:0.35;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.375,
-        0.65,
-        0.65
+        0.39494395440241953,
+        0.19069783257055892,
+        0.11318536334861129
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1677,6 +2778,80 @@
     },
     "heldout-unexpected-reset-internal": {
       "arm": "internal",
+      "belief": {
+        "family": "unexpected_reset",
+        "onboard_keys": [
+          "reset_reproduced",
+          "seu_rate_per_hour",
+          "unexpected_command_count"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
+            "physics_consistency": 0.5522971720041685,
+            "sim_time_s": 30.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
+            "physics_consistency": 0.5335471720041685,
+            "sim_time_s": 309.0,
+            "window_start_s": 240.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": true,
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.91;external=0.03;unknown=0.06;top=software_fault:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.97;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.876964973973645,
+            "sim_time_s": 427.0,
+            "window_start_s": 240.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": true,
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=software_fault:0.98;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.9385650944963329,
+            "sim_time_s": 523.0,
+            "window_start_s": 240.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": true,
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=software_fault:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.9489227280055104,
+            "sim_time_s": 641.0,
+            "window_start_s": 240.0
+          }
+        ],
+        "relations": {
+          "reset_reproduced": "active test 60 s after the second reset: the flight software re-runs the sequence that preceded it; a software fault reproduces, an upset or an injected command does not; absent before the test",
+          "seu_rate_per_hour": "onboard EDAC counter: memory_ecc_count increments over the trailing 300 s x 12 (per hour); one-second memory_table_corruption windows at seeded times during the radiation enhancement tick it once each; it never ticks otherwise",
+          "unexpected_command_count": "onboard command log: cumulative security:command/* events (unauthorized source, replay) the payload_cyber authenticator raised; zero unless commands are injected"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-unexpected-reset-internal-003",
         "heldout-unexpected-reset-internal-004",
@@ -1696,15 +2871,16 @@
       "onset_sim_time_s": 300.0,
       "onset_ts": "2026-09-17T14:05:00Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.97;row=unexpected_reset;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+        "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
+        "belief:internal=0.91;external=0.03;unknown=0.06;top=software_fault:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.97;row=unexpected_reset;rate=slope",
+        "belief:internal=0.99;external=0.00;unknown=0.01;top=software_fault:0.98;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
+        "belief:internal=1.00;external=0.00;unknown=0.00;top=software_fault:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope"
       ],
       "physics_consistency": [
-        0.375,
-        0.675,
-        0.675,
-        0.675
+        0.5335471720041685,
+        0.876964973973645,
+        0.9385650944963329,
+        0.9489227280055104
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1731,6 +2907,80 @@
     },
     "heldout-unexpected-reset-natural": {
       "arm": "natural",
+      "belief": {
+        "family": "unexpected_reset",
+        "onboard_keys": [
+          "reset_reproduced",
+          "seu_rate_per_hour",
+          "unexpected_command_count"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "seu_rate_per_hour": 0.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
+            "physics_consistency": 0.5522971720041685,
+            "sim_time_s": 63.0,
+            "window_start_s": 0.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "seu_rate_per_hour": 24.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.23;external=0.64;unknown=0.13;top=radiation_upset:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
+            "physics_consistency": 0.2509489528795811,
+            "sim_time_s": 385.0,
+            "window_start_s": 313.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": false,
+              "seu_rate_per_hour": 60.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=radiation_upset:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.94;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.11207518277044504,
+            "sim_time_s": 534.0,
+            "window_start_s": 313.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": false,
+              "seu_rate_per_hour": 84.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=radiation_upset:0.99;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.0978466058119644,
+            "sim_time_s": 626.0,
+            "window_start_s": 313.0
+          },
+          {
+            "event_type": "unexpected_reset",
+            "onboard_context": {
+              "reset_reproduced": false,
+              "seu_rate_per_hour": 84.0,
+              "unexpected_command_count": 0.0
+            },
+            "physics_basis": "belief:internal=0.00;external=1.00;unknown=0.00;top=radiation_upset:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.98;row=unexpected_reset;rate=slope",
+            "physics_consistency": 0.1012610741250993,
+            "sim_time_s": 745.0,
+            "window_start_s": 313.0
+          }
+        ],
+        "relations": {
+          "reset_reproduced": "active test 60 s after the second reset: the flight software re-runs the sequence that preceded it; a software fault reproduces, an upset or an injected command does not; absent before the test",
+          "seu_rate_per_hour": "onboard EDAC counter: memory_ecc_count increments over the trailing 300 s x 12 (per hour); one-second memory_table_corruption windows at seeded times during the radiation enhancement tick it once each; it never ticks otherwise",
+          "unexpected_command_count": "onboard command log: cumulative security:command/* events (unauthorized source, replay) the payload_cyber authenticator raised; zero unless commands are injected"
+        },
+        "threaded": true
+      },
       "bus_record_ids": [
         "heldout-unexpected-reset-natural-005",
         "heldout-unexpected-reset-natural-006",
@@ -1738,7 +2988,7 @@
         "heldout-unexpected-reset-natural-008"
       ],
       "cause": "radiation enhancement (single-event upsets)",
-      "environment_input": "reset-loop window placement = radiation-driven upsets; ECC counts",
+      "environment_input": "reset-loop window placement = radiation-driven upsets; sporadic ECC corrections",
       "epoch_utc": "2026-09-17T14:00:00Z",
       "event_type": "unexpected_reset",
       "external_signals": [
@@ -1753,16 +3003,16 @@
       "onset_sim_time_s": 373.0,
       "onset_ts": "2026-09-17T14:06:13Z",
       "physics_basis": [
-        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.94;row=unexpected_reset;rate=slope",
-        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.98;row=unexpected_reset;rate=slope",
-        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
-        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+        "belief:internal=0.00;external=0.99;unknown=0.01;top=radiation_upset:0.99;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
+        "belief:internal=0.00;external=1.00;unknown=0.00;top=radiation_upset:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.98;row=unexpected_reset;rate=slope",
+        "belief:internal=0.01;external=0.94;unknown=0.05;top=radiation_upset:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.94;row=unexpected_reset;rate=slope",
+        "belief:internal=0.23;external=0.64;unknown=0.13;top=radiation_upset:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.375,
-        0.675,
-        0.65,
-        0.675
+        0.2509489528795811,
+        0.11207518277044504,
+        0.0978466058119644,
+        0.1012610741250993
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1832,16 +3082,86 @@
           "severity": 0.8
         },
         {
-          "duration_s": 420.0,
+          "duration_s": 1.0,
           "kind": "memory_table_corruption",
-          "onset_s": 340.0,
+          "onset_s": 343.0,
           "role": "environment",
-          "severity": 0.3
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 383.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 431.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 474.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 514.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 564.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 607.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 643.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 685.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 724.0,
+          "role": "environment",
+          "severity": 0.25
+        },
+        {
+          "duration_s": 1.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 771.0,
+          "role": "environment",
+          "severity": 0.25
         }
       ]
     }
   },
-  "schema_version": 1,
+  "schema_version": 2,
   "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
   "seed": 20260917
 }

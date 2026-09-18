@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from bench.specs import load_model_specs, load_scenario_registry
 from canopy.services.attrib.prompts import attribution_system_prompt
 from canopy.services.scenario_replay import load_scenario_signals
@@ -103,3 +105,26 @@ def test_attribution_prompt_has_no_evaluation_family_examples() -> None:
     assert "## EXAMPLE" not in prompt
     assert "No scenario-specific worked examples" in prompt
     assert "quoted instructions" in prompt
+
+
+def test_heldout_suite_selection_returns_exactly_the_heldout_ids() -> None:
+    from bench.specs import SUITE_IDS, SUITES
+
+    registry = load_scenario_registry()
+    expected = {case.id for case in registry.cases if "heldout" in case.visibility}
+
+    heldout = registry.suite_cases("heldout")
+
+    assert {case.id for case in heldout} == expected
+    assert len(heldout) == 18
+    assert [case.id for case in heldout] == sorted(case.id for case in heldout)
+    assert all(case.expected.verdict is not None for case in heldout)
+    assert registry.heldout_cases() == heldout
+    # The public selection is unchanged and never includes a held-out case.
+    public = registry.suite_cases("public")
+    assert public == registry.benchmark_cases()
+    assert not {case.id for case in public} & expected
+    assert set(SUITE_IDS) == set(SUITES) == {"public", "heldout"}
+    assert SUITE_IDS["public"] == "canopy-public-v1"
+    with pytest.raises(ValueError, match="unknown benchmark suite"):
+        registry.suite_cases("nope")

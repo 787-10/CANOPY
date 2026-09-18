@@ -7,6 +7,13 @@ LLM client, the §5.2 bounds are enforced after reconcile, the actor
 convention holds, the traces carry the verdict, the recent-anomaly context
 is bounded, and missing internal-diagnosis telemetry takes the stress
 haircut. The real-rule fixtures run in ``megalith/tests/test_verdict_lane.py``.
+
+With the rule lane on, a batch that carries a ``satellite_id`` and a
+``bus_*`` anomaly goes through the fast lane (wave 3A): the rule verdict is
+published first as a provisional attribution and the reasoning lane's result
+follows under the same id as revision 1, so those fixtures read the final
+attribution from the end of the stream (``tests/test_fast_lane.py`` pins
+the lane itself).
 """
 from __future__ import annotations
 
@@ -131,8 +138,16 @@ async def test_rule_verdict_fills_the_attribution() -> None:
     rule = _Rule("internal_fault", 0.83, pc=0.83)
     attributions, traces, _ = await _attribute([[_bus(0.83)]], rule_verdict=_fixed(rule))
 
-    assert len(attributions) == 1
-    final = attributions[0]
+    # Fast lane: the rule verdict first (provisional), then the reasoning lane.
+    assert [a.provisional for a in attributions] == [True, False]
+    assert [a.revision for a in attributions] == [0, 1]
+    assert len({a.id for a in attributions}) == 1
+    provisional = attributions[0]
+    assert provisional.verdict == "internal_fault"
+    assert provisional.verdict_basis == "rule"
+    assert provisional.actor == "None"
+    assert provisional.confidence == pytest.approx(0.83)
+    final = attributions[-1]
     assert final.verdict == "internal_fault"
     assert final.verdict_basis == "rule"
     assert final.actor == "None"
@@ -175,7 +190,8 @@ async def test_single_pass_path_gets_the_same_treatment() -> None:
     attributions, _, _ = await _attribute(
         [[_bus(0.83)]], rule_verdict=_fixed(rule), multi_agent=False
     )
-    final = attributions[0]
+    final = attributions[-1]
+    assert final.provisional is False and final.revision == 1
     assert final.verdict == "internal_fault"
     assert final.verdict_basis == "rule"
     assert final.actor == "None"
@@ -198,17 +214,20 @@ async def test_hostile_verdict_keeps_the_attributed_actor() -> None:
 async def test_hostile_verdict_with_actorless_template_is_unknown_actor_and_capped() -> None:
     rule = _Rule("hostile_external", 0.7, pc=0.3)
     attributions, _, _ = await _attribute([[_bus(0.3)]], rule_verdict=_fixed(rule))
-    final = attributions[0]
-    assert final.verdict == "hostile_external"
-    assert final.actor == "Unknown"
-    assert final.confidence == pytest.approx(0.49)
+    # Provisional and final agree: no actor was attributed on either lane.
+    for attribution in attributions:
+        assert attribution.verdict == "hostile_external"
+        assert attribution.actor == "Unknown"
+        assert attribution.confidence == pytest.approx(0.49)
+    assert [a.provisional for a in attributions] == [True, False]
 
 
 @pytest.mark.asyncio
 async def test_unknown_verdict_forces_unknown_actor_at_cap() -> None:
     rule = _Rule("unknown", 0.49, pc=0.83)
     attributions, _, _ = await _attribute([[_bus(0.83), _rf()]], rule_verdict=_fixed(rule))
-    final = attributions[0]
+    final = attributions[-1]
+    assert final.provisional is False
     assert final.verdict == "unknown"
     assert final.actor == "Unknown"
     assert final.confidence == pytest.approx(0.49)
@@ -316,6 +335,8 @@ async def test_traces_carry_verdict_physics_and_basis() -> None:
 async def test_lane_off_leaves_verdict_unset_but_fills_identity() -> None:
     attributions, traces, attrib = await _attribute([[_bus(0.83)]], rule_verdict=None)
     assert not attrib.verdict_lane_enabled
+    assert not attrib.fast_lane_enabled
+    assert len(attributions) == 1  # no rule lane: no provisional attribution
     final = attributions[0]
     assert final.verdict is None
     assert final.verdict_basis is None

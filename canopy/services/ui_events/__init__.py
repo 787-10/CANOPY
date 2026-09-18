@@ -3,7 +3,9 @@ from __future__ import annotations
 import asyncio
 import logging
 import re
+import time
 from collections import OrderedDict
+from collections.abc import Callable
 
 from canopy.services.bus import Bus
 from canopy.services.schemas.events import (
@@ -15,6 +17,7 @@ from canopy.services.schemas.events import (
     UIEventType,
     UISeverity,
 )
+from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
@@ -158,12 +161,31 @@ class UIEventService:
     ``decisions.*`` (to fire UI events). The cache keeps the most recent
     256 attributions so a Decision arriving moments after its Attribution can
     pick up the actor/confidence/forecast for the message.
+
+    Revisions (wave 3A). A revised attribution replaces the cached one under
+    the same id, and the decision made for it arrives with the decision id
+    its first revision got, so the UI event it produces has the same id as
+    before: the console updates the card instead of adding a duplicate. With
+    a ``tracer`` the service emits one ``decide``-stage trace per UI event
+    (there is no separate UI stage in the trace vocabulary), stamped with
+    ``latency_ms`` since the cluster's first anomaly and ``stage_ms`` for
+    this stage's own work.
     """
 
-    def __init__(self, bus: Bus, *, cache_size: int = ATTRIBUTION_CACHE_SIZE) -> None:
+    def __init__(
+        self,
+        bus: Bus,
+        *,
+        cache_size: int = ATTRIBUTION_CACHE_SIZE,
+        tracer: Tracer | None = None,
+        clock: Callable[[], float] = time.monotonic,
+    ) -> None:
         self._bus = bus
         self._cache: OrderedDict[str, Attribution] = OrderedDict()
+        self._decisions: OrderedDict[str, Decision] = OrderedDict()
         self._cache_size = cache_size
+        self._tracer = tracer
+        self._clock = clock
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:
@@ -183,15 +205,39 @@ class UIEventService:
         async for topic, event in self._bus.subscribe("decisions.*"):
             if not isinstance(event, Decision):
                 continue
+            stage_t0 = self._clock()
             attribution = self._cache.get(event.attribution_id)
+            previous = self._decisions.get(event.id)
+            self._decisions[event.id] = event
+            self._decisions.move_to_end(event.id)
+            while len(self._decisions) > self._cache_size:
+                self._decisions.popitem(last=False)
             ui_event = self._build_ui_event(event, attribution)
             await self._bus.publish(f"ui_events.{ui_event.type}", ui_event)
+            verb = "updated" if previous is not None else "published"
             log.info(
-                "ui_events published id=%s type=%s severity=%s",
+                "ui_events %s id=%s type=%s severity=%s revision=%d",
+                verb,
                 ui_event.id,
                 ui_event.type,
                 ui_event.severity,
+                event.revision,
             )
+            if self._tracer is not None:
+                await self._tracer.emit(
+                    "decide",
+                    "info",
+                    f"ui event {verb}: {ui_event.type} severity={ui_event.severity} "
+                    f"revision={event.revision}",
+                    ref_id=ui_event.id,
+                    t0=self._tracer.t0_for(event.id, event.attribution_id),
+                    stage_t0=stage_t0,
+                    decision_id=event.id,
+                    attribution_id=event.attribution_id,
+                    revision=event.revision,
+                    provisional=attribution.provisional if attribution else None,
+                    update=previous is not None,
+                )
 
     def _build_ui_event(
         self, decision: Decision, attribution: Attribution | None

@@ -17,6 +17,17 @@ DEFAULT_MODEL_SPECS = ROOT / "bench" / "models.yaml"
 RecordRole = Literal["stimulus", "context", "oracle", "display_only"]
 Visibility = Literal["demo", "public_eval", "heldout"]
 
+# Benchmark suites (MEGALITH wave 3D). ``public`` is the pre-existing public
+# evaluation set; ``heldout`` is the paired fault/natural/hostile suite that the
+# public selection never includes (plan §7 concern 8). ``SUITE_IDS`` is the
+# ``suite_id`` written into run bundles.
+Suite = Literal["public", "heldout"]
+SUITES: tuple[Suite, ...] = ("public", "heldout")
+SUITE_IDS: dict[str, str] = {
+    "public": "canopy-public-v1",
+    "heldout": "megalith-heldout-v1",
+}
+
 
 class RecordRoleRule(BaseModel):
     role: RecordRole
@@ -134,6 +145,21 @@ class ScenarioRegistry(BaseModel):
 
     def benchmark_cases(self) -> list[ScenarioSpec]:
         return [case for case in self.cases if "public_eval" in case.visibility]
+
+    def heldout_cases(self) -> list[ScenarioSpec]:
+        """The paired held-out suite, in id order (never part of the public suite)."""
+        return sorted(
+            (case for case in self.cases if "heldout" in case.visibility),
+            key=lambda case: case.id,
+        )
+
+    def suite_cases(self, suite: str) -> list[ScenarioSpec]:
+        """The cases a named suite runs; unknown suites fail closed."""
+        if suite == "public":
+            return self.benchmark_cases()
+        if suite == "heldout":
+            return self.heldout_cases()
+        raise ValueError(f"unknown benchmark suite {suite!r}; choose from {', '.join(SUITES)}")
 
     def by_file(self, filename: str) -> ScenarioSpec:
         try:

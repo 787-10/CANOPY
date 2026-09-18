@@ -1,8 +1,13 @@
 """Shared engine builder used by both the CLI and the FastAPI gateway.
 
-Bundling the ``InProcessBus`` + KB + LLM + four async services into one
-function keeps :mod:`canopy.cli` and :mod:`canopy.api` in lock-step. If a new
-service joins the engine, it ships here once.
+Bundling the bus + KB + LLM + four async services into one function keeps
+:mod:`canopy.cli` and :mod:`canopy.api` in lock-step. If a new service joins
+the engine, it ships here once.
+
+The bus is any :class:`canopy.services.bus.Bus`. ``build_bus`` picks the
+backend: ``memory`` (the in-process default) or ``nats`` (``megalith.bus``'s
+JetStream client, imported only on that branch because CANOPY's own
+environment carries neither ``nats-py`` nor ``megalith``).
 """
 from __future__ import annotations
 
@@ -15,7 +20,7 @@ from pathlib import Path
 from typing import Literal
 
 from canopy.services.attrib import AttribService
-from canopy.services.bus import InProcessBus
+from canopy.services.bus import Bus, InProcessBus
 from canopy.services.decide import DecideService, Gate
 from canopy.services.decide.tools import build_tool_registry
 from canopy.services.fusion import FusionService
@@ -28,13 +33,16 @@ from canopy.services.ui_events import UIEventService
 
 DEFAULT_KB_PATH = Path("data/kb_seed_entries.json")
 LLM_PROVIDERS = ("stub", "anthropic", "ollama")
+BUS_BACKENDS = ("memory", "nats")
+BusBackend = Literal["memory", "nats"]
+DEFAULT_NATS_URL = "nats://127.0.0.1:4222"
 
 log = logging.getLogger(__name__)
 
 
 @dataclass
 class Engine:
-    bus: InProcessBus
+    bus: Bus
     kb: KB
     orbit: OrbitService
     llm: LLMClient
@@ -89,6 +97,50 @@ def build_llm(
     )
 
 
+def build_bus(
+    backend: BusBackend = "memory",
+    *,
+    nats_url: str | None = None,
+    nats_stream: str = "canopy",
+    consumer_prefix: str | None = None,
+) -> Bus:
+    """Construct the bus backend.
+
+    ``nats`` imports ``megalith.bus`` lazily: it needs ``nats-py`` and the
+    ``megalith`` package, neither of which CANOPY's own environment has.
+    ``nats_url`` falls back to ``CANOPY_NATS_URL`` then ``DEFAULT_NATS_URL``.
+    ``consumer_prefix`` names this process's durable consumers so a restart
+    resumes where it left off (``None`` keeps them ephemeral).
+    """
+    if backend == "memory":
+        return InProcessBus()
+    if backend == "nats":
+        try:
+            from megalith.bus import NatsBus
+        except ImportError as exc:  # pragma: no cover - depends on the env
+            raise RuntimeError(
+                "bus backend 'nats' needs the megalith package and nats-py "
+                "(run from the MEGALITH root environment)"
+            ) from exc
+
+        url = nats_url or os.environ.get("CANOPY_NATS_URL") or DEFAULT_NATS_URL
+        return NatsBus(url, stream=nats_stream, consumer_prefix=consumer_prefix)
+    raise ValueError(
+        f"unknown bus backend {backend!r}; expected one of {BUS_BACKENDS}"
+    )
+
+
+def resolve_bus_backend(*, bus_flag: str | None) -> BusBackend:
+    """Pick the bus backend from --bus > CANOPY_BUS env > memory."""
+    value = bus_flag or os.environ.get("CANOPY_BUS") or "memory"
+    value = value.lower()
+    if value not in BUS_BACKENDS:
+        raise ValueError(
+            f"unknown bus backend {value!r}; expected one of {BUS_BACKENDS}"
+        )
+    return value  # type: ignore[return-value]
+
+
 def resolve_provider(*, llm_flag: str | None, live_flag: bool = False) -> str:
     """Pick provider from --llm > CANOPY_LLM env > --live/CANOPY_LIVE > stub."""
     if llm_flag:
@@ -119,8 +171,17 @@ def build_engine(
     fusion_windows: Mapping[str, tuple[int, int]] | None = None,
     decision_gate: Gate | None = None,
     bus_health_registry: Callable[[], set[str]] | None = None,
+    bus: Bus | None = None,
+    bus_backend: BusBackend = "memory",
+    nats_url: str | None = None,
+    nats_stream: str = "canopy",
+    consumer_prefix: str | None = None,
 ) -> Engine:
-    """Wire up the in-process bus, KB, LLM, and the four async services.
+    """Wire up the bus, KB, LLM, and the four async services.
+
+    ``bus`` injects a ready bus; otherwise ``bus_backend`` (``memory`` or
+    ``nats``) selects one through :func:`build_bus`, with ``nats_url``,
+    ``nats_stream`` and ``consumer_prefix`` forwarded to the NATS client.
 
     ``fusion_windows`` overrides entries of the fusion per-domain
     ``(look-back s, look-ahead s)`` table (``fusion.DEFAULT_WINDOWS``,
@@ -131,7 +192,13 @@ def build_engine(
     gate from ``megalith.gate`` when that package is installed, else the
     policy-only gate.
     """
-    bus = InProcessBus()
+    if bus is None:
+        bus = build_bus(
+            bus_backend,
+            nats_url=nats_url,
+            nats_stream=nats_stream,
+            consumer_prefix=consumer_prefix,
+        )
     kb = KB.load_from_json(kb_path)
     log.info("KB loaded: %d entries from %s", len(kb), kb_path)
     resolved_llm = llm or build_llm(
@@ -178,7 +245,7 @@ def build_engine(
         tool_ctx=tool_ctx,
         gate=decision_gate,
     )
-    ui_events = UIEventService(bus)
+    ui_events = UIEventService(bus, tracer=tracer)
     osint_cluster = (
         OsintClusterService(bus, tracer=tracer) if enable_osint else None
     )

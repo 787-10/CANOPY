@@ -131,6 +131,13 @@ export type Attribution = {
   verdict_basis?: VerdictBasis | null
   verdict_evidence?: string[]
   satellite_id?: string | null
+  // Fast lane (wave 3A). A provisional attribution is the rule lane's call,
+  // published before any LLM ran; the reasoning lane republishes the SAME id
+  // with `provisional: false` and a higher `revision`. The store replaces an
+  // entry by id, so a card updates in place. Optional so fixtures predating
+  // the lane stay valid; the engine always serializes both (false / 0).
+  provisional?: boolean
+  revision?: number
 }
 
 // Recovery recommendation carried by a `recovery_recommendation` decision
@@ -160,6 +167,9 @@ export type Decision = {
   // threat-context gate blocked is republished as `threat_warning` with
   // `recovery: null` and a `[gate:<reason_code>] ` rationale prefix (§7).
   recovery?: RecoveryBlock | null
+  // Mirrors the revision of the attribution this decision was made for; the
+  // decision id is stable across revisions (wave 3A).
+  revision?: number
 }
 
 export type TraceStage =

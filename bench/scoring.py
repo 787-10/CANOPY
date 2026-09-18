@@ -7,13 +7,219 @@ calibration scoring.
 from __future__ import annotations
 
 import random
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
-from typing import Literal
+from datetime import UTC, datetime
+from typing import Any, Literal
 
 from canopy.services.schemas.events import ACTION_AUTHORITY
 
 ConfidenceBand = Literal["low", "med", "high"]
+
+# MEGALITH three-way verdict scoring (docs/INTERFACE-SPEC.md §5, wave 3D).
+VERDICT_CLASSES: tuple[str, ...] = (
+    "internal_fault",
+    "natural_external",
+    "hostile_external",
+    "unknown",
+)
+RECOVERY_ACTION = "recovery_recommendation"
+# A decide-stage warn trace whose message starts with this is a gate block
+# (canopy/services/decide/__init__.py ``_apply_gate``).
+GATE_BLOCK_PREFIX = "gate blocked"
+# Per-stage timing keys wave 3A puts on attrib and decide trace payloads.
+STAGE_TIMING_KEYS: tuple[str, ...] = ("stage_ms", "latency_ms")
+# Confidence bins shared by the actor ECE and the verdict ECE.
+_ECE_BINS: tuple[tuple[float, float], ...] = (
+    (0.0, 0.5),
+    (0.5, 0.7),
+    (0.7, 0.85),
+    (0.85, 1.01),
+)
+
+
+def _field(record: Any, name: str, default: Any = None) -> Any:
+    """Read ``name`` from a pydantic event or its ``model_dump`` dict."""
+    if isinstance(record, Mapping):
+        return record.get(name, default)
+    return getattr(record, name, default)
+
+
+def _as_ms(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    ms = float(value)
+    return ms if ms >= 0.0 else None
+
+
+def _as_utc(value: Any) -> datetime | None:
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=UTC)
+    if isinstance(value, str) and value:
+        text = value[:-1] + "+00:00" if value.endswith(("Z", "z")) else value
+        try:
+            return _as_utc(datetime.fromisoformat(text))
+        except ValueError:
+            return None
+    return None
+
+
+def stage_timings_from_traces(traces: Iterable[Any]) -> dict[str, dict[str, float]]:
+    """Per-stage timings from trace payloads, ``{stage: {key: ms}}``.
+
+    Wave 3A puts ``stage_ms`` (the stage's own duration) and ``latency_ms``
+    (elapsed since the triggering event) on attrib and decide trace payloads.
+    Either key may be a number, in which case the trace's ``stage`` is the
+    key, or a ``{stage: ms}`` mapping. Several traces for one stage keep the
+    largest value, so a stage that reports progressively is measured to its
+    last line. Traces without timing keys contribute nothing; the scorecard
+    then falls back to whole-episode elapsed time.
+    """
+    out: dict[str, dict[str, float]] = {}
+    for trace in traces:
+        payload = _field(trace, "payload", None) or {}
+        stage = _field(trace, "stage", None)
+        for key in STAGE_TIMING_KEYS:
+            value = payload.get(key)
+            if isinstance(value, Mapping):
+                items = list(value.items())
+            elif value is None or not stage:
+                continue
+            else:
+                items = [(stage, value)]
+            for name, raw in items:
+                ms = _as_ms(raw)
+                if ms is None or not name:
+                    continue
+                slot = out.setdefault(str(name), {})
+                slot[key] = max(slot.get(key, 0.0), ms)
+    return out
+
+
+def gate_block_messages(traces: Iterable[Any]) -> list[str]:
+    """Messages of decide-stage warn traces that record a gate block."""
+    return [
+        str(_field(trace, "message", ""))
+        for trace in traces
+        if _field(trace, "stage") == "decide"
+        and _field(trace, "level") == "warn"
+        and str(_field(trace, "message", "")).startswith(GATE_BLOCK_PREFIX)
+    ]
+
+
+def latest_physics_consistency(anomalies: Iterable[Any]) -> float | None:
+    """``physics_consistency`` of the most recent ``bus_*`` anomaly carrying one.
+
+    Spec §5.1 (1.2): the latest bus record is the most informed; ties on time
+    take the larger value. ``None`` when no bus anomaly carries a score.
+    """
+    best: tuple[datetime, float] | None = None
+    for anomaly in anomalies:
+        if not str(_field(anomaly, "kind", "")).startswith("bus_"):
+            continue
+        payload = _field(anomaly, "payload", None) or {}
+        value = payload.get("physics_consistency")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        when = _as_utc(_field(anomaly, "ts")) or datetime.min.replace(tzinfo=UTC)
+        candidate = (when, float(value))
+        if best is None or candidate > best:
+            best = candidate
+    return best[1] if best else None
+
+
+def _latest_bus_anomaly_id(anomalies: Iterable[Any]) -> str | None:
+    best: tuple[datetime, float, str] | None = None
+    for anomaly in anomalies:
+        if not str(_field(anomaly, "kind", "")).startswith("bus_"):
+            continue
+        payload = _field(anomaly, "payload", None) or {}
+        value = payload.get("physics_consistency")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        when = _as_utc(_field(anomaly, "ts")) or datetime.min.replace(tzinfo=UTC)
+        candidate = (when, float(value), str(_field(anomaly, "id", "")))
+        if best is None or candidate[:2] > best[:2]:
+            best = candidate
+    return best[2] if best else None
+
+
+def select_final_attribution(
+    attributions: Iterable[Any], anomalies: Iterable[Any] = ()
+) -> Any | None:
+    """The attribution an episode is scored on.
+
+    With the fast lane (wave 3A) one episode can publish a provisional
+    attribution and its reasoning revision under the same id, plus separate
+    attributions for clusters with no satellite (global space weather). The
+    scored one is the satellite cluster's final word: prefer attributions
+    whose ``anomaly_ids`` cover the latest scored bus anomaly, else any with a
+    ``satellite_id``; among those the highest ``revision``, then the latest
+    published. Falls back to the last attribution (pre-3A pipelines and the
+    public suite, where nothing is satellite-keyed).
+    """
+    items = list(attributions)
+    if not items:
+        return None
+    latest_bus = _latest_bus_anomaly_id(anomalies)
+    covering = [
+        a for a in items if latest_bus and latest_bus in (_field(a, "anomaly_ids", None) or [])
+    ]
+    keyed = [a for a in items if _field(a, "satellite_id")]
+    pool = covering or keyed or items
+    best: tuple[tuple[int, int], Any] | None = None
+    for index, attribution in enumerate(pool):
+        revision = _field(attribution, "revision", 0) or 0
+        key = (int(revision) if isinstance(revision, (int, float)) else 0, index)
+        if best is None or key > best[0]:
+            best = (key, attribution)
+    return best[1] if best else None
+
+
+def select_provisional_attribution(attributions: Iterable[Any], final: Any) -> Any | None:
+    """The fast lane's provisional attribution for the scored cluster, if any."""
+    if final is None:
+        return None
+    final_id = _field(final, "id")
+    for attribution in attributions:
+        if _field(attribution, "provisional", False) and _field(attribution, "id") == final_id:
+            return attribution
+    return None
+
+
+def select_final_decision(decisions: Iterable[Any], attribution: Any) -> Any | None:
+    """The last decision for the scored attribution; else the last decision."""
+    items = list(decisions)
+    if not items:
+        return None
+    if attribution is not None:
+        final_id = _field(attribution, "id")
+        matching = [d for d in items if _field(d, "attribution_id") == final_id]
+        if matching:
+            return matching[-1]
+    return items[-1]
+
+
+def _percentile(values: list[float], p: float) -> float:
+    if not values:
+        return 0.0
+    ordered = sorted(values)
+    idx = max(0, min(len(ordered) - 1, int(p * len(ordered))))
+    return ordered[idx]
+
+
+def _ece(pairs: list[tuple[float, bool]]) -> float:
+    if not pairs:
+        return 0.0
+    error = 0.0
+    for lo, hi in _ECE_BINS:
+        members = [(c, ok) for c, ok in pairs if lo <= c < hi]
+        if not members:
+            continue
+        accuracy = sum(ok for _, ok in members) / len(members)
+        mean_confidence = sum(c for c, _ in members) / len(members)
+        error += (len(members) / len(pairs)) * abs(accuracy - mean_confidence)
+    return error
 
 
 def actor_head(actor: str) -> str:
@@ -92,6 +298,19 @@ class ScenarioResult:
     raw_attribution_schema_valid: bool | None = None
     raw_decision_schema_valid: bool | None = None
     repetition: int | None = None
+    # MEGALITH three-way verdict, gate and timing fields (wave 3D). All
+    # optional so pre-existing constructors and rescoring stay valid.
+    expected_verdict: str | None = None
+    predicted_verdict: str | None = None
+    verdict_correct: bool | None = None
+    physics_consistency: float | None = None
+    gate_blocked: bool = False
+    gate_block_messages: list[str] = field(default_factory=list)
+    stage_timings: dict[str, dict[str, float]] = field(default_factory=dict)
+    # The fast lane's provisional verdict for the scored cluster (wave 3A).
+    provisional_verdict: str | None = None
+    # Any decision in the episode (provisional ones included) recommended a recovery.
+    recovery_published: bool = False
 
 
 @dataclass
@@ -162,21 +381,174 @@ class Scorecard:
         ) / len(scored)
 
     def expected_calibration_error(self) -> float:
-        scored = [r for r in self.results if r.confidence is not None]
+        return _ece(
+            [
+                (float(r.confidence), bool(r.actor_correct))
+                for r in self.results
+                if r.confidence is not None
+            ]
+        )
+
+    # ---- MEGALITH verdict, gate, recovery and stage timing (wave 3D) --------
+
+    def verdict_results(self) -> list[ScenarioResult]:
+        """Results whose label carries an expected three-way verdict."""
+        return [r for r in self.results if r.expected_verdict is not None]
+
+    def verdict_accuracy(self) -> float:
+        scored = self.verdict_results()
         if not scored:
             return 0.0
-        bins = ((0.0, 0.5), (0.5, 0.7), (0.7, 0.85), (0.85, 1.01))
-        error = 0.0
-        for lo, hi in bins:
-            members = [r for r in scored if lo <= float(r.confidence) < hi]
-            if not members:
+        return sum(bool(r.verdict_correct) for r in scored) / len(scored)
+
+    def verdict_missing(self) -> int:
+        """Scored cases that produced no verdict at all (counted as ``unknown``)."""
+        return sum(1 for r in self.verdict_results() if r.predicted_verdict is None)
+
+    def verdict_confusion(self) -> dict[str, dict[str, int]]:
+        """Expected verdict (rows) by predicted verdict (columns), 4x4.
+
+        A case with no attribution has no verdict; it is an abstention by
+        absence and lands in the ``unknown`` column (``verdict_missing``
+        counts them separately).
+        """
+        matrix = {e: {p: 0 for p in VERDICT_CLASSES} for e in VERDICT_CLASSES}
+        for r in self.verdict_results():
+            expected = r.expected_verdict
+            predicted = r.predicted_verdict or "unknown"
+            if expected not in matrix or predicted not in matrix[expected]:
                 continue
-            accuracy = sum(r.actor_correct for r in members) / len(members)
-            mean_confidence = sum(float(r.confidence) for r in members) / len(members)
-            error += (len(members) / len(scored)) * abs(
-                accuracy - mean_confidence
-            )
-        return error
+            matrix[expected][predicted] += 1
+        return matrix
+
+    def verdict_class_metrics(self) -> dict[str, dict[str, float | int]]:
+        """Per-verdict precision, recall, F1 and support from the confusion matrix."""
+        matrix = self.verdict_confusion()
+        out: dict[str, dict[str, float | int]] = {}
+        for cls in VERDICT_CLASSES:
+            tp = matrix[cls][cls]
+            fp = sum(matrix[e][cls] for e in VERDICT_CLASSES if e != cls)
+            fn = sum(matrix[cls][p] for p in VERDICT_CLASSES if p != cls)
+            precision = tp / (tp + fp) if tp + fp else 0.0
+            recall = tp / (tp + fn) if tp + fn else 0.0
+            f1 = (2 * precision * recall / (precision + recall)) if precision + recall else 0.0
+            out[cls] = {
+                "precision": precision,
+                "recall": recall,
+                "f1": f1,
+                "support": tp + fn,
+                "predicted": tp + fp,
+            }
+        return out
+
+    def _verdict_pairs(self) -> list[tuple[float, bool]]:
+        return [
+            (float(r.confidence), bool(r.verdict_correct))
+            for r in self.verdict_results()
+            if r.confidence is not None
+        ]
+
+    def verdict_brier(self) -> float:
+        """Brier score of the attribution confidence against verdict correctness."""
+        pairs = self._verdict_pairs()
+        if not pairs:
+            return 0.0
+        return sum((c - float(ok)) ** 2 for c, ok in pairs) / len(pairs)
+
+    def verdict_ece(self) -> float:
+        """Expected calibration error of confidence against verdict correctness."""
+        return _ece(self._verdict_pairs())
+
+    def abstention_rate(self) -> float:
+        """Fraction of all results whose verdict is ``unknown``."""
+        if not self.results:
+            return 0.0
+        return sum(r.predicted_verdict == "unknown" for r in self.results) / self.total
+
+    def gate_block_rate(self) -> float:
+        """Fraction of results where the threat-context gate blocked a decision."""
+        if not self.results:
+            return 0.0
+        return sum(bool(r.gate_blocked) for r in self.results) / self.total
+
+    def recovery_rate(self) -> float:
+        """Fraction of results whose decision is a recovery recommendation."""
+        if not self.results:
+            return 0.0
+        return sum(r.predicted_action == RECOVERY_ACTION for r in self.results) / self.total
+
+    def recovery_when_hostile(self) -> int:
+        """Recoveries recommended under an expected hostile verdict: safety misses."""
+        return sum(
+            1
+            for r in self.results
+            if r.expected_verdict == "hostile_external" and r.predicted_action == RECOVERY_ACTION
+        )
+
+    def recovery_when_hostile_rate(self) -> float:
+        hostile = [r for r in self.results if r.expected_verdict == "hostile_external"]
+        if not hostile:
+            return 0.0
+        return self.recovery_when_hostile() / len(hostile)
+
+    def any_recovery_when_hostile(self) -> int:
+        """Cases where any published decision, provisional ones included, recommended
+        a recovery under an expected hostile verdict. The operator saw it even if
+        a later revision withdrew it."""
+        return sum(
+            1
+            for r in self.results
+            if r.expected_verdict == "hostile_external" and r.recovery_published
+        )
+
+    def provisional_verdict_accuracy(self) -> float:
+        """Accuracy of the fast lane's provisional verdict where one was published."""
+        scored = [
+            r for r in self.verdict_results() if r.provisional_verdict is not None
+        ]
+        if not scored:
+            return 0.0
+        return sum(r.provisional_verdict == r.expected_verdict for r in scored) / len(scored)
+
+    def provisional_verdict_scored(self) -> int:
+        return sum(
+            1 for r in self.verdict_results() if r.provisional_verdict is not None
+        )
+
+    def latency_source(self) -> str:
+        """``traces`` when any result carries per-stage timing, else ``elapsed``."""
+        return "traces" if any(r.stage_timings for r in self.results) else "elapsed"
+
+    def latency_by_stage(self) -> dict[str, dict[str, dict[str, float | int]]]:
+        """p50/p95 per stage from trace timings, plus whole-episode elapsed.
+
+        ``{stage: {"stage_ms" | "latency_ms": {"p50", "p95", "count"}}}`` for
+        every stage any trace timed, and always ``{"episode": {"elapsed_ms":
+        {...}}}`` from ``latency_seconds`` as the fallback that exists even when
+        no trace carries timing (pre-3A pipelines).
+        """
+        out: dict[str, dict[str, dict[str, float | int]]] = {}
+        for key in STAGE_TIMING_KEYS:
+            per_stage: dict[str, list[float]] = {}
+            for r in self.results:
+                for stage, timing in r.stage_timings.items():
+                    if key in timing:
+                        per_stage.setdefault(stage, []).append(float(timing[key]))
+            for stage, values in sorted(per_stage.items()):
+                out.setdefault(stage, {})[key] = {
+                    "p50": _percentile(values, 0.5),
+                    "p95": _percentile(values, 0.95),
+                    "count": len(values),
+                }
+        elapsed = [r.latency_seconds * 1000.0 for r in self.results]
+        out["episode"] = {
+            "elapsed_ms": {
+                "p50": _percentile(elapsed, 0.5),
+                "p95": _percentile(elapsed, 0.95),
+                "count": len(elapsed),
+            }
+        }
+        return out
 
     def actor_macro_f1(self) -> float:
         if not self.results:
@@ -377,11 +749,18 @@ class Scorecard:
         output = {}
         for family in families:
             rows = [r for r in self.results if (r.family or "unclassified") == family]
+            verdict_rows = [r for r in rows if r.expected_verdict is not None]
             output[family] = {
                 "total": len(rows),
                 "attribution_accuracy": sum(r.actor_correct for r in rows) / len(rows),
                 "action_accuracy": sum(r.action_correct for r in rows) / len(rows),
                 "authority_accuracy": sum(r.authority_correct for r in rows) / len(rows),
+                "verdict_scored": len(verdict_rows),
+                "verdict_accuracy": (
+                    sum(bool(r.verdict_correct) for r in verdict_rows) / len(verdict_rows)
+                    if verdict_rows
+                    else 0.0
+                ),
             }
         return output
 
@@ -566,6 +945,39 @@ class Scorecard:
             "confidence_means": {
                 k: round(v, 3) for k, v in self.confidence_means().items()
             },
+            # MEGALITH wave 3D additions (keys only ever added, never renamed).
+            "verdict_scored": len(self.verdict_results()),
+            "verdict_accuracy": round(self.verdict_accuracy(), 3),
+            "verdict_missing": self.verdict_missing(),
+            "verdict_confusion": self.verdict_confusion(),
+            "verdict_classes": {
+                cls: {
+                    key: round(value, 3) if isinstance(value, float) else value
+                    for key, value in metrics.items()
+                }
+                for cls, metrics in self.verdict_class_metrics().items()
+            },
+            "verdict_brier": round(self.verdict_brier(), 3),
+            "verdict_ece": round(self.verdict_ece(), 3),
+            "abstention_rate": round(self.abstention_rate(), 3),
+            "gate_block_rate": round(self.gate_block_rate(), 3),
+            "recovery_rate": round(self.recovery_rate(), 3),
+            "recovery_when_hostile": self.recovery_when_hostile(),
+            "recovery_when_hostile_rate": round(self.recovery_when_hostile_rate(), 3),
+            "any_recovery_when_hostile": self.any_recovery_when_hostile(),
+            "provisional_verdict_scored": self.provisional_verdict_scored(),
+            "provisional_verdict_accuracy": round(self.provisional_verdict_accuracy(), 3),
+            "latency_source": self.latency_source(),
+            "latency_by_stage": {
+                stage: {
+                    key: {
+                        name: round(value, 3) if isinstance(value, float) else value
+                        for name, value in stats.items()
+                    }
+                    for key, stats in timings.items()
+                }
+                for stage, timings in self.latency_by_stage().items()
+            },
             "results": [
                 {
                     "file": r.file,
@@ -602,6 +1014,17 @@ class Scorecard:
                     ),
                     "raw_decision_schema_valid": r.raw_decision_schema_valid,
                     "repetition": r.repetition,
+                    "expected_verdict": r.expected_verdict,
+                    "predicted_verdict": r.predicted_verdict,
+                    "verdict_correct": r.verdict_correct,
+                    "physics_consistency": r.physics_consistency,
+                    "gate_blocked": r.gate_blocked,
+                    "gate_block_messages": list(r.gate_block_messages),
+                    "stage_timings": {
+                        stage: dict(timing) for stage, timing in r.stage_timings.items()
+                    },
+                    "provisional_verdict": r.provisional_verdict,
+                    "recovery_published": r.recovery_published,
                 }
                 for r in self.results
             ],

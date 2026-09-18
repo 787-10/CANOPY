@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import fnmatch
 import logging
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable
 from dataclasses import dataclass, field
 from typing import Protocol
 
@@ -13,11 +13,37 @@ log = logging.getLogger(__name__)
 
 
 class Bus(Protocol):
+    """Topic pub/sub every engine service is injected with.
+
+    ``publish`` delivers *event* to every subscriber whose fnmatch pattern
+    matches *topic*; ``subscribe`` returns an async iterator of
+    ``(topic, event)`` pairs. ``drain`` waits until every event published so
+    far, and every event those deliveries cascade into, has been handled.
+    ``close`` releases subscriptions and any external connection; it is
+    awaited (``await bus.close()``), and the in-process bus additionally
+    closes synchronously on call so pre-existing un-awaited callers keep
+    working. Backends: :class:`InProcessBus` here and ``megalith.bus.NatsBus``
+    (docs/INTERFACE-SPEC.md §10).
+    """
+
     async def publish(self, topic: str, event: BaseModel) -> None: ...
 
     def subscribe(
         self, topic_pattern: str
     ) -> AsyncIterator[tuple[str, BaseModel]]: ...
+
+    async def drain(self) -> None: ...
+
+    def close(self) -> Awaitable[None]: ...
+
+
+class _Completed:
+    """An already-finished awaitable; ``await`` returns immediately."""
+
+    __slots__ = ()
+
+    def __await__(self):
+        return iter(())
 
 
 @dataclass
@@ -103,7 +129,15 @@ class InProcessBus:
                 stable_turns = 0
                 observed_deliveries = self._delivery_count
 
-    def close(self) -> None:
+    def close(self) -> Awaitable[None]:
+        """Close every subscription.
+
+        The work happens synchronously on call, exactly as before the
+        ``Bus`` protocol gained ``close``; the returned awaitable is already
+        complete so ``await bus.close()`` (the protocol form) and a bare
+        ``bus.close()`` both work.
+        """
         for sub in self._subs:
             sub.closed = True
         self._subs.clear()
+        return _Completed()
