@@ -313,7 +313,7 @@ describe('commanderLanguage — gate and recovery copy', () => {
   })
 
   it('labels the spec reason codes and title-cases unknown ones', () => {
-    expect(gateReasonLabel('threat/uplink_jamming_active')).toBe('Uplink jamming active')
+    expect(gateReasonLabel('threat/uplink_jamming_active')).toBe('Active jamming detected')
     expect(gateReasonLabel('threat/hostile_close_approach')).toBe('Hostile close approach')
     expect(gateReasonLabel('policy/unselectable_action')).toBe('Action not selectable')
     expect(gateReasonLabel('policy/authority_mismatch')).toBe('Authority mismatch')
@@ -368,5 +368,80 @@ describe('commanderLanguage — trace annotations', () => {
         makeTrace('t', { payload: { verdict: 'sabotage', physics_consistency: 'high' } }),
       ),
     ).toEqual({ verdict: null, physicsConsistency: null, gateReasonCode: null })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Wave 4D: withheld recovery (docs/INTERFACE-SPEC.md §6, spec 1.3).
+// ---------------------------------------------------------------------------
+import {
+  GATE_REASON_CODES,
+  withheldRecoveryLabel,
+  withheldTraceReasonCode,
+} from './commanderLanguage'
+
+describe('commanderLanguage — withheld recovery', () => {
+  it('labels all six reason codes and falls back to a title-cased tail', () => {
+    expect([...GATE_REASON_CODES]).toEqual([
+      'threat/uplink_jamming_active',
+      'threat/hostile_close_approach',
+      'policy/unselectable_action',
+      'policy/authority_mismatch',
+      'verdict/hostile_external',
+      'verdict/unknown',
+    ])
+    expect(gateReasonLabel('verdict/hostile_external')).toBe('Verdict: hostile external')
+    expect(gateReasonLabel('verdict/unknown')).toBe('Verdict: unknown')
+    expect(gateReasonLabel('threat/uplink_jamming_active')).toBe('Active jamming detected')
+    expect(gateReasonLabel('future/some_new_code')).toBe('Some New Code')
+  })
+
+  it('words the chip as "Recovery withheld: <action> on <subsystem>: <label>"', () => {
+    expect(
+      withheldRecoveryLabel({
+        action_id: 'reset_transponder_chain',
+        target_subsystem: 'comms',
+        reason_code: 'threat/uplink_jamming_active',
+      }),
+    ).toBe('Recovery withheld: Reset transponder chain on Comms: Active jamming detected')
+    expect(
+      withheldRecoveryLabel({
+        action_id: 'switch_redundant_amplifier',
+        target_subsystem: 'power',
+        reason_code: 'verdict/unknown',
+      }),
+    ).toBe('Recovery withheld: Switch redundant amplifier on Power: Verdict: unknown')
+  })
+
+  it('recognises the decide-stage "recovery withheld" warn and nothing else', () => {
+    expect(
+      withheldTraceReasonCode(
+        makeTrace('t', {
+          stage: 'decide',
+          level: 'warn',
+          message: 'recovery withheld: reset_transponder_chain: verdict/hostile_external',
+        }),
+      ),
+    ).toBe('verdict/hostile_external')
+    expect(
+      withheldTraceReasonCode(
+        makeTrace('t', {
+          stage: 'decide',
+          level: 'warn',
+          message: 'recovery withheld: x',
+          payload: { reason_code: 'threat/hostile_close_approach' },
+        }),
+      ),
+    ).toBe('threat/hostile_close_approach')
+    expect(
+      withheldTraceReasonCode(
+        makeTrace('t', { stage: 'decide', level: 'info', message: 'recovery withheld: x: y' }),
+      ),
+    ).toBeNull()
+    expect(
+      withheldTraceReasonCode(
+        makeTrace('t', { stage: 'decide', level: 'warn', message: 'gate blocked x: y' }),
+      ),
+    ).toBeNull()
   })
 })

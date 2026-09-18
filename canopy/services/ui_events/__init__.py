@@ -21,7 +21,7 @@ from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
-__all__ = ["UIEventService"]
+__all__ = ["UIEventService", "withheld_reason_label"]
 
 ATTRIBUTION_CACHE_SIZE = 256
 
@@ -51,6 +51,18 @@ _ACTION_TITLES: dict[Action, str] = {
 }
 
 _BEAT_RAW_TO_DISPLAY = {"1": "1", "2": "2", "3": "3", "4": "4", "47": "4.7"}
+
+# Operator-facing labels for the withheld-recovery reason codes
+# (docs/INTERFACE-SPEC.md §6, wave 4B). The console keeps its own copy in
+# ``src/lib/commanderLanguage.ts`` (``gateReasonLabel``); these render the
+# same codes into the UI event's prose. Unknown codes fall back to the
+# humanised tail of the code.
+_WITHHELD_REASON_LABELS: dict[str, str] = {
+    "threat/uplink_jamming_active": "active jamming detected",
+    "threat/hostile_close_approach": "hostile close approach in progress",
+    "verdict/hostile_external": "verdict is hostile external",
+    "verdict/unknown": "verdict is unknown",
+}
 
 _BEAT_RE = re.compile(r"canopy-beat(\d+)-")
 
@@ -90,6 +102,9 @@ def _build_message(decision: Decision, attribution: Attribution | None) -> str:
     recovery_clause = _recovery_clause(decision)
     if recovery_clause:
         parts.append(recovery_clause)
+    withheld_clause = _withheld_clause(decision)
+    if withheld_clause:
+        parts.append(withheld_clause)
     if attribution is not None:
         if attribution.actor == "None" and attribution.verdict:
             # internal_fault / natural_external: there is no actor to name
@@ -124,6 +139,31 @@ def _recovery_clause(decision: Decision) -> str | None:
         f"Recommended recovery: {recovery.action_id} on the "
         f"{recovery.target_subsystem} subsystem ({approval}); "
         f"source {recovery.source}."
+    )
+
+
+def withheld_reason_label(reason_code: str) -> str:
+    """Prose for a withheld-recovery reason code."""
+    known = _WITHHELD_REASON_LABELS.get(reason_code)
+    if known:
+        return known
+    tail = reason_code.rsplit("/", 1)[-1]
+    return tail.replace("_", " ").strip() or reason_code
+
+
+def _withheld_clause(decision: Decision) -> str | None:
+    """Name the recovery the decide stage withheld and why (spec §6, wave 4B).
+
+    The UI event's type and severity follow the decision as before; this only
+    adds the clause the console shows as "radio reset withheld: active
+    jamming detected".
+    """
+    withheld = decision.withheld_recovery
+    if withheld is None:
+        return None
+    return (
+        f"Recovery withheld: {withheld.action_id} on {withheld.target_subsystem}: "
+        f"{withheld_reason_label(withheld.reason_code)}."
     )
 
 
@@ -186,6 +226,18 @@ class UIEventService:
         self._cache_size = cache_size
         self._tracer = tracer
         self._clock = clock
+
+    def reset(self) -> dict[str, int]:
+        """Forget cached attributions and decisions (``POST /reset``).
+
+        In-process state only. Afterwards the first decision of the next run
+        is published as new rather than as an update of a card from the
+        previous run. Returns how many entries each cache held.
+        """
+        cleared = {"attributions": len(self._cache), "decisions": len(self._decisions)}
+        self._cache.clear()
+        self._decisions.clear()
+        return cleared
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:

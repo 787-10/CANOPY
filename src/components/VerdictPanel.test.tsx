@@ -298,7 +298,7 @@ describe('VerdictPanel — decision section', () => {
       />,
     )
     const chip = screen.getByTestId('gate-chip')
-    expect(chip).toHaveTextContent('Blocked: Uplink jamming active')
+    expect(chip).toHaveTextContent('Blocked: Active jamming detected')
     expect(chip).toHaveAttribute('title', 'threat/uplink_jamming_active')
     expect(
       screen.getByText('Recovery on comms withheld while jamming is active.'),

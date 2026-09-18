@@ -5,6 +5,8 @@ import 'maplibre-gl/dist/maplibre-gl.css'
 import type { ScenarioDefinition } from '../data/scenarioLibrary'
 import { commanderSignalSummary, signalKindLabel } from '../lib/commanderLanguage'
 import { boundsForSignals, signalCoordinate } from '../lib/signalLocation'
+import { groundStationsFromSignals } from '../lib/groundStations'
+import { useCaptureStore } from '../store/captureStore'
 import type { PlaybackStatus } from '../types/playback'
 import type { Signal } from '../types/canopy'
 
@@ -819,6 +821,23 @@ export function AorMap({
   const [isMapReady, setIsMapReady] = useState(false)
   const [basemap, setBasemap] = useState<Basemap>('imagery')
   const [zoomLevel, setZoomLevel] = useState(INITIAL_AOR_ZOOM)
+  const capture = useCaptureStore((s) => s.enabled)
+  const stationFeatures = useMemo(
+    () =>
+      ({
+        type: 'FeatureCollection',
+        features: groundStationsFromSignals(signals).map((station) => ({
+          type: 'Feature',
+          properties: {
+            id: station.id,
+            label: station.label.toUpperCase(),
+            grid: formatMgrs([station.lng, station.lat]),
+          },
+          geometry: { type: 'Point', coordinates: [station.lng, station.lat] },
+        })),
+      }) as GeoJSON.FeatureCollection,
+    [signals],
+  )
 
   const coordinateSignals = useMemo(
     () =>
@@ -1244,6 +1263,55 @@ export function AorMap({
           'text-halo-width': 1.1,
         },
       })
+
+      // Ground stations named by the stream (Site A). A square frame so the
+      // site reads as infrastructure, not a report.
+      map.addSource('aor-stations', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+      })
+      map.addLayer({
+        id: 'aor-station-frame',
+        type: 'circle',
+        source: 'aor-stations',
+        paint: {
+          'circle-color': '#020404',
+          'circle-opacity': 0.85,
+          'circle-radius': ['interpolate', ['linear'], ['zoom'], 5, 7, 13, 11],
+          'circle-stroke-color': '#f2edd7',
+          'circle-stroke-width': 1.6,
+        },
+      })
+      map.addLayer({
+        id: 'aor-station-symbol',
+        type: 'symbol',
+        source: 'aor-stations',
+        layout: {
+          'text-field': '⏚',
+          'text-font': ['Open Sans Semibold'],
+          'text-size': ['interpolate', ['linear'], ['zoom'], 5, 9, 13, 13],
+          'text-allow-overlap': true,
+        },
+        paint: { 'text-color': '#f2edd7' },
+      })
+      map.addLayer({
+        id: 'aor-station-label',
+        type: 'symbol',
+        source: 'aor-stations',
+        layout: {
+          'text-field': ['concat', ['get', 'label'], '\nground station'],
+          'text-font': ['Open Sans Semibold'],
+          'text-offset': [1.2, 0],
+          'text-size': 10,
+          'text-anchor': 'left',
+          'text-allow-overlap': true,
+        },
+        paint: {
+          'text-color': '#f5f7f0',
+          'text-halo-color': '#091112',
+          'text-halo-width': 1.2,
+        },
+      })
     })
 
     map.on('zoom', () => {
@@ -1275,13 +1343,17 @@ export function AorMap({
     const arrowSource = map.getSource('aor-signal-arrows') as
       | maplibregl.GeoJSONSource
       | undefined
+    const stationSource = map.getSource('aor-stations') as
+      | maplibregl.GeoJSONSource
+      | undefined
     if (source) {
       source.setData(signalFeatures)
     }
     zoneSource?.setData(signalZones)
     trackSource?.setData(signalTracks.lines)
     arrowSource?.setData(signalTracks.arrows)
-  }, [isMapReady, signalFeatures, signalTracks, signalZones])
+    stationSource?.setData(stationFeatures)
+  }, [isMapReady, signalFeatures, signalTracks, signalZones, stationFeatures])
 
   useEffect(() => {
     const map = mapRef.current
@@ -1361,7 +1433,8 @@ export function AorMap({
   return (
     <div className={`aor-map aor-map--${mapDensity}`} aria-label="AOR tactical map">
       <div className="aor-map__canvas" ref={containerRef} />
-      <div className="aor-map__basemaps" aria-label="AOR basemap">
+      {capture ? null : (
+      <div className="aor-map__basemaps" aria-label="AOR basemap" data-capture-hide>
         <button
           className={basemap === 'imagery' ? 'is-active' : ''}
           onClick={() => switchBasemap('imagery')}
@@ -1377,6 +1450,7 @@ export function AorMap({
           Muted
         </button>
       </div>
+      )}
     </div>
   )
 }

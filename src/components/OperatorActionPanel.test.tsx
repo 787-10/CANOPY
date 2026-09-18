@@ -169,7 +169,7 @@ describe('OperatorActionPanel — gate-blocked decisions', () => {
     render(<OperatorActionPanel />)
     const chip = screen.getByTestId('gate-chip')
     expect(chip).toHaveTextContent('blocked threat/uplink_jamming_active')
-    expect(chip).toHaveAttribute('title', 'Uplink jamming active')
+    expect(chip).toHaveAttribute('title', 'Active jamming detected')
     expect(
       screen.getByText('Recovery on comms withheld while uplink jamming is active.'),
     ).toBeInTheDocument()

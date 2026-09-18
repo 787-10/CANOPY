@@ -17,6 +17,8 @@ type ScenarioRailProps = {
   signalCount: number
   uiEvent?: UIEvent | null
   collapsed?: boolean
+  /** Capture mode: hide the scenario library (dev replay buttons). */
+  hideLibrary?: boolean
 }
 
 const familyLabel = (family: ScenarioDefinition['family']) => {
@@ -25,6 +27,9 @@ const familyLabel = (family: ScenarioDefinition['family']) => {
   }
   if (family === 'army') {
     return 'Army'
+  }
+  if (family.startsWith('demo')) {
+    return 'MEGALITH demo'
   }
   return 'Regional'
 }
@@ -41,6 +46,7 @@ export function ScenarioRail({
   signalCount,
   uiEvent = null,
   collapsed = false,
+  hideLibrary = false,
 }: ScenarioRailProps) {
   const activeScenario =
     scenarios.find((scenario) => scenario.id === activeScenarioId) ??
@@ -82,7 +88,10 @@ export function ScenarioRail({
         </div>
       ) : null}
 
-      <nav className="scenario-list" aria-label="Available scenarios">
+      {hideLibrary ? (
+        <div className="scenario-list scenario-list--hidden" aria-hidden="true" />
+      ) : (
+      <nav className="scenario-list" aria-label="Available scenarios" data-capture-hide>
         {scenarios.map((scenario) => {
           const isActive = scenario.id === activeScenarioId
 
@@ -105,6 +114,7 @@ export function ScenarioRail({
           )
         })}
       </nav>
+      )}
 
       <OperatorActionPanel />
 

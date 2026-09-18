@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 from collections import OrderedDict
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields
 from types import MappingProxyType
 from typing import Any
 
@@ -472,6 +472,19 @@ class FusionService:
     def windows(self) -> Mapping[str, tuple[int, int]]:
         """Effective per-domain window table (read-only)."""
         return self._windows
+
+    def reset(self) -> dict[str, int]:
+        """Forget every open window, remembered correlate and seen signal.
+
+        In-process state only (the bus subscription and the window table are
+        untouched), so one gateway process can replay unrelated runs back to
+        back without the previous run's cues correlating into the next
+        (``POST /reset``). Returns how many entries each store held.
+        """
+        state = self._state
+        cleared = {f.name: len(getattr(state, f.name)) for f in fields(state)}
+        self._state = _State()
+        return cleared
 
     async def run(self) -> None:
         async for topic, event in self._bus.subscribe("signals.*"):

@@ -95,8 +95,16 @@ function reduceMessage(
         ...state,
         anomalies: prependLimited<Anomaly>(state.anomalies, message.data, 20),
       }
-    case 'attribution':
-      store.ingestAttribution(message.data as Attribution)
+    case 'attribution': {
+      // Stamp the client receipt before the store update so the verdict
+      // panel can measure WebSocket receipt -> render (F3).
+      const attribution = message.data as Attribution
+      store.noteAttributionArrival(
+        attribution.id,
+        attribution.revision ?? 0,
+        performance.now(),
+      )
+      store.ingestAttribution(attribution)
       return {
         ...state,
         attributions: prependLimited<Attribution>(
@@ -105,6 +113,7 @@ function reduceMessage(
           20,
         ),
       }
+    }
     case 'decision':
       store.ingestDecision(message.data as Decision)
       return {

@@ -439,11 +439,18 @@ def validate_and_repair_decision(raw: dict[str, Any]) -> dict[str, Any]:
 # a usable block becomes a threat_warning, a stray block is dropped, and the
 # note lands in ``_validation_notes`` and on the rationale so the operator
 # sees it.
+#
+# The withheld-recovery block (wave 4B) is the mirror image: it may only sit
+# on a decision that is *not* a recovery, so a recovery decision never carries
+# one and a withheld block never coexists with a recovery block. A malformed
+# withheld block is dropped rather than repaired: the decide stage recomputes
+# it on every revision from the cluster and the gate context.
 
 RECOVERY_ACTION = "recovery_recommendation"
 RECOVERY_DOWNGRADE_ACTION = "threat_warning"
 RECOVERY_SOURCE = "internal-diagnosis"
 _RECOVERY_REQUIRED_KEYS = ("action_id", "target_subsystem", "requires_approval", "rationale")
+_WITHHELD_REQUIRED_KEYS = ("action_id", "target_subsystem", "reason_code")
 
 
 def _normalise_recovery_block(raw: object) -> dict[str, Any] | None:
@@ -465,6 +472,18 @@ def _normalise_recovery_block(raw: object) -> dict[str, Any] | None:
         "source": RECOVERY_SOURCE,
         "satellite_id": satellite_id if isinstance(satellite_id, str) and satellite_id else None,
     }
+
+
+def _normalise_withheld_block(raw: object) -> dict[str, Any] | None:
+    """A well-formed WithheldRecovery dict from a supplied object, or None."""
+    if not isinstance(raw, dict):
+        return None
+    if any(key not in raw for key in _WITHHELD_REQUIRED_KEYS):
+        return None
+    values = {key: str(raw[key]).strip() for key in _WITHHELD_REQUIRED_KEYS}
+    if not all(values.values()):
+        return None
+    return {**values, "source": RECOVERY_SOURCE}
 
 
 def _repair_recovery_invariants(d: dict[str, Any]) -> list[str]:
@@ -492,6 +511,19 @@ def _repair_recovery_invariants(d: dict[str, Any]) -> list[str]:
     elif d.get("recovery") is not None:
         d["recovery"] = None
         notes.append(f"recovery block is only valid on {RECOVERY_ACTION}; cleared from {action}")
+    # The decision is a recovery iff it still carries a block after the repairs
+    # above; a withheld block is only valid on every other decision.
+    if d.get("recovery") is not None:
+        if d.get("withheld_recovery") is not None:
+            d["withheld_recovery"] = None
+            notes.append("a recovery decision withholds nothing; withheld_recovery cleared")
+    elif "withheld_recovery" in d and d["withheld_recovery"] is not None:
+        withheld = _normalise_withheld_block(d["withheld_recovery"])
+        if withheld is None:
+            d["withheld_recovery"] = None
+            notes.append("malformed withheld_recovery block dropped")
+        else:
+            d["withheld_recovery"] = withheld
     if notes:
         logger.warning("DECIDE_VALIDATION: recovery invariants repaired: %s", notes)
         d["_validation_notes"] = [*(d.get("_validation_notes") or []), *notes]

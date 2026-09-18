@@ -6,7 +6,10 @@ import {
   signalKindLabel,
   spacecraftEnvironmentFacts,
 } from '../lib/commanderLanguage'
+import { useCaptureStore, withCapture } from '../store/captureStore'
+import { useEventStore } from '../store/eventStore'
 import type { Signal } from '../types/canopy'
+import { BusHealthCard } from './BusHealthCard'
 
 type EventFeedProps = {
   isMapAutoFocusEnabled?: boolean
@@ -142,7 +145,7 @@ const buildDummyDecisionFlow = (
         activeNode: 'hold',
         completedEdges: ['signal-schema', 'schema-hold'],
         completedNodes: ['signal', 'schema'],
-        detail: 'Holding event while CANOPY asks for missing context',
+        detail: 'Holding event while MEGALITH asks for missing context',
         headline: 'LLM routes event to enrichment hold',
       },
     ]
@@ -249,6 +252,8 @@ export function EventFeed({
   signals,
   collapsed = false,
 }: EventFeedProps) {
+  const capture = useCaptureStore((s) => s.enabled)
+  const latestDecision = useEventStore((s) => s.decisions[0] ?? null)
   const [activeView, setActiveView] = useState<FeedView>('raw')
   const [flowProgress, setFlowProgress] = useState<{
     signalId: string | undefined
@@ -435,19 +440,22 @@ export function EventFeed({
             >
               Raw Tail
             </button>
-            <button
-              className={
-                activeView === 'flow'
-                  ? 'event-feed__tab is-active'
-                  : 'event-feed__tab'
-              }
-              onClick={() => setActiveView('flow')}
-              role="tab"
-              type="button"
-              aria-selected={activeView === 'flow'}
-            >
-              Flow
-            </button>
+            {capture ? null : (
+              <button
+                className={
+                  activeView === 'flow'
+                    ? 'event-feed__tab is-active'
+                    : 'event-feed__tab'
+                }
+                onClick={() => setActiveView('flow')}
+                role="tab"
+                type="button"
+                aria-selected={activeView === 'flow'}
+                data-capture-hide
+              >
+                Flow
+              </button>
+            )}
           </div>
           {onToggleMapAutoFocus ? (
             <button
@@ -474,7 +482,7 @@ export function EventFeed({
       {activeView === 'flow' ? (
         <div
           className={`event-feed__flow-view event-feed__flow-view--${flowPriority}`}
-          aria-label="CANOPY decision flow"
+          aria-label="MEGALITH decision flow"
         >
           <div className="event-feed__flow-summary">
             <span>Sense / Attribute / Decide</span>
@@ -715,7 +723,7 @@ export function EventFeed({
         <div className="event-feed__raw-view">
           <div className="event-feed__bus-status">
             <span className="event-feed__live-dot" aria-hidden="true" />
-            <span>canopy://bus</span>
+            <span>megalith://bus</span>
             <span>signals.* topics</span>
             <span>{arrivalTimes.length} events/min</span>
             <span>{activeDomains} domains active</span>
@@ -798,8 +806,21 @@ export function EventFeed({
                         {plainEventName(signal)}
                       </span>
                     </button>
-                    {isSelected ? (
-                      <pre className="event-feed__raw-detail">
+                    {isSelected && signal.domain === 'bus_health' ? (
+                      <div className="event-feed__raw-card">
+                        <BusHealthCard
+                          signal={signal}
+                          compact
+                          decision={latestDecision}
+                          zoomHref={withCapture(
+                            `/signal?id=${encodeURIComponent(signal.id)}`,
+                            capture,
+                          )}
+                        />
+                      </div>
+                    ) : null}
+                    {isSelected && !capture ? (
+                      <pre className="event-feed__raw-detail" data-capture-hide>
                         <code>{signalJson(signal)}</code>
                       </pre>
                     ) : null}

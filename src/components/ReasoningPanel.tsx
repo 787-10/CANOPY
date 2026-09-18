@@ -1,9 +1,11 @@
 import { useEffect, useRef } from 'react'
+import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import {
   gateReasonLabel,
   traceAnnotations,
   verdictLabel,
+  withheldTraceReasonCode,
 } from '../lib/commanderLanguage'
 import type { ReasoningTrace, TraceStage } from '../types/canopy'
 
@@ -48,6 +50,7 @@ interface Props {
 
 export function ReasoningPanel({ compact = false }: Props) {
   const traces = useEventStore((s) => s.traces)
+  const capture = useCaptureStore((s) => s.enabled)
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -89,14 +92,17 @@ export function ReasoningPanel({ compact = false }: Props) {
         <h2 id="reasoning-title">Reasoning trace</h2>
         <div className="reasoning-panel__head-actions">
           <span>{traces.length} lines</span>
-          <button
-            type="button"
-            className="reasoning-panel__clear"
-            onClick={clear}
-            title="Reset all engine state — traces, anomalies, decisions, embeddings, action log, approvals"
-          >
-            reset
-          </button>
+          {capture ? null : (
+            <button
+              type="button"
+              className="reasoning-panel__clear"
+              onClick={clear}
+              title="Reset all engine state — traces, anomalies, decisions, embeddings, action log, approvals"
+              data-capture-hide
+            >
+              reset
+            </button>
+          )}
         </div>
       </div>
       <div className="reasoning-panel__stream" ref={ref}>
@@ -115,16 +121,20 @@ export function ReasoningPanel({ compact = false }: Props) {
 function TraceLine({ trace }: { trace: ReasoningTrace }) {
   const color = STAGE_COLORS[trace.stage] ?? 'var(--text-muted)'
   const { verdict, physicsConsistency, gateReasonCode } = traceAnnotations(trace)
+  const withheldReasonCode = withheldTraceReasonCode(trace)
   const blocked = gateReasonCode !== null
-  const hasChips = blocked || verdict !== null || physicsConsistency !== null
+  const withheld = withheldReasonCode !== null
+  const hasChips =
+    blocked || withheld || verdict !== null || physicsConsistency !== null
 
   return (
     <div
       className={`reasoning-line reasoning-line--${trace.level}${
         blocked ? ' reasoning-line--blocked' : ''
-      }`}
+      }${withheld ? ' reasoning-line--withheld' : ''}`}
       data-trace-id={trace.id}
       data-blocked={blocked ? 'true' : undefined}
+      data-withheld={withheld ? 'true' : undefined}
     >
       <span className="reasoning-line__time">{formatTime(trace.ts)}</span>
       <span className="reasoning-line__stage" style={{ color }}>
@@ -139,6 +149,14 @@ function TraceLine({ trace }: { trace: ReasoningTrace }) {
               title={gateReasonLabel(gateReasonCode)}
             >
               blocked · {gateReasonCode}
+            </span>
+          ) : null}
+          {withheld ? (
+            <span
+              className="reasoning-line__chip reasoning-line__chip--withheld"
+              title={gateReasonLabel(withheldReasonCode)}
+            >
+              withheld · {withheldReasonCode}
             </span>
           ) : null}
           {verdict ? (

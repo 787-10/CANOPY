@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import {
   gateReasonLabel,
   noVerdictCopy,
@@ -9,8 +10,11 @@ import {
   verdictCopy,
   verdictHeadline,
 } from '../lib/commanderLanguage'
+import { attributionTimings, formatMs } from '../lib/timing'
+import { useEventStore } from '../store/eventStore'
 import type { Attribution, Decision, Verdict } from '../types/canopy'
 import { KBCitationCard } from './KBCitationCard'
+import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
 type VerdictPanelProps = {
   /** Latest attribution, or null while the engine is still correlating. */
@@ -54,6 +58,9 @@ export function VerdictPanel({
   const citations = attribution?.kb_citations ?? []
   const satelliteId = attribution?.satellite_id ?? null
   const gate = decision ? parseGateRationale(decision.rationale) : null
+  const provisional = attribution?.provisional === true
+  const revision = attribution?.revision ?? 0
+  const withheld = decision?.withheld_recovery ?? null
 
   return (
     <section
@@ -67,6 +74,8 @@ export function VerdictPanel({
         .join(' ')}
       aria-labelledby="verdict-panel-title"
       data-verdict={state}
+      data-provisional={provisional ? 'true' : undefined}
+      data-revision={attribution ? revision : undefined}
     >
       <div className="panel__header">
         <h2 id="verdict-panel-title">Verdict</h2>
@@ -91,6 +100,21 @@ export function VerdictPanel({
             {Math.round(attribution.confidence * 100)}% confidence
           </span>
         ) : null}
+        {provisional ? (
+          <span
+            className="verdict-panel__provisional"
+            data-testid="provisional-badge"
+            title="Rule-lane verdict published before the reasoning lane ran; the same id is revised in place."
+          >
+            Provisional
+          </span>
+        ) : null}
+        {attribution ? (
+          <span className="verdict-panel__revision" data-testid="verdict-revision">
+            rev {revision}
+            {provisional ? '' : ' · final'}
+          </span>
+        ) : null}
       </div>
 
       {attribution ? (
@@ -99,8 +123,10 @@ export function VerdictPanel({
       <p className="verdict-panel__meaning">
         {attribution
           ? copy.meaning
-          : 'CANOPY is correlating multi-domain activity. No attribution package is ready.'}
+          : 'MEGALITH is correlating multi-domain activity. No attribution package is ready.'}
       </p>
+
+      {attribution ? <VerdictTiming attribution={attribution} /> : null}
 
       {attribution ? (
         <>
@@ -238,6 +264,9 @@ export function VerdictPanel({
                 Blocked: {gateReasonLabel(gate.reasonCode)}
               </span>
             ) : null}
+            {withheld ? (
+              <WithheldRecoveryChip withheld={withheld} variant="verdict-panel" />
+            ) : null}
           </p>
           <p className="verdict-panel__rationale">{gate?.text ?? decision.rationale}</p>
           {decision.target ? (
@@ -286,5 +315,70 @@ export function VerdictPanel({
         </section>
       ) : null}
     </section>
+  )
+}
+
+
+/** F3: "provisional in N ms, final in M ms" from the attrib traces'
+ *  `latency_ms` (docs/INTERFACE-SPEC.md §5.0), plus the arrival-to-display
+ *  time measured on the client from the WebSocket receipt of this revision
+ *  to the commit that painted it. Real numbers only: a value the traces do
+ *  not carry reads "n/a" and one that was never received over the socket
+ *  (fixtures, sessionStorage) reads "not measured". */
+export function VerdictTiming({ attribution }: { attribution: Attribution }) {
+  const traces = useEventStore((s) => s.traces)
+  const arrivals = useEventStore((s) => s.attributionArrivals[attribution.id])
+  const timings = useMemo(
+    () => attributionTimings(traces, attribution.id),
+    [traces, attribution.id],
+  )
+  const revision = attribution.revision ?? 0
+  const arrivedAt = arrivals?.[revision]
+  const [displayMs, setDisplayMs] = useState<number | null>(null)
+  const revisionKey = `${attribution.id}:${revision}`
+
+  useEffect(() => {
+    // Runs after this revision was committed to the DOM: the display moment.
+    if (arrivedAt === undefined) {
+      setDisplayMs(null)
+      return
+    }
+    setDisplayMs(Math.max(0, performance.now() - arrivedAt))
+    // revisionKey changes whenever a new revision of this id renders.
+  }, [revisionKey, arrivedAt])
+
+  const provisionalLine =
+    timings.provisionalMs === null
+      ? attribution.provisional
+        ? 'awaiting trace'
+        : 'n/a'
+      : formatMs(timings.provisionalMs)
+  const finalLine =
+    timings.finalMs === null
+      ? attribution.provisional
+        ? 'pending'
+        : 'n/a'
+      : formatMs(timings.finalMs)
+
+  return (
+    <dl className="verdict-panel__timing" data-testid="verdict-timing" aria-label="Verdict timing">
+      <div>
+        <dt>Provisional in</dt>
+        <dd data-testid="timing-provisional">{provisionalLine}</dd>
+      </div>
+      <div>
+        <dt>Final in</dt>
+        <dd data-testid="timing-final">
+          {finalLine}
+          {timings.finalRevision !== null ? <small> rev {timings.finalRevision}</small> : null}
+        </dd>
+      </div>
+      <div>
+        <dt>Arrival to display</dt>
+        <dd data-testid="timing-display">
+          {displayMs === null ? 'not measured' : `+${displayMs.toFixed(1)} ms`}
+        </dd>
+      </div>
+    </dl>
   )
 }

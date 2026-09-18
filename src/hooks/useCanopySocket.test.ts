@@ -344,3 +344,36 @@ describe('useCanopySocket', () => {
     expect(socket.closed).toBe(true)
   })
 })
+
+describe('useCanopySocket — attribution receipt stamps (F3)', () => {
+  it('records performance.now() per attribution revision on receipt, first stamp wins', () => {
+    const now = vi.spyOn(performance, 'now')
+    renderHook(() => useCanopySocket(TEST_URL))
+
+    now.mockReturnValue(1000)
+    act(() =>
+      MockWebSocket.last!.emitMessage({
+        kind: 'attribution',
+        data: makeAttribution('att-1', { provisional: true, revision: 0 }),
+      }),
+    )
+    now.mockReturnValue(1500)
+    act(() =>
+      MockWebSocket.last!.emitMessage({
+        kind: 'attribution',
+        data: makeAttribution('att-1', { provisional: false, revision: 1 }),
+      }),
+    )
+    // A replayed revision-0 message must not move the original stamp.
+    now.mockReturnValue(1600)
+    act(() =>
+      MockWebSocket.last!.emitMessage({
+        kind: 'attribution',
+        data: makeAttribution('att-1', { provisional: true, revision: 0 }),
+      }),
+    )
+
+    expect(useEventStore.getState().attributionArrivals['att-1']).toEqual({ 0: 1000, 1: 1500 })
+    now.mockRestore()
+  })
+})

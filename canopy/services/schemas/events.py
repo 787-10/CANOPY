@@ -271,6 +271,24 @@ class RecoveryBlock(BaseModel):
     satellite_id: str | None = None
 
 
+class WithheldRecovery(BaseModel):
+    """A recovery the internal diagnosis recommended and the decide stage withheld.
+
+    Set on a Decision whose cluster carries a ``recommended_recovery`` but
+    whose action is not ``recovery_recommendation`` (docs/INTERFACE-SPEC.md
+    §6, wave 4B): the verdict is ``hostile_external`` or ``unknown``, or a
+    threat-context gate rule (§7) would block the recovery. ``reason_code`` is
+    one of ``threat/uplink_jamming_active``, ``threat/hostile_close_approach``,
+    ``verdict/hostile_external``, ``verdict/unknown``; the console renders a
+    label for it. Never coexists with ``recovery``.
+    """
+
+    action_id: str
+    target_subsystem: str
+    reason_code: str
+    source: Literal["internal-diagnosis"] = "internal-diagnosis"
+
+
 class Decision(_Event):
     """Recommended action for an attribution."""
 
@@ -284,6 +302,10 @@ class Decision(_Event):
     # Set iff ``action == "recovery_recommendation"`` (docs/INTERFACE-SPEC.md
     # §6); such a decision is local authority with no request packet.
     recovery: RecoveryBlock | None = None
+    # Set when the cluster recommended a recovery that this decision does not
+    # carry (docs/INTERFACE-SPEC.md §6, wave 4B); never set together with
+    # ``recovery``. Re-evaluated on every revision like the gate.
+    withheld_recovery: WithheldRecovery | None = None
     # Mirrors the revision of the attribution the decision was made for; the
     # decision id is stable across revisions (wave 3A).
     revision: int = 0

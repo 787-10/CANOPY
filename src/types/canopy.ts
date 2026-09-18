@@ -152,6 +152,19 @@ export type RecoveryBlock = {
   satellite_id?: string | null
 }
 
+// A recovery the internal diagnosis recommended that the decide stage did
+// not route (docs/INTERFACE-SPEC.md §6, spec 1.3 / wave 4B). Set when the
+// cluster carries a `recommended_recovery` but the decision is not a
+// recovery: the verdict is hostile or unknown, or a gate rule would block
+// it. `reason_code` is one of `verdict/hostile_external`, `verdict/unknown`,
+// `threat/uplink_jamming_active`, `threat/hostile_close_approach`.
+export type WithheldRecovery = {
+  action_id: string
+  target_subsystem: string
+  reason_code: string
+  source?: 'internal-diagnosis'
+}
+
 export type Decision = {
   id: string
   ts: string
@@ -167,6 +180,9 @@ export type Decision = {
   // threat-context gate blocked is republished as `threat_warning` with
   // `recovery: null` and a `[gate:<reason_code>] ` rationale prefix (§7).
   recovery?: RecoveryBlock | null
+  // Recovery recommended by the internal diagnosis but withheld by the
+  // decide stage (§6). Null or absent when nothing was withheld.
+  withheld_recovery?: WithheldRecovery | null
   // Mirrors the revision of the attribution this decision was made for; the
   // decision id is stable across revisions (wave 3A).
   revision?: number

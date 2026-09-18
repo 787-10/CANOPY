@@ -27,12 +27,18 @@
       "maxLength": 2000
     },
     "beat": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1,
       "maxLength": 32
     },
     "asset": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1,
       "maxLength": 160
     },
@@ -81,6 +87,10 @@
           "format": "date-time"
         }
       }
+    },
+    "satellite_id": {
+      "description": "Space weather is global (docs/INTERFACE-SPEC.md §4): a serialized Signal carries null here and a hand-written payload omits it.",
+      "type": "null"
     }
   }
 }

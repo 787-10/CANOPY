@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isStaleRevision } from '../lib/episode'
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Anomaly,
@@ -85,6 +86,12 @@ interface EventState {
   attributionsById: Record<string, Attribution>;
   decisionsById: Record<string, Decision>;
 
+  /** Client receipt time of every attribution revision, keyed by
+   *  attribution id then revision: `performance.now()` when the WebSocket
+   *  message was parsed. The verdict panel measures arrival-to-display from
+   *  it (F3). Not persisted: it only means something for this page load. */
+  attributionArrivals: Record<string, Record<number, number>>;
+
   // Connection + view state.
   connection: ConnectionStatus;
   view: ViewMode;
@@ -112,6 +119,7 @@ interface EventState {
   ingestUIEvent: (event: UIEvent) => void;
   ingestTrace: (trace: ReasoningTrace) => void;
   ingestEmbeddingSnapshot: (snapshot: OsintEmbeddingSnapshot) => void;
+  noteAttributionArrival: (id: string, revision: number, at: number) => void;
 
   setConnection: (status: ConnectionStatus) => void;
   setView: (view: ViewMode) => void;
@@ -138,6 +146,7 @@ const initialState = (): Omit<
   | "ingestUIEvent"
   | "ingestTrace"
   | "ingestEmbeddingSnapshot"
+  | "noteAttributionArrival"
   | "setConnection"
   | "setView"
   | "selectEvent"
@@ -163,6 +172,7 @@ const initialState = (): Omit<
   signalsById: {},
   attributionsById: {},
   decisionsById: {},
+  attributionArrivals: {},
   connection: "connecting",
   view: "brigade",
   selectedEventId: null,
@@ -192,13 +202,20 @@ export const useEventStore = create<EventState>()(
     })),
 
   ingestAttribution: (attribution) =>
-    set((state) => ({
+    set((state) => {
+      // A revision lower than the one already held for this id is stale
+      // (redelivery or reordering); never let it overwrite the final.
+      if (isStaleRevision(attribution, state.attributionsById[attribution.id])) {
+        return {}
+      }
+      return {
       attributions: pushBounded(state.attributions, attribution),
       attributionsById: {
         ...state.attributionsById,
         [attribution.id]: attribution,
       },
-    })),
+      }
+    }),
 
   ingestDecision: (decision) =>
     set((state) => ({
@@ -213,6 +230,20 @@ export const useEventStore = create<EventState>()(
 
   ingestEmbeddingSnapshot: (snapshot) =>
     set({ embeddingSnapshot: snapshot }),
+
+  noteAttributionArrival: (id, revision, at) =>
+    set((state) => {
+      const existing = state.attributionArrivals[id] ?? {};
+      // First receipt of a revision wins: a replayed message must not
+      // shorten the measured arrival-to-display time.
+      if (existing[revision] !== undefined) return {};
+      return {
+        attributionArrivals: {
+          ...state.attributionArrivals,
+          [id]: { ...existing, [revision]: at },
+        },
+      };
+    }),
 
   ingestUIEvent: (event) =>
     set((state) => {

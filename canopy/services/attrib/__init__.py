@@ -435,6 +435,48 @@ class AttribService:
             if pending:
                 await asyncio.gather(*pending, return_exceptions=True)
 
+    async def reset(self) -> dict[str, int]:
+        """Cancel in-flight work and forget every run-scoped memory (``POST /reset``).
+
+        Cancels the window timer and every fast-lane reasoning task and waits
+        for them to finish cancelling (nothing is published on the way out),
+        then clears the buffered batch, the per-satellite context behind
+        :meth:`recent_context`, arrival marks, open clusters and recorded
+        errors. The bus subscription, the LLM client, the knowledge base and
+        the memo of which clients accept the rule verdict are untouched, so
+        the next run on the same satellite starts a fresh cluster with a
+        fresh attribution id and no context from the previous run.
+        Returns how many entries each store held.
+        """
+        cleared = {
+            "buffer": len(self._buffer),
+            "recent_satellites": len(self._recent),
+            "recent_anomalies": sum(len(bucket) for bucket in self._recent.values()),
+            "arrivals": len(self._arrivals),
+            "clusters": len(self._clusters),
+            "errors": len(self.errors),
+        }
+        pending: list[asyncio.Task] = []
+        if self._flush_task is not None and not self._flush_task.done():
+            self._flush_task.cancel()
+            pending.append(self._flush_task)
+        self._flush_task = None
+        for cluster in list(self._clusters.values()):
+            cluster.closing = True
+            cluster.closed = True
+            if cluster.task is not None and not cluster.task.done():
+                cluster.task.cancel()
+                pending.append(cluster.task)
+        if pending:
+            await asyncio.gather(*pending, return_exceptions=True)
+        self._buffer.clear()
+        self._recent.clear()
+        self._latest_ts = None
+        self._arrivals.clear()
+        self._clusters.clear()
+        self.errors.clear()
+        return cleared
+
     @property
     def open_clusters(self) -> dict[str, list[str]]:
         """Satellite → anomaly ids of every open fast-lane cluster (diagnostics)."""
@@ -546,6 +588,10 @@ class AttribService:
                 try:
                     await asyncio.wait_for(cluster.joined.wait(), timeout=self._window_s)
                 except TimeoutError:
+                    if cluster.dirty:
+                        # A joiner landed in the loop turn between the timer
+                        # firing and the cancellation arriving: one more pass.
+                        continue
                     break
         except asyncio.CancelledError:
             raise

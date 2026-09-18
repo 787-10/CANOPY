@@ -32,12 +32,12 @@ import {
   clearN2YOSatelliteLayers,
   currentN2YODisplayPoint,
   deselectN2YOSatellite,
-  fetchN2YOPositionCache,
   FAMILY_COLOR_HEX,
   FAMILY_SHORT_LABEL,
   getN2YOOrbitMotion,
   isN2YOGeostationaryFamily,
   latestN2YOAltitudeKm,
+  loadN2YOPositionCaches,
   N2YO_SATELLITES,
   n2yoCurrentOrbitalTheta,
   n2yoOrbitalPositionAtTheta,
@@ -46,11 +46,18 @@ import {
   selectN2YOSatellite,
   setN2YOSatelliteLayerVisible,
   setN2YOOrbitsVisible,
+  syntheticSatelliteFor,
   type N2YOLayerState,
   type N2YODisplayPoint,
   type N2YOSatelliteFamily,
 } from '../lib/n2yoSatelliteLayer'
 import { commanderSignalSummary } from '../lib/commanderLanguage'
+import {
+  groundStationFromPositionCache,
+  groundStationsFromSignals,
+  mergeGroundStations,
+} from '../lib/groundStations'
+import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import type { Signal } from '../types/canopy'
 
@@ -75,12 +82,15 @@ const markerSvg = (
     | 'terrain'
     | 'health'
     | 'weather'
-    | 'intel',
+    | 'intel'
+    | 'station',
   stroke: string,
   fill = 'rgba(2,4,4,0.72)',
 ) => {
   const inner =
-    kind === 'satellite'
+    kind === 'station'
+      ? '<path d="M8 20a10 10 0 0 1 20 0"/><path d="M18 20v9M13 29h10"/><path d="M12 14l6 6 6-6"/><circle cx="18" cy="20" r="2.2" fill="currentColor" stroke="none"/>'
+      : kind === 'satellite'
       ? '<path d="M13 13h10v10H13z"/><path d="M5 16h6M25 16h6M5 20h6M25 20h6M18 7v4M18 25v4"/><circle cx="18" cy="18" r="2.4" fill="currentColor" stroke="none"/>'
       : kind === 'drone'
         ? '<path d="M18 6l10 20-10-5-10 5z"/><path d="M18 11v10M13 20h10"/><circle cx="18" cy="18" r="2.2" fill="currentColor" stroke="none"/>'
@@ -180,6 +190,7 @@ type SatelliteFamilySelection = 'all' | N2YOSatelliteFamily[]
 
 const SATELLITE_FAMILY_FILTERS: SatelliteFamilyFilter[] = [
   'all',
+  'SIM',
   'AEHF',
   'MUOS',
   'WGS',
@@ -189,6 +200,7 @@ const SATELLITE_FAMILY_FILTERS: SatelliteFamilyFilter[] = [
   'CHINA',
   'RUSSIA',
 ]
+const STATION_COLOR = Color.fromCssColorString('#f2edd7')
 const ALL_N2YO_FAMILIES = SATELLITE_FAMILY_FILTERS.filter(
   (familyFilter): familyFilter is N2YOSatelliteFamily => familyFilter !== 'all',
 )
@@ -334,7 +346,7 @@ const createVehicleCzml = () => {
   return [
     {
       id: 'document',
-      name: 'CANOPY Vehicle Track',
+      name: 'MEGALITH Vehicle Track',
       version: '1.0',
       clock: {
         interval,
@@ -386,7 +398,9 @@ export function CesiumGlobe({
   const creditRef = useRef<HTMLDivElement | null>(null)
   const viewerRef = useRef<Viewer | null>(null)
   const signalEntityIdsRef = useRef<Set<string>>(new Set())
+  const stationEntityIdsRef = useRef<Set<string>>(new Set())
   const n2yoLayersRef = useRef<N2YOLayerState[]>([])
+  const capture = useCaptureStore((s) => s.enabled)
   const loadedN2yoSatelliteIdsRef = useRef<Set<number>>(new Set())
   const selectedN2yoLayerRef = useRef<N2YOLayerState | null>(null)
   const [activeLayer, setActiveLayer] = useState('baseline')
@@ -909,15 +923,22 @@ export function CesiumGlobe({
       }
 
       setRealSatelliteStatus('Loading sats')
-      return Promise.all(
-        satellitesToLoad.map((satellite) =>
-          fetchN2YOPositionCache(satellite).then((cache) => ({ cache, satellite })),
-        ),
-      )
-        .then((payloads) => {
+      return loadN2YOPositionCaches(satellitesToLoad)
+        .then((result) => {
           if (viewer.isDestroyed()) {
             return
           }
+          // A synthetic file that the demo-scenario lane has not written yet
+          // is skipped; a real cache that fails is reported on the button.
+          const realMissing = result.missing.filter(({ config }) => !config.synthetic)
+          const payloads = result.loaded.map(({ cache, config }) => ({
+            cache,
+            satellite: config,
+          }))
+          result.missing.forEach(({ config }) => {
+            // Do not retry a missing file on every filter change.
+            loadedN2yoSatelliteIdsRef.current.add(config.id)
+          })
 
           if (selectedN2yoLayerRef.current) {
             deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
@@ -951,7 +972,9 @@ export function CesiumGlobe({
           }
           viewer.clock.shouldAnimate = true
           setActiveLayer('real-satellite')
-          setRealSatelliteStatus('Satellites')
+          setRealSatelliteStatus(
+            realMissing.length && !payloads.length ? 'Sats unavailable' : 'Satellites',
+          )
           viewer.scene.requestRender()
         })
         .catch(() => {
@@ -960,6 +983,85 @@ export function CesiumGlobe({
     },
     [syncN2YOLayerVisibility],
   )
+
+  // Ground stations named by the signal stream (Site A in the demo), drawn
+  // on the surface with a dish marker and an always-on label so the station,
+  // the RF marker and the spacecraft read together in one frame (S1).
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) {
+      return
+    }
+    stationEntityIdsRef.current.forEach((id) => viewer.entities.removeById(id))
+    stationEntityIdsRef.current.clear()
+
+    // Stations named by signals, plus the pass site of every loaded synthetic
+    // track (Run A has no ground-segment signal, the file still names Site A).
+    const fromTracks = n2yoLayersRef.current
+      .filter((layer) => layer.satelliteFamily === 'SIM')
+      .map((layer) => groundStationFromPositionCache(layer.cache))
+      .filter((station): station is NonNullable<typeof station> => station !== null)
+    mergeGroundStations(groundStationsFromSignals(signals), fromTracks).forEach((station) => {
+      viewer.entities.add({
+        id: station.id,
+        name: station.label,
+        position: Cartesian3.fromDegrees(station.lng, station.lat, station.altM),
+        billboard: {
+          color: Color.WHITE,
+          height: 24,
+          image: markerSvg('station', markerColorHex(STATION_COLOR)),
+          scaleByDistance: new NearFarScalar(1500000, 0.95, 25000000, 0.5),
+          width: 24,
+        },
+        label: {
+          backgroundColor: MAP_PANEL.withAlpha(0.86),
+          fillColor: Color.WHITE,
+          font: MAP_FONT,
+          pixelOffset: new Cartesian2(0, -30),
+          scaleByDistance: new NearFarScalar(800000, 1, 22000000, 0.7),
+          show: true,
+          showBackground: true,
+          style: LabelStyle.FILL,
+          text: `${station.label.toUpperCase()}\nground station`,
+        },
+        description: `${station.label}: ground station reported by ${station.signalIds.length} signal(s).`,
+      })
+      stationEntityIdsRef.current.add(station.id)
+    })
+    viewer.scene.requestRender()
+    // n2yoLayerCount changes when a synthetic layer finishes loading.
+  }, [signals, n2yoLayerCount])
+
+  // A spacecraft with a synthetic track in the stream (SIM-01, SIM-02) loads
+  // its layer on the globe without a click and frames it with the ground
+  // station, so the demo picture is complete when the first record arrives.
+  const syntheticInStream = signals.some((signal) =>
+    syntheticSatelliteFor(signal.payload.satellite_id ?? null),
+  )
+  useEffect(() => {
+    if (displayMode !== 'globe' || !syntheticInStream) {
+      return
+    }
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) {
+      return
+    }
+    const selection = satelliteFamilySelectionRef.current
+    const next: SatelliteFamilySelection =
+      selection === 'all' ? 'all' : selection.includes('SIM') ? selection : [...selection, 'SIM']
+    satelliteFamilySelectionRef.current = next
+    setSatelliteFamilySelection(next)
+    void ensureN2YOSatellitesLoaded(next).then(() => {
+      if (viewer.isDestroyed()) return
+      const station = groundStationsFromSignals(signals)[0]
+      const anchor = station
+        ? Cartesian3.fromDegrees(station.lng, station.lat, 9_500_000)
+        : RESET_CAMERA_DESTINATION
+      viewer.camera.flyTo({ destination: anchor, duration: 0.9 })
+    })
+    // Loads once per stream that carries a synthetic spacecraft; the family
+    // filter buttons stay in control afterwards.
+  }, [displayMode, syntheticInStream, ensureN2YOSatellitesLoaded, signals])
 
   const applySatelliteFamilyFilter = (familyFilter: SatelliteFamilyFilter) => {
     const viewer = viewerRef.current
@@ -1827,7 +1929,7 @@ export function CesiumGlobe({
               </dd>
             </div>
             <div>
-              <dt>NORAD</dt>
+              <dt>{selectedSatellite.satelliteFamily === 'SIM' ? 'Synthetic id' : 'NORAD'}</dt>
               <dd>{selectedSatellite.satelliteId}</dd>
             </div>
             <div>
@@ -1954,7 +2056,11 @@ export function CesiumGlobe({
           </div>
         </aside>
       ) : null}
-      <div className="map-stage__mode">{imageryMode}</div>
+      {capture ? null : (
+        <div className="map-stage__mode" data-capture-hide>
+          {imageryMode}
+        </div>
+      )}
       <div className="cesium-credits" ref={creditRef} />
     </>
   )

@@ -201,9 +201,15 @@ async def test_blocked_decision_is_republished_as_threat_warning_with_warn_trace
     assert decision.attribution_id == attribution.id
 
     warns = _warn_traces(traces)
-    assert [t.message for t in warns] == [f"gate blocked recovery_recommendation: {UPLINK_JAMMING}"]
+    assert warns[0].message == f"gate blocked recovery_recommendation: {UPLINK_JAMMING}"
     assert warns[0].ref_id == decision.id
     assert warns[0].payload["reason_code"] == UPLINK_JAMMING
+    # Where the MEGALITH helper is installed the blocked recovery is also
+    # reported as withheld (wave 4B); nothing else warns.
+    assert [t.message for t in warns[1:]] in (
+        [],
+        [f"recovery withheld: switch_redundant_amplifier: {UPLINK_JAMMING}"],
+    )
 
     # The gate saw the stub's recovery decision and the satellite's context:
     # the cluster plus the cached same-satellite anomaly inside the look-back.
@@ -445,3 +451,80 @@ async def test_hostile_verdict_never_routes_to_recovery_even_with_a_block() -> N
     )
     assert decisions[0].action != "recovery_recommendation"
     assert decisions[0].recovery is None
+
+
+# ---- Withheld recovery rides along with the gate (§6, wave 4B) ------------------
+
+
+async def test_real_gate_block_is_also_reported_as_withheld_with_the_same_reason() -> None:
+    gate_pkg = pytest.importorskip("megalith.gate")
+    bus_anom = _bus_anomaly()
+    jam = _anomaly("rf_anomaly", "sig-rf-1", offset_s=300)
+
+    decisions, traces = await _run(
+        StubLLMClient(KB(entries=[])),
+        cached=[bus_anom, jam],
+        attribution=_attribution([bus_anom]),
+        gate=gate_pkg.threat_context_gate,
+    )
+    decision = decisions[0]
+    assert decision.action == "threat_warning"
+    assert decision.recovery is None
+    assert decision.withheld_recovery is not None
+    assert decision.withheld_recovery.action_id == "switch_redundant_amplifier"
+    assert decision.withheld_recovery.target_subsystem == "comms"
+    assert decision.withheld_recovery.reason_code == UPLINK_JAMMING
+    assert [t.message for t in _warn_traces(traces)] == [
+        f"gate blocked recovery_recommendation: {UPLINK_JAMMING}",
+        f"recovery withheld: switch_redundant_amplifier: {UPLINK_JAMMING}",
+    ]
+
+
+async def test_scripted_gate_block_under_an_internal_verdict_has_no_verdict_reason() -> None:
+    # CANOPY on its own reports verdict reasons only; a gate block under an
+    # internal verdict therefore carries the gate's rationale prefix and trace
+    # but no withheld block. With the MEGALITH helper the threat rule names it.
+    bus_anom = _bus_anomaly()
+    jam = _anomaly("rf_anomaly", "sig-rf-1", offset_s=300)
+    decisions, traces = await _run(
+        StubLLMClient(KB(entries=[])),
+        cached=[bus_anom, jam],
+        attribution=_attribution([bus_anom]),
+        gate=RecordingGate(_block_recoveries),
+    )
+    decision = decisions[0]
+    assert decision.action == "threat_warning"
+    assert decision.rationale.startswith(f"[gate:{UPLINK_JAMMING}] ")
+    try:
+        import megalith.gate  # noqa: F401
+    except ImportError:
+        assert decision.withheld_recovery is None
+        assert [t.message for t in _warn_traces(traces)] == [
+            f"gate blocked recovery_recommendation: {UPLINK_JAMMING}"
+        ]
+    else:
+        assert decision.withheld_recovery is not None
+        assert decision.withheld_recovery.reason_code == UPLINK_JAMMING
+
+
+async def test_hostile_verdict_with_a_block_is_withheld_not_gated() -> None:
+    bus_anom = _bus_anomaly()
+    gate = RecordingGate(policy_gate)
+    decisions, traces = await _run(
+        StubLLMClient(KB(entries=[])),
+        cached=[bus_anom],
+        attribution=_attribution([bus_anom], verdict="hostile_external"),
+        gate=gate,
+    )
+    decision = decisions[0]
+    assert decision.action != "recovery_recommendation"
+    assert decision.recovery is None
+    assert not decision.rationale.startswith("[gate:")
+    assert decision.withheld_recovery is not None
+    assert decision.withheld_recovery.reason_code == "verdict/hostile_external"
+    # The gate saw the decision before the annotation was added.
+    gated, _ = gate.calls[0]
+    assert gated.withheld_recovery is None
+    assert [t.message for t in _warn_traces(traces)] == [
+        "recovery withheld: switch_redundant_amplifier: verdict/hostile_external"
+    ]

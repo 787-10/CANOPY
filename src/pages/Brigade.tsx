@@ -9,11 +9,15 @@ import { ReasoningPanel } from '../components/ReasoningPanel'
 import { ScenarioRail } from '../components/ScenarioRail'
 import { ScenarioTimeline } from '../components/ScenarioTimeline'
 import { StressMode } from '../components/StressMode'
+import { TopBar } from '../components/TopBar'
 import { VerdictPanel } from '../components/VerdictPanel'
 import { defaultScenario, scenarios } from '../data/scenarioLibrary'
+import { selectEpisodeAttribution } from '../lib/episode'
+import { DEMO_RUNS, parseRun } from '../lib/demoRuns'
 import { useCanopyMissionState } from '../hooks/useCanopyMissionState'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { triggerReplay } from '../hooks/useEngineSocket'
+import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import type { PlaybackStatus } from '../types/playback'
 import type { Attribution, Decision, Signal } from '../types/canopy'
@@ -93,9 +97,17 @@ const beatDecision: Decision = {
 
 export function Brigade() {
   const socketState = useCanopySocket()
+  const capture = useCaptureStore((s) => s.enabled)
   const [beatIndex] = useState(1)
   const [isMapAutoFocusEnabled, setIsMapAutoFocusEnabled] = useState(true)
-  const [activeScenarioId, setActiveScenarioId] = useState(defaultScenario.id)
+  // `/brigade?run=A|B|C` (set by the demo launcher) selects the matching
+  // library scenario so the rail header, the AOR bounds and the local
+  // playback agree with the replay the launcher already started.
+  const [activeScenarioId, setActiveScenarioId] = useState(() => {
+    const run = parseRun(new URLSearchParams(window.location.search).get('run'))
+    const stem = run ? DEMO_RUNS[run].stem : null
+    return (stem && scenarios.find((scenario) => scenario.file === stem)?.id) ?? defaultScenario.id
+  })
   const [simElapsedMs, setSimElapsedMs] = useState(0)
   const pendingApproval = useEventStore((state) => state.pendingApproval)
   const approvedEventIds = useEventStore((state) => state.approvedEventIds)
@@ -169,11 +181,18 @@ export function Brigade() {
     }
   }
 
-  const signals = activeScenarioSignals
+  // Capture mode shows what the engine actually received: the live socket
+  // signals, newest first. Outside capture (and before a replay has sent
+  // anything) the local scenario playback drives the map and the feed.
+  const signals =
+    capture && socketState.signals.length ? socketState.signals : activeScenarioSignals
   const isEngineLive = socketState.isConnected
   const dataModeLabel = isEngineLive ? 'Engine live' : 'Feed'
+  // The episode's verdict is the satellite cluster's final revision, not the
+  // newest attribution received (INTERFACE-SPEC §5.0).
   const latestAttribution =
-    socketState.attributions[0] ?? (beatIndex >= 4 ? beatAttribution : null)
+    selectEpisodeAttribution(socketState.attributions, socketState.anomalies) ??
+    (beatIndex >= 4 ? beatAttribution : null)
   const latestDecision =
     socketState.decisions[0] ?? (beatIndex >= 5 ? beatDecision : null)
   // The decision the verdict panel explains is the one taken on the latest
@@ -207,12 +226,10 @@ export function Brigade() {
 
   return (
     <main className="brigade-shell">
-      <header className="app-header">
-        <div>
-          <p className="app-header__eyebrow">CANOPY</p>
-          <h1>Brigade COP</h1>
-        </div>
-        <div className="app-header__right">
+      <TopBar
+        title="Brigade COP"
+        current="brigade"
+        right={
           <span
             className={
               isEngineLive
@@ -222,9 +239,8 @@ export function Brigade() {
           >
             {dataModeLabel}
           </span>
-          <a href="/operator">Ops</a>
-        </div>
-      </header>
+        }
+      />
 
       <section className="command-workbench">
         <ScenarioRail
@@ -239,6 +255,7 @@ export function Brigade() {
           offsets={playbackTimeline.offsets}
           playback={playbackStatus}
           collapsed={scenarioRailCollapsed}
+          hideLibrary={capture}
         />
         <button
           type="button"
@@ -338,7 +355,11 @@ export function Brigade() {
           >
             <EmbeddingViz compact />
           </CollapsibleStackSection>
-          <CollapsibleStackSection title="Reasoning trace" flexGrow>
+          <CollapsibleStackSection
+            title="Reasoning trace"
+            flexGrow
+            defaultOpen={!capture}
+          >
             <ReasoningPanel />
           </CollapsibleStackSection>
           <CollapsibleStackSection title="Stress mode" defaultOpen={false}>

@@ -1,8 +1,11 @@
 import { useEventStore } from '../store/eventStore'
+import { selectEpisodeAttribution } from '../lib/episode'
 import { ActionLog } from '../components/ActionLog'
 import { EmbeddingViz } from '../components/EmbeddingViz'
 import { ReasoningPanel } from '../components/ReasoningPanel'
+import { TopBar } from '../components/TopBar'
 import { VerdictPanel } from '../components/VerdictPanel'
+import { WithheldRecoveryChip } from '../components/WithheldRecoveryChip'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import {
   parseGateRationale,
@@ -24,7 +27,8 @@ export function Operator() {
   const attributionsById = useEventStore((s) => s.attributionsById)
   const decisions = useEventStore((s) => s.decisions)
 
-  const latestAttribution = attributions[0] ?? null
+  // Satellite cluster's final revision, not the newest attribution received.
+  const latestAttribution = selectEpisodeAttribution(attributions, anomalies)
   // Newest decision taken on the latest attribution: a gate-republished
   // threat_warning sits ahead of the recovery it replaced.
   const verdictDecision = latestAttribution
@@ -33,13 +37,7 @@ export function Operator() {
 
   return (
     <main className="operator-shell">
-      <header className="app-header">
-        <div>
-          <p className="app-header__eyebrow">CANOPY / Operator</p>
-          <h1>Fusion Console</h1>
-        </div>
-        <a href="/brigade">Brigade View</a>
-      </header>
+      <TopBar title="Operator · Fusion console" current="operator" />
       <section className="operator-grid" aria-label="Operator fusion state">
         <div className="panel operator-panel--anomaly">
           <div className="panel__header">
@@ -81,6 +79,12 @@ export function Operator() {
                         <span className="operator-list__chip operator-list__chip--blocked">
                           blocked · {gate.reasonCode}
                         </span>
+                      ) : null}
+                      {d.withheld_recovery ? (
+                        <WithheldRecoveryChip
+                          withheld={d.withheld_recovery}
+                          variant="operator-list"
+                        />
                       ) : null}
                       {d.recovery ? (
                         <span className="operator-list__chip operator-list__chip--recovery">

@@ -12,6 +12,12 @@ Configure via env vars (or constructor args):
   is typically ``http://<machine-name>:11434`` or ``http://<100.x.x.x>:11434``.
 * ``CANOPY_OLLAMA_MODEL`` — the model tag to use (e.g. ``gemma3:4b``).
 * ``CANOPY_OLLAMA_TIMEOUT_S`` — per-request HTTP timeout (default 180 s).
+* ``CANOPY_OLLAMA_NUM_CTX`` — context window requested per call (default
+  32768). Attribution prompts with the full knowledge base run to 12–16k
+  tokens; at the daemon's 4096-token default they are silently truncated and
+  the verdict degrades.
+* ``CANOPY_OLLAMA_THINK`` — set to ``0``/``false`` or ``1``/``true`` to send the
+  ``think`` flag for thinking-capable models; unset sends nothing.
 """
 from __future__ import annotations
 
@@ -48,6 +54,7 @@ def _verdict_fields(payload: dict[str, Any]) -> dict[str, Any]:
         "verdict_evidence": list(payload.get("verdict_evidence") or []),
     }
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
+DEFAULT_OLLAMA_NUM_CTX = 32768
 DEFAULT_TIMEOUT_S = 180.0
 
 
@@ -74,6 +81,11 @@ class OllamaLLMClient:
     ) -> None:
         self._kb = kb
         self._model = model or os.environ.get("CANOPY_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+        self._num_ctx = int(os.environ.get("CANOPY_OLLAMA_NUM_CTX", str(DEFAULT_OLLAMA_NUM_CTX)))
+        think_env = os.environ.get("CANOPY_OLLAMA_THINK")
+        self._think: bool | None = (
+            None if think_env is None else think_env.strip().lower() in ("1", "true", "yes")
+        )
         url = base_url or os.environ.get("CANOPY_OLLAMA_URL", DEFAULT_OLLAMA_URL)
         self._base_url = url.rstrip("/")
         timeout = timeout_s
@@ -292,8 +304,14 @@ class OllamaLLMClient:
                 {"role": "user", "content": user_with_schema},
             ],
             "stream": False,
-            "options": {"temperature": self._temperature, "seed": self._seed},
+            "options": {
+                "temperature": self._temperature,
+                "seed": self._seed,
+                "num_ctx": self._num_ctx,
+            },
         }
+        if self._think is not None:
+            base_body["think"] = self._think
 
         # Try schema-typed structured output first (Ollama ≥ 0.5). Fall back
         # to plain JSON mode if the daemon rejects the schema dict.

@@ -3,6 +3,7 @@ import { AorMap } from './AorMap'
 import { MissionAlert } from './MissionAlert'
 import type { ScenarioDefinition } from '../data/scenarioLibrary'
 import { signalEffectState } from '../lib/signalEffects'
+import { useCaptureStore } from '../store/captureStore'
 import type { PlaybackStatus } from '../types/playback'
 import type { Signal } from '../types/canopy'
 
@@ -27,7 +28,9 @@ export function MapStage({
   scenario,
   signals,
 }: MapStageProps) {
-  const [viewMode, setViewMode] = useState<'nav' | 'globe'>('nav')
+  // Capture S1 is the orbital view: open on the globe when capture mode is on.
+  const capture = useCaptureStore((s) => s.enabled)
+  const [viewMode, setViewMode] = useState<'nav' | 'globe'>(capture ? 'globe' : 'nav')
   const [focusRequestId, setFocusRequestId] = useState(0)
   const isGlobe = viewMode === 'globe'
   const latestSignal = signals[0] ?? null

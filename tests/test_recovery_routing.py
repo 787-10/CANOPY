@@ -11,6 +11,7 @@ builder individually.
 from __future__ import annotations
 
 import asyncio
+import importlib.util
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -35,8 +36,11 @@ from canopy.services.schemas.events import (
     RecoveryBlock,
     Signal,
     UIEvent,
+    WithheldRecovery,
 )
 from canopy.services.ui_events import UIEventService
+
+MEGALITH_AVAILABLE = importlib.util.find_spec("megalith") is not None
 
 ROOT = Path(__file__).resolve().parent.parent
 KB_FILE = ROOT / "data" / "kb_seed_entries.json"
@@ -110,7 +114,13 @@ def _rf_signal(ts: datetime) -> Signal:
     )
 
 
-async def _run(signals: list[Signal], *, verdict: str = "internal_fault") -> dict[str, list]:
+async def _run(
+    signals: list[Signal],
+    *,
+    verdict: str = "internal_fault",
+    actor: str = "None",
+    confidence: float = 0.83,
+) -> dict[str, list]:
     engine = build_engine(
         provider="stub", kb_path=KB_FILE, attrib_window_s=0.2, enable_osint=False
     )
@@ -145,8 +155,8 @@ async def _run(signals: list[Signal], *, verdict: str = "internal_fault") -> dic
         attribution = Attribution(
             id="attr-recovery-1",
             anomaly_ids=[a.id for a in anomalies],
-            actor="None",
-            confidence=0.83,
+            actor=actor,
+            confidence=confidence,
             evidence=["ramp-shaped margin loss consistent with amplifier degradation"],
             kb_citations=["kb-attribution-uncertainty-001"],
             source_signal_ids=[s.id for s in signals],
@@ -191,6 +201,8 @@ async def test_bus_health_recovery_becomes_a_recovery_recommendation_with_ui_eve
     assert "switch_redundant_amplifier" in decision.rationale
     assert "CJFSCC" not in decision.rationale
     assert decision.source_signal_ids == ["sig-bus-1"]
+
+    assert decision.withheld_recovery is None
 
     ui = next(e for e in collected["ui_event"] if e.id == f"uievt-{decision.id}")
     assert ui.title == "Recovery recommendation"
@@ -241,6 +253,63 @@ async def test_recovery_under_active_jamming_is_gated_end_to_end() -> None:
     assert any(
         t.message == "gate blocked recovery_recommendation: threat/uplink_jamming_active" for t in warns
     )
+    # The blocked recovery is also reported as withheld, with the gate's reason.
+    assert decision.withheld_recovery == WithheldRecovery(
+        action_id="switch_redundant_amplifier",
+        target_subsystem="comms",
+        reason_code="threat/uplink_jamming_active",
+    )
+    assert any(
+        t.message == "recovery withheld: switch_redundant_amplifier: threat/uplink_jamming_active"
+        and t.ref_id == decision.id
+        for t in warns
+    )
+
+
+async def test_hostile_run_withholds_the_recommended_radio_recovery_end_to_end() -> None:
+    """The demo's hostile run (F8): same symptom, an RF report, verdict hostile.
+
+    No recovery is routed, so the gate never fires; the decision instead
+    reports the recovery the internal diagnosis recommended and the decide
+    stage withheld, with the reason. With the MEGALITH package the reason is
+    the jamming itself; CANOPY on its own can only cite the verdict.
+    """
+    bus = _bus_signal()
+    collected = await _run(
+        [bus, _rf_signal(bus.ts + timedelta(seconds=400))],
+        verdict="hostile_external",
+        actor="Unknown",
+        confidence=0.45,
+    )
+    expected_reason = "threat/uplink_jamming_active" if MEGALITH_AVAILABLE else "verdict/hostile_external"
+    expected_label = "active jamming detected" if MEGALITH_AVAILABLE else "verdict is hostile external"
+
+    decision = _our_decision(collected)
+    assert decision.action != "recovery_recommendation"
+    assert decision.recovery is None
+    assert not decision.rationale.startswith("[gate:")  # the gate did not fire
+    assert decision.withheld_recovery == WithheldRecovery(
+        action_id="switch_redundant_amplifier",
+        target_subsystem="comms",
+        reason_code=expected_reason,
+    )
+
+    warns = [
+        t for t in collected["trace"]
+        if t.stage == "decide" and t.level == "warn" and t.ref_id == decision.id
+    ]
+    assert [t.message for t in warns] == [
+        f"recovery withheld: switch_redundant_amplifier: {expected_reason}"
+    ]
+    assert warns[0].payload["reason_code"] == expected_reason
+    assert warns[0].payload["attribution_id"] == "attr-recovery-1"
+    assert "latency_ms" in warns[0].payload and "stage_ms" in warns[0].payload
+
+    ui = next(e for e in collected["ui_event"] if e.id == f"uievt-{decision.id}")
+    assert f"Recovery withheld: switch_redundant_amplifier on comms: {expected_label}." in ui.message
+    assert "Recommended recovery:" not in ui.message
+    assert ui.type == ("recommendation_created" if decision.authority == "request" else "threat_updated")
+    assert ui.confidence == 0.45
 
 
 # ---- Stub -------------------------------------------------------------------------------

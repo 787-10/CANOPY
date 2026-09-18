@@ -6,6 +6,7 @@ import {
   subsystemLabel,
 } from '../lib/commanderLanguage'
 import type { Action } from '../types/canopy'
+import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
 // Exhaustive over the Action vocabulary (types/canopy.ts) so adding an action
 // without a label is a typecheck error, not a title-cased fallback.
@@ -81,11 +82,14 @@ export function OperatorActionPanel() {
   const recovery = isRecovery ? (decision.recovery ?? null) : null
   const gate = parseGateRationale(decision.rationale)
   const isBlocked = gate.reasonCode !== null
+  const withheld = decision.withheld_recovery ?? null
   const eyebrow = isRecovery
     ? 'Internal diagnosis recommendation'
     : isBlocked
       ? 'Engine recommendation · gate blocked'
-      : 'Engine recommendation'
+      : withheld
+        ? 'Engine recommendation · recovery withheld'
+        : 'Engine recommendation'
 
   const accept = () => {
     acceptDecision(decision.id)
@@ -120,11 +124,13 @@ export function OperatorActionPanel() {
         `operator-action--${status}`,
         isRecovery ? 'operator-action--recovery' : '',
         isBlocked ? 'operator-action--blocked' : '',
+        withheld ? 'operator-action--withheld' : '',
       ]
         .filter(Boolean)
         .join(' ')}
       aria-labelledby="operator-action-title"
       data-decision-kind={isRecovery ? 'recovery' : isBlocked ? 'blocked' : 'action'}
+      data-withheld={withheld ? withheld.reason_code : undefined}
     >
       <header className="operator-action__head">
         <span className="operator-action__eyebrow">{eyebrow}</span>
@@ -137,6 +143,9 @@ export function OperatorActionPanel() {
           >
             <b>blocked</b> {gate.reasonCode}
           </span>
+        ) : null}
+        {withheld ? (
+          <WithheldRecoveryChip withheld={withheld} variant="operator-action" />
         ) : null}
       </header>
 

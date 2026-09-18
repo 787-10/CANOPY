@@ -32,7 +32,10 @@
       "maxLength": 2000
     },
     "beat": {
-      "type": "string",
+      "type": [
+        "string",
+        "null"
+      ],
       "minLength": 1,
       "maxLength": 32
     },

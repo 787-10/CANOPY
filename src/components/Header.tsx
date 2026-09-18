@@ -15,8 +15,8 @@ export function Header() {
   return (
     <header className="app-header">
       <div className="app-header__brand">
-        CANOPY
-        <span className="app-header__brand-sub">multi-domain · space</span>
+        MEGALITH
+        <span className="app-header__brand-sub">external awareness: CANOPY · internal diagnosis</span>
       </div>
       <SeverityRibbon />
       <div className="app-header__spacer" />

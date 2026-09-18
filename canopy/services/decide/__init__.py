@@ -11,6 +11,7 @@ from typing import Any
 from canopy.services.bus import Bus
 from canopy.services.decide.prompts import (
     RecoveryContext,
+    _block_from,
     recovery_context,
     recovery_rationale,
     with_recovery_context,
@@ -39,12 +40,25 @@ from canopy.services.schemas.events import (
     Attribution,
     Authority,
     Decision,
+    RecoveryBlock,
+    WithheldRecovery,
 )
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
-__all__ = ["DecideService", "Gate", "GateContext", "GateResult", "default_gate"]
+__all__ = [
+    "REASON_VERDICT_HOSTILE",
+    "REASON_VERDICT_UNKNOWN",
+    "DecideService",
+    "Gate",
+    "GateContext",
+    "GateResult",
+    "WithheldReason",
+    "default_gate",
+    "default_withheld_reason",
+    "verdict_withheld_reason",
+]
 
 
 # Request-authority actions whose request_packet should be enriched with
@@ -71,6 +85,53 @@ _DECISION_ID_CACHE_SIZE = 256
 DEFAULT_GATE_LOOKBACK_S = 600.0
 
 RECOVERY_ACTION: Action = "recovery_recommendation"
+
+# ---- Withheld recovery (docs/INTERFACE-SPEC.md §6, wave 4B) -----------------
+#
+# When the cluster recommends a recovery that the published decision does not
+# carry, the decision says so and why. The two verdict reasons need nothing
+# but the attribution and live here; the two threat reasons reuse the gate's
+# R1/R2 predicates and live in ``megalith.gate.withheld``, which chains onto
+# :func:`verdict_withheld_reason`. A withheld-reason callable answers
+# ``(decision, gate context, recommended block) -> reason code or None``.
+
+REASON_VERDICT_HOSTILE = "verdict/hostile_external"
+REASON_VERDICT_UNKNOWN = "verdict/unknown"
+
+WithheldReason = Callable[[Decision, GateContext, RecoveryBlock], str | None]
+
+
+def verdict_withheld_reason(
+    decision: Decision, ctx: GateContext, recommended: RecoveryBlock
+) -> str | None:
+    """The verdict-only withheld reasons: what CANOPY enforces on its own.
+
+    A recovery is routed only for ``internal_fault`` and ``natural_external``
+    (§6), so under ``hostile_external`` or ``unknown`` the recommended block is
+    withheld for the verdict's sake. Any other verdict withholds nothing here.
+    """
+    if decision.action == RECOVERY_ACTION:
+        return None
+    if ctx.verdict == "hostile_external":
+        return REASON_VERDICT_HOSTILE
+    if ctx.verdict == "unknown":
+        return REASON_VERDICT_UNKNOWN
+    return None
+
+
+def default_withheld_reason() -> WithheldReason:
+    """The withheld-reason callable DecideService runs when none is injected.
+
+    Mirrors :func:`default_gate`: the full helper (threat reasons first, then
+    the verdict reasons) lives in the MEGALITH package; when CANOPY runs on
+    its own only the verdict reasons apply.
+    """
+    try:
+        from megalith.gate import withheld_reason
+    except ImportError:
+        log.info("megalith.gate unavailable; withheld recovery reports verdict reasons only")
+        return verdict_withheld_reason
+    return withheld_reason
 
 
 def default_gate() -> Gate:
@@ -115,6 +176,13 @@ class DecideService:
        decision plus every recent anomaly on the same satellite. A block is
        republished as a local ``threat_warning`` with the reason code in the
        rationale and a warn trace; an authority mismatch is repaired.
+    5. **Withheld recovery** (spec §6, wave 4B). When the cluster carries a
+       ``recommended_recovery`` and the decision leaving the gate is not a
+       recovery, ``Decision.withheld_recovery`` names the block and the
+       first applicable reason code (a threat rule that would block it, else
+       the hostile or unknown verdict) and a warn trace
+       ``recovery withheld: <action_id>: <reason_code>`` is emitted. The
+       block path of the gate is unchanged; this only annotates.
 
     Revisions (wave 3A). A provisional attribution and every reasoning-lane
     revision of it share an attribution id; the decisions made for them share
@@ -137,6 +205,7 @@ class DecideService:
         tool_ctx: ToolContext | None = None,
         kb=None,
         gate: Gate | None = None,
+        withheld_reason: WithheldReason | None = None,
         lookback_s: float = DEFAULT_GATE_LOOKBACK_S,
         clock: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -160,9 +229,15 @@ class DecideService:
         self._tools = tools
         self._tool_ctx = tool_ctx
         self._gate: Gate = gate if gate is not None else default_gate()
+        self._withheld_reason: WithheldReason = (
+            withheld_reason if withheld_reason is not None else default_withheld_reason()
+        )
         self._lookback = timedelta(seconds=float(lookback_s))
         self._anomaly_cache: OrderedDict[str, Anomaly] = OrderedDict()
         self._cache_size = anomaly_cache_size
+        # Bumped by reset(): a decide result that started under an older
+        # generation belongs to a run that has been cleared and is dropped.
+        self._generation = 0
         self._arrivals: OrderedDict[str, float] = OrderedDict()
         self._decision_ids: OrderedDict[str, str] = OrderedDict()
         # Timing of the attribution being handled (the consumer loop handles
@@ -173,6 +248,32 @@ class DecideService:
     @property
     def gate(self) -> Gate:
         return self._gate
+
+    @property
+    def withheld_reason(self) -> WithheldReason:
+        return self._withheld_reason
+
+    def reset(self) -> dict[str, int]:
+        """Forget cached anomalies, arrival marks, decision ids and errors.
+
+        In-process state only, for ``POST /reset`` between runs: without it
+        the previous run's anomalies on the same satellite stay in the cache
+        and feed the next run's gate context and withheld-recovery reason.
+        Returns how many entries each store held.
+        """
+        cleared = {
+            "anomaly_cache": len(self._anomaly_cache),
+            "arrivals": len(self._arrivals),
+            "decision_ids": len(self._decision_ids),
+            "errors": len(self.errors),
+        }
+        self._anomaly_cache.clear()
+        self._generation += 1
+        self._arrivals.clear()
+        self._decision_ids.clear()
+        self._timing = None
+        self.errors.clear()
+        return cleared
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:
@@ -231,6 +332,7 @@ class DecideService:
             self._timing = (self._t0_for(event, cluster), stage_t0)
             recovery = recovery_context(event, cluster)
             llm_input = event if recovery is None else with_recovery_context(event, recovery)
+            generation = self._generation
             try:
                 decision = await self._llm.decide(llm_input)
             except Exception as exc:
@@ -245,6 +347,12 @@ class DecideService:
                     "decide: LLMClient.decide failed for attribution=%s", event.id
                 )
                 continue
+            if generation != self._generation:
+                log.info(
+                    "decide: dropping result for attribution=%s from before an engine reset",
+                    event.id,
+                )
+                continue
             decision = decision.model_copy(
                 update={
                     "id": self._shared_decision_id(event, decision),
@@ -255,6 +363,7 @@ class DecideService:
             decision = await self._maybe_enrich_with_tools(decision, event)
             decision = await self._validate_routing(decision, event)
             decision = await self._apply_gate(decision, event, cluster)
+            decision = await self._annotate_withheld(decision, event, cluster)
             t0 = self._timing[0] if self._timing is not None else None
             if self._tracer is not None and t0 is not None:
                 self._tracer.mark(decision.id, t0)
@@ -467,6 +576,74 @@ class DecideService:
             )
             return repaired
         return decision
+
+    # ---- Withheld recovery (spec §6, wave 4B) ---------------------------------
+
+    @staticmethod
+    def _recommended_block(
+        cluster: list[Anomaly], satellite_id: str | None
+    ) -> RecoveryBlock | None:
+        """The cluster's ``recommended_recovery``, whatever the verdict.
+
+        Same choice as the routing rule (the strongest anomaly carrying a valid
+        block wins) but without the verdict filter, since the point is to name
+        a recovery the verdict or a gate rule kept off the decision.
+        """
+        candidates = [
+            a for a in cluster if isinstance(a.payload.get("recommended_recovery"), dict)
+        ]
+        for anomaly in sorted(candidates, key=lambda a: (-a.severity, a.id)):
+            sat = satellite_id or anomaly.payload.get("satellite_id")
+            block = _block_from(anomaly.payload["recommended_recovery"], satellite_id=sat)
+            if block is not None:
+                return block
+        return None
+
+    async def _annotate_withheld(
+        self, decision: Decision, attribution: Attribution, cluster: list[Anomaly]
+    ) -> Decision:
+        """Set ``withheld_recovery`` when the cluster's recovery is not on the decision.
+
+        Runs after the gate on every revision. A recovery decision withholds
+        nothing; every other decision whose cluster carries a
+        ``recommended_recovery`` is annotated with the first applicable
+        reason code and a warn trace. When no reason applies (a verdict that
+        is neither hostile nor unknown, no threat rule) nothing is set.
+        """
+        if decision.action == RECOVERY_ACTION:
+            if decision.withheld_recovery is not None:
+                return decision.model_copy(update={"withheld_recovery": None})
+            return decision
+        ctx = self._gate_context(attribution, cluster, decision)
+        recommended = self._recommended_block(cluster, ctx.satellite_id)
+        if recommended is None:
+            if decision.withheld_recovery is not None:
+                return decision.model_copy(update={"withheld_recovery": None})
+            return decision
+        reason = self._withheld_reason(decision, ctx, recommended)
+        if reason is None:
+            if decision.withheld_recovery is not None:
+                return decision.model_copy(update={"withheld_recovery": None})
+            return decision
+        withheld = WithheldRecovery(
+            action_id=recommended.action_id,
+            target_subsystem=recommended.target_subsystem,
+            reason_code=reason,
+        )
+        annotated = decision.model_copy(update={"withheld_recovery": withheld})
+        await self._trace(
+            "warn",
+            f"recovery withheld: {withheld.action_id}: {withheld.reason_code}",
+            annotated,
+            attribution,
+            reason_code=withheld.reason_code,
+            action_id=withheld.action_id,
+            target_subsystem=withheld.target_subsystem,
+            verdict=ctx.verdict,
+            satellite_id=ctx.satellite_id,
+            context_anomaly_ids=[a.id for a in ctx.anomalies],
+        )
+        return annotated
 
     @staticmethod
     def _repair_authority(decision: Decision, expected: Authority, *, note: str) -> Decision:

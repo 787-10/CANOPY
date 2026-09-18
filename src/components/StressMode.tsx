@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useCaptureStore } from '../store/captureStore'
 import { DOMAINS, type Domain } from '../types/canopy'
 
 const API_URL =
@@ -26,6 +27,7 @@ export function StressMode() {
   const [blocked, setBlocked] = useState<Set<Domain>>(new Set())
   const [pending, setPending] = useState<Set<Domain>>(new Set())
   const [status, setStatus] = useState<'idle' | 'applying' | 'error'>('idle')
+  const capture = useCaptureStore((s) => s.enabled)
 
   useEffect(() => {
     let cancelled = false
@@ -81,11 +83,21 @@ export function StressMode() {
         <h2 id="stress-mode-title">Stress mode</h2>
         <span>{blocked.size} blocked</span>
       </div>
-      <p className="stress-mode__hint">
-        Block input domains to simulate degraded ISR. The engine will drop
-        signals from blocked domains and lower attribution confidence on
-        anomalies that depend on them.
-      </p>
+      {capture ? null : (
+        <p className="stress-mode__hint" data-capture-hide>
+          Block input domains to simulate degraded ISR. The engine will drop
+          signals from blocked domains and lower attribution confidence on
+          anomalies that depend on them.
+        </p>
+      )}
+      {blocked.size ? (
+        <p className="stress-mode__banner" role="status" data-testid="stress-banner">
+          <strong>Domain denied:</strong>{' '}
+          {[...blocked].map((domain) => LABELS[domain]).join(', ')}. Confidence on
+          anomalies that depend on {blocked.size === 1 ? 'it' : 'them'} is lowered
+          and the reason is written to the trace.
+        </p>
+      ) : null}
       <div className="stress-mode__grid">
         {ALL_DOMAINS.map((domain) => {
           const isBlocked = pending.has(domain)

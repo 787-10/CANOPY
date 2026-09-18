@@ -182,3 +182,69 @@ export function makeManeuverDemo(overrides: Partial<ManeuverDemo> = {}): Maneuve
     ...overrides,
   }
 }
+
+// ---------------------------------------------------------------------------
+// Wave 4D: bus-health signal (docs/INTERFACE-SPEC.md §3) for the card, the
+// spacecraft page and the feed. Defaults are the spec's example record with
+// the demo identity (SIM-01).
+// ---------------------------------------------------------------------------
+
+export const SIM01 = 'ctb://megalith.demo/sim-01'
+
+export const BELIEF_BASIS =
+  'belief:internal=0.81;external=0.08;unknown=0.10;top=amplifier_degradation:0.75;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=link_margin_drop;rate=slope'
+
+export const HOSTILE_BELIEF_BASIS =
+  'belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval'
+
+export function makeBusHealthSignal(
+  id: string,
+  {
+    observables = {},
+    payload = {},
+    ...overrides
+  }: Partial<Omit<Signal, 'payload'>> & {
+    observables?: Record<string, unknown>
+    payload?: Partial<Signal['payload']>
+  } = {},
+): Signal {
+  return makeSignal(id, {
+    domain: 'bus_health',
+    source: 'internal-diagnosis',
+    confidence: 0.81,
+    location: { label: 'SIM-01' },
+    payload: {
+      event_type: 'link_margin_drop',
+      summary:
+        'SIM-01 downlink margin falling 0.42 dB/s since 14:32:10Z; consistent with amplifier degradation.',
+      asset: 'SIM-01',
+      satellite_id: SIM01,
+      observables: {
+        subsystem: 'comms',
+        symptom: 'link_margin_db_drop',
+        onset_ts: '2026-09-17T14:32:10Z',
+        onset_clock_domain: 'simulation',
+        sim_time_s: 812,
+        rate_of_change: -0.42,
+        rate_unit: 'dB/s',
+        physics_consistency: 0.83,
+        physics_basis: BELIEF_BASIS,
+        shape: 'ramp',
+        recommended_recovery: {
+          action_id: 'switch_redundant_amplifier',
+          target_subsystem: 'comms',
+          requires_approval: true,
+          rationale: 'Primary amplifier output trending down; redundant unit nominal.',
+        },
+        ...observables,
+      },
+      ...payload,
+    },
+    provenance: {
+      source_id: 'internal-diagnosis',
+      collector: 'megalith-bus-health-adapter',
+      method: 'rule_fdir+belief',
+    },
+    ...overrides,
+  })
+}

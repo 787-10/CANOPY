@@ -14,11 +14,20 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_registry_is_the_complete_demo_and_seed_source() -> None:
     registry = load_scenario_registry()
 
-    public = [case for case in registry.cases if "heldout" not in case.visibility]
+    public = [case for case in registry.cases if "public_eval" in case.visibility]
     heldout = [case for case in registry.cases if "heldout" in case.visibility]
+    # MEGALITH wave 4A: three demo-only cases (visibility ["demo"]) that are
+    # neither public evaluation cases nor held-out.
+    demo_only = [case for case in registry.cases if case.visibility == ["demo"]]
     assert len(public) == 11
     assert len(heldout) == 18
-    assert len(registry.cases) == len(public) + len(heldout)
+    assert len(demo_only) == 3
+    assert {case.id for case in demo_only} == {
+        "demo-link-margin-a",
+        "demo-link-margin-b",
+        "demo-link-margin-c",
+    }
+    assert len(registry.cases) == len(public) + len(demo_only) + len(heldout)
     assert {case.file for case in registry.demo_cases()} == {
         path.name for path in (ROOT / "scenarios").glob("*.jsonl")
     }
