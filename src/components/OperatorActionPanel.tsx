@@ -86,9 +86,9 @@ export function OperatorActionPanel() {
   const eyebrow = isRecovery
     ? 'Internal diagnosis recommendation'
     : isBlocked
-      ? 'Engine recommendation · gate blocked'
+      ? 'Gate blocked'
       : withheld
-        ? 'Engine recommendation · recovery withheld'
+        ? 'Recovery withheld'
         : 'Engine recommendation'
 
   const accept = () => {

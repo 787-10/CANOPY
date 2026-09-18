@@ -23,6 +23,6 @@ export function resolveRoute(pathname: string, search: string): Route {
       autostart: params.get('autostart') === '1',
     }
   }
-  if (pathname.startsWith('/run')) return { page: 'run' }
+  if (pathname.startsWith('/runs')) return { page: 'run' }
   return { page: 'brigade' }
 }

@@ -174,7 +174,7 @@ describe('OperatorActionPanel — gate-blocked decisions', () => {
       screen.getByText('Recovery on comms withheld while uplink jamming is active.'),
     ).toBeInTheDocument()
     expect(screen.queryByText(/\[gate:/)).not.toBeInTheDocument()
-    expect(screen.getByText('Engine recommendation · gate blocked')).toBeInTheDocument()
+    expect(screen.getByText('Gate blocked')).toBeInTheDocument()
     expect(screen.getByRole('region', { name: 'Threat warning' })).toHaveClass(
       'operator-action--blocked',
     )

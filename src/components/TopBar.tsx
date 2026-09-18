@@ -8,7 +8,7 @@ const PAGES: Array<{ page: ConsolePage; label: string; href: string }> = [
   { page: 'brigade', label: 'Brigade', href: '/brigade' },
   { page: 'operator', label: 'Operator', href: '/operator' },
   { page: 'spacecraft', label: 'Spacecraft', href: '/spacecraft' },
-  { page: 'run', label: 'Run', href: '/run' },
+  { page: 'run', label: 'Run', href: '/runs' },
 ]
 
 type TopBarProps = {

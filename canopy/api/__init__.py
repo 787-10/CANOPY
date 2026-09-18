@@ -397,11 +397,16 @@ def create_app(
 
         async with _control_lock(app):
             await cancel_replay(app.state.replay_task)
+            # Same input discipline as the bench: oracle records (the scenario's
+            # own answer key) never reach the bus, and redacted observables are
+            # stripped, so the console shows what an operator would see.
             replay = ScenarioReplayService(
                 app.state.engine.bus,
                 path,
                 speed=speed,
                 max_delay_s=max_delay_s,
+                signal_filter=case.includes_as_input,
+                signal_transform=case.sanitize_input,
             )
             app.state.replay_task = asyncio.create_task(
                 replay.run(), name=f"replay-{name}"

@@ -721,10 +721,10 @@ export function CesiumGlobe({
           position: Cartesian3.fromDegrees(point.lon, point.lat, point.height),
           billboard: {
             color: Color.WHITE,
-            height: isFocus ? 24 : isCorrelated ? 21 : 18,
+            height: isFocus ? 30 : isCorrelated ? 27 : 24,
             image: markerSvg(markerKind, markerColorHex(color)),
-            scaleByDistance: new NearFarScalar(1500000, 0.84, 25000000, 0.36),
-            width: isFocus ? 24 : isCorrelated ? 21 : 18,
+            scaleByDistance: new NearFarScalar(1500000, 1.0, 25000000, 0.36),
+            width: isFocus ? 30 : isCorrelated ? 27 : 24,
           },
           label: {
             backgroundColor: MAP_PANEL.withAlpha(0.84),
@@ -1017,7 +1017,9 @@ export function CesiumGlobe({
           backgroundColor: MAP_PANEL.withAlpha(0.86),
           fillColor: Color.WHITE,
           font: MAP_FONT,
-          pixelOffset: new Cartesian2(0, -30),
+          // Below the dish: the synthetic spacecraft is pinned over its pass site,
+          // so a label above would sit under the satellite's own label.
+          pixelOffset: new Cartesian2(0, 44),
           scaleByDistance: new NearFarScalar(800000, 1, 22000000, 0.7),
           show: true,
           showBackground: true,
@@ -1053,9 +1055,18 @@ export function CesiumGlobe({
     setSatelliteFamilySelection(next)
     void ensureN2YOSatellitesLoaded(next).then(() => {
       if (viewer.isDestroyed()) return
-      const station = groundStationsFromSignals(signals)[0]
+      // Signals name the station in the hostile run; the natural and internal
+      // runs have no ground-segment signal, so fall back to the pass site the
+      // synthetic track carries (Site A in every demo run).
+      const fromTracks = n2yoLayersRef.current
+        .filter((layer) => layer.satelliteFamily === 'SIM')
+        .map((layer) => groundStationFromPositionCache(layer.cache))
+        .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
+      const station = mergeGroundStations(groundStationsFromSignals(signals), fromTracks)[0]
       const anchor = station
-        ? Cartesian3.fromDegrees(station.lng, station.lat, 9_500_000)
+        ? // Close enough that the station dish, the pinned spacecraft and an RF
+          // emitter estimate ~180 km away read as separate marks (demo capture S1).
+          Cartesian3.fromDegrees(station.lng, station.lat, 1_400_000)
         : RESET_CAMERA_DESTINATION
       viewer.camera.flyTo({ destination: anchor, duration: 0.9 })
     })
@@ -1867,7 +1878,10 @@ export function CesiumGlobe({
       {activeLayer === 'real-satellite' ? (
         <>
           <div className="satellite-family-controls" aria-label="Satellite families">
-            {SATELLITE_FAMILY_FILTERS.map((familyFilter) => (
+            {(capture
+              ? SATELLITE_FAMILY_FILTERS.filter((familyFilter) => familyFilter === 'SIM')
+              : SATELLITE_FAMILY_FILTERS
+            ).map((familyFilter) => (
               <button
                 className={
                   isFamilyControlActive(satelliteFamilySelection, familyFilter)

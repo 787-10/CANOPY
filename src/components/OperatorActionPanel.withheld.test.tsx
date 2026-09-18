@@ -33,7 +33,7 @@ describe('OperatorActionPanel — F8 withheld-recovery chip', () => {
     expect(chip).toHaveAttribute('title', reasonCode)
     const section = document.querySelector('.operator-action')
     expect(section).toHaveAttribute('data-withheld', reasonCode)
-    expect(screen.getByText('Engine recommendation · recovery withheld')).toBeInTheDocument()
+    expect(screen.getByText('Recovery withheld')).toBeInTheDocument()
   })
 
   it('renders no withheld chip for a decision without the block', () => {

@@ -123,7 +123,13 @@ def test_replay_honours_speed_and_max_delay_s(
     calls: list[dict[str, object]] = []
 
     class RecordingReplay:
-        def __init__(self, bus, path, *, speed: float, max_delay_s: float | None) -> None:
+        def __init__(
+            self, bus, path, *, speed: float, max_delay_s: float | None,
+            signal_filter=None, signal_transform=None,
+        ) -> None:
+            # The gateway applies the manifest record roles like the bench does:
+            # oracle records never reach the bus, redacted observables are stripped.
+            assert callable(signal_filter) and callable(signal_transform)
             calls.append({"file": Path(path).name, "speed": speed, "max_delay_s": max_delay_s})
 
         async def run(self) -> None:

@@ -97,6 +97,14 @@ const beatDecision: Decision = {
 
 export function Brigade() {
   const socketState = useCanopySocket()
+  // Event data comes from the store, not the hook's own arrays: the store
+  // de-duplicates by id (development mode opens the socket twice) and
+  // survives a reload; the hook still owns the connection state.
+  const storeSignals = useEventStore((state) => state.signals)
+  const storeAnomalies = useEventStore((state) => state.anomalies)
+  const storeAttributions = useEventStore((state) => state.attributions)
+  const storeDecisions = useEventStore((state) => state.decisions)
+  const storeUiEvents = useEventStore((state) => state.uiEvents)
   const capture = useCaptureStore((s) => s.enabled)
   const [beatIndex] = useState(1)
   const [isMapAutoFocusEnabled, setIsMapAutoFocusEnabled] = useState(true)
@@ -185,28 +193,28 @@ export function Brigade() {
   // signals, newest first. Outside capture (and before a replay has sent
   // anything) the local scenario playback drives the map and the feed.
   const signals =
-    capture && socketState.signals.length ? socketState.signals : activeScenarioSignals
+    capture && storeSignals.length ? storeSignals : activeScenarioSignals
   const isEngineLive = socketState.isConnected
   const dataModeLabel = isEngineLive ? 'Engine live' : 'Feed'
   // The episode's verdict is the satellite cluster's final revision, not the
   // newest attribution received (INTERFACE-SPEC §5.0).
   const latestAttribution =
-    selectEpisodeAttribution(socketState.attributions, socketState.anomalies) ??
+    selectEpisodeAttribution(storeAttributions, storeAnomalies) ??
     (beatIndex >= 4 ? beatAttribution : null)
   const latestDecision =
-    socketState.decisions[0] ?? (beatIndex >= 5 ? beatDecision : null)
+    storeDecisions[0] ?? (beatIndex >= 5 ? beatDecision : null)
   // The decision the verdict panel explains is the one taken on the latest
   // attribution (newest first, so a gate-republished threat_warning wins
   // over the recovery it replaced), not simply the newest decision.
   const verdictDecision = latestAttribution
-    ? (socketState.decisions.find(
+    ? (storeDecisions.find(
         (decision) => decision.attribution_id === latestAttribution.id,
       ) ??
       (latestDecision?.attribution_id === latestAttribution.id
         ? latestDecision
         : null))
     : null
-  const latestUiEvent = socketState.uiEvents[0] ?? null
+  const latestUiEvent = storeUiEvents[0] ?? null
   const approvalEvent = pendingApproval ?? latestUiEvent
   const hasApprovalRequest =
     Boolean(
@@ -219,7 +227,7 @@ export function Brigade() {
       approvedEventIds instanceof Set &&
       approvedEventIds.has(approvalEvent.id)
     )
-  const missionState = useCanopyMissionState(signals, socketState.uiEvents, {
+  const missionState = useCanopyMissionState(signals, storeUiEvents, {
     enableMapAutoFocus: isMapAutoFocusEnabled,
     mapFocusMinConfidence: 0,
   })
@@ -246,7 +254,10 @@ export function Brigade() {
         <ScenarioRail
           activeScenarioId={activeScenario.id}
           attribution={latestAttribution}
-          decision={latestDecision}
+          // The recommendation panel follows the episode's decision, not the
+          // newest decision overall (a global space-weather cluster publishes
+          // its own threat warning in the natural run).
+          decision={verdictDecision ?? latestDecision}
           latestSignal={signals[0] ?? null}
           onSelectScenario={selectScenario}
           scenarios={scenarios}
@@ -338,7 +349,7 @@ export function Brigade() {
               compact
             />
           </CollapsibleStackSection>
-          <CollapsibleStackSection title="Timeline">
+          <CollapsibleStackSection title="Timeline" defaultOpen={!capture}>
             <ScenarioTimeline
               offsets={playbackTimeline.offsets}
               playback={playbackStatus}

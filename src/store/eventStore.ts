@@ -224,9 +224,13 @@ export const useEventStore = create<EventState>()(
     })),
 
   ingestTrace: (trace) =>
-    set((state) => ({
-      traces: appendBounded(state.traces, trace, TRACE_BUFFER),
-    })),
+    set((state) =>
+      // The same trace can be delivered twice (a reconnect, or React's
+      // development-mode double effect opening two sockets); keep one.
+      state.traces.some((existing) => existing.id === trace.id)
+        ? {}
+        : { traces: appendBounded(state.traces, trace, TRACE_BUFFER) },
+    ),
 
   ingestEmbeddingSnapshot: (snapshot) =>
     set({ embeddingSnapshot: snapshot }),
