@@ -68,6 +68,8 @@ export const signalEffectLabel = (signal: Signal | null) => {
     satcom: 'SATCOM path degraded',
     drone: 'ISR relay change',
     terrain: 'Terrain masking risk',
+    bus_health: 'Spacecraft health change',
+    space_weather: 'Space weather activity',
   }
 
   return byDomain[signal.domain]

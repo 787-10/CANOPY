@@ -69,3 +69,22 @@ sda:
 
 terrain:
 - `terrain_masking_risk`
+
+bus_health (source `internal-diagnosis`; payload schema `payloads/bus_health.schema.json`;
+docs/INTERFACE-SPEC.md §3):
+- `link_margin_drop`
+- `sensor_saturation`
+- `attitude_disturbance`
+- `unexpected_reset`
+- `power_thermal_excursion`
+- `orbit_decay`
+- `safe_mode_entry`
+- `nominal` (baseline; fusion ignores it)
+
+space_weather (source `noaa-swpc` fixture or `noaa-swpc-live`; location label `geospace`,
+no `satellite_id`; payload schema `payloads/space_weather.schema.json`; docs/INTERFACE-SPEC.md §4):
+- `geomagnetic_storm`
+- `solar_radio_burst`
+- `radiation_enhancement`
+- `density_enhancement`
+- `quiet` (baseline; fusion ignores it)

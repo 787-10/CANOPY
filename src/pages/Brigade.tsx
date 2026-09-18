@@ -77,7 +77,7 @@ const beatDecision: Decision = {
   id: 'dec-approve-009',
   ts: nowMinus(0),
   attribution_id: 'att-ghost-lance',
-  action: 'Authorize SATCOM hardening package',
+  action: 'active_defense_escort',
   target: 'SAT-BRAVO / north-axis BLOS relay',
   rationale:
     'Preemptive waveform shift and relay isolation are expected to preserve command links during the predicted denial window.',

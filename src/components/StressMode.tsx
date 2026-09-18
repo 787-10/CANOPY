@@ -1,21 +1,11 @@
 import { useEffect, useState } from 'react'
-import type { Domain } from '../types/canopy'
+import { DOMAINS, type Domain } from '../types/canopy'
 
 const API_URL =
   import.meta.env.VITE_CANOPY_API_URL ?? 'http://localhost:8000'
 
-const ALL_DOMAINS: Domain[] = [
-  'sda',
-  'orbit',
-  'osint',
-  'humint',
-  'rf_ew',
-  'cyber',
-  'pnt',
-  'satcom',
-  'drone',
-  'terrain',
-]
+// Every blockable input domain, in vocabulary order (see types/canopy.ts).
+const ALL_DOMAINS: readonly Domain[] = DOMAINS
 
 const LABELS: Record<Domain, string> = {
   sda: 'SDA',
@@ -28,6 +18,8 @@ const LABELS: Record<Domain, string> = {
   satcom: 'SATCOM',
   drone: 'Drone',
   terrain: 'Terrain',
+  bus_health: 'Bus health',
+  space_weather: 'Space weather',
 }
 
 export function StressMode() {

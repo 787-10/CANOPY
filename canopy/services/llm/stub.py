@@ -452,6 +452,124 @@ _KIND_TO_ATTRIBUTION: dict[str, _AttribTemplate] = {
         predicted_next="Treat as one fused observation; pair with cross-domain cues before naming a single actor.",
         capability_lookups=["attribution_uncertainty"],
     ),
+    # ---- Bus health (internal-diagnosis lane) -----------------------------
+    # docs/INTERFACE-SPEC.md §3 / §5. These kinds describe a symptom on a
+    # monitored spacecraft, not adversary activity, so the actor is "None"
+    # (the actor used for internal_fault and natural_external verdicts).
+    # Evidence names the subsystem and symptom in neutral language; the
+    # verdict itself is set by the rule lane (wave 2A), not by these templates.
+    "bus_link_margin": _AttribTemplate(
+        actor="None",
+        confidence=0.66,
+        evidence=[
+            "Comms subsystem reports a falling downlink link margin; onset, trend shape, and rate are recorded by the internal-diagnosis lane.",
+            "The symptom is consistent with onboard amplifier or antenna degradation; an RF effect on the same satellite inside the look-back window would argue for an external cause.",
+        ],
+        predicted_next="Margin keeps falling at the reported rate until the redundant chain is selected or the trend reverses.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_sensor_saturation": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "A sensor channel reports saturated readings; the affected subsystem and channel are carried in the anomaly payload.",
+            "Saturation is consistent with sun-in-field-of-view geometry or elevated radiation; a directed-energy source would present the same reading.",
+        ],
+        predicted_next="Readings return to range once the geometry or radiation environment clears; persistence beyond that points to hardware.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_attitude_disturbance": _AttribTemplate(
+        actor="None",
+        confidence=0.64,
+        evidence=[
+            "ADCS reports an attitude disturbance outside the expected pointing envelope; onset time and rate are recorded.",
+            "A ramp-shaped disturbance is consistent with reaction-wheel friction or a momentum event; a step would argue for an external impulse.",
+        ],
+        predicted_next="Momentum management absorbs the disturbance if it is internal; a recurring step pattern warrants a co-orbital check.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_unexpected_reset": _AttribTemplate(
+        actor="None",
+        confidence=0.58,
+        evidence=[
+            "Command-and-data-handling reports an unexpected processor reset with no matching ground command.",
+            "Single-event upsets during elevated radiation and unauthorized commanding produce the same symptom; space-weather and cyber context inside the look-back window separate them.",
+        ],
+        predicted_next="A single reset is usually benign; repeated resets on one board indicate a degraded component.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_power_thermal": _AttribTemplate(
+        actor="None",
+        confidence=0.63,
+        evidence=[
+            "Power or thermal subsystem reports an excursion outside its operating band; the trend shape distinguishes a step from a drift.",
+            "Consistent with a degraded solar string, heater fault, or eclipse-season loading; a storm-driven heating event would present the same drift.",
+        ],
+        predicted_next="Load shedding or heater reconfiguration holds the bus inside limits while the trend is characterised.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_orbit_decay": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Orbit determination shows semi-major-axis decay faster than the modelled drag baseline.",
+            "Storm-driven density increases and unintended thrust both raise the decay rate; the space-weather window and propulsion telemetry separate them.",
+        ],
+        predicted_next="Decay rate tracks the density profile if it is environmental; a persistent rate after the window closes points to propulsion.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_safe_mode": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "The spacecraft entered safe mode; the triggering fault-protection rule and subsystem are carried in the anomaly payload.",
+            "Safe-mode entry is a consequence, not a cause; attribution follows the underlying symptom in the same cluster.",
+        ],
+        predicted_next="Recovery from safe mode proceeds once the triggering symptom is understood and cleared.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    # ---- Space weather ----------------------------------------------------
+    # docs/INTERFACE-SPEC.md §4. Global natural events with no actor.
+    "space_weather_storm": _AttribTemplate(
+        actor="None",
+        confidence=0.66,
+        evidence=[
+            "Geomagnetic storm in progress: Kp at or above 5, with the validity window carried in the observables.",
+            "Storm conditions raise drag, charging, and single-event-upset rates on every asset in the affected regime; this is a natural, global event, not attributable activity.",
+        ],
+        predicted_next="Expect storm-sensitive bus symptoms (orbit decay, resets, power or thermal excursions, safe-mode entries) on exposed assets during the validity window.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_radio_burst": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Solar radio burst reported by the space-weather feed; wideband noise rises across communication and navigation bands for the burst duration.",
+            "A radio burst mimics uplink or downlink interference on sunlit passes; it is a natural event and carries no actor.",
+        ],
+        predicted_next="Link-margin and GNSS carrier-to-noise dips coincident with the burst window should be discounted as interference.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_radiation": _AttribTemplate(
+        actor="None",
+        confidence=0.62,
+        evidence=[
+            "Radiation enhancement reported: proton flux at or above S1, with severity scaled from the S-scale.",
+            "Elevated proton flux raises single-event-upset and sensor-noise rates; a natural event with no actor.",
+        ],
+        predicted_next="Expect unexpected resets and sensor saturation on assets in polar or high-altitude regimes during the enhancement.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_density": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Storm-driven upper-atmosphere density increase reported; drag on low-orbit assets rises above baseline.",
+            "Density enhancements produce orbit decay and attitude disturbances without any external actor.",
+        ],
+        predicted_next="Expect faster-than-baseline decay on low-orbit assets; re-plan station-keeping after the window closes.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
 }
 
 _DEFAULT_ATTRIBUTION = _AttribTemplate(
@@ -655,6 +773,153 @@ _KIND_TO_REDTEAM: dict[str, _RedTeamTemplate] = {
         rationale=(
             "Spoofed identity is a probe indicator at best; without RF or "
             "cyber paired evidence the uncertainty floor should hold."
+        ),
+    ),
+    # ---- Bus health (internal-diagnosis lane) -----------------------------
+    # The red team's job on a bus symptom is to name the hostile or natural
+    # look-alike that produces the same reading, so the internal explanation
+    # is not locked before the same-satellite context window is checked.
+    "bus_link_margin": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "An uplink or downlink jammer on the same pass produces the same margin drop; an RF anomaly on this satellite inside the look-back window changes the reading.",
+            "Trend shape alone does not separate slow amplifier ageing from a slowly ramped interference source.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Internal amplifier degradation is the simplest reading, but an "
+            "external RF effect is not ruled out until the RF picture for this "
+            "satellite and window is clear."
+        ),
+    ),
+    "bus_sensor_saturation": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Directed-energy dazzle and sun-in-field-of-view geometry saturate the same detector.",
+            "Saturation during a radiation enhancement is expected and carries no fault.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Saturation is ambiguous between a benign geometry event, a natural "
+            "radiation enhancement, and deliberate dazzle; hold the internal "
+            "reading until the context window is checked."
+        ),
+    ),
+    "bus_attitude_disturbance": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A co-orbital close approach or an unintended thrust event produces a disturbance with the same signature.",
+            "Wheel friction usually ramps; a step-shaped disturbance argues for an external impulse.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "The disturbance shape decides this: a ramp favors a wheel fault, a "
+            "step favors an external impulse. Do not lock the internal reading "
+            "on the symptom alone."
+        ),
+    ),
+    "bus_unexpected_reset": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "An unauthorized command or a malformed uplink can trigger the same watchdog reset.",
+            "Resets during a radiation enhancement are natural and should not be read as a fault.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "A reset with no matching ground command is what both a single-event "
+            "upset and an unauthorized command look like; the cyber and "
+            "space-weather context decide it."
+        ),
+    ),
+    "bus_power_thermal": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A step-shaped excursion is as consistent with a commanded load change as with a hardware fault.",
+            "Storm-driven heating produces a drift that resembles a slow thermal fault.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Power and thermal excursions have benign, natural, and hostile "
+            "explanations with similar shapes; the internal reading should stay "
+            "bounded until the context window is checked."
+        ),
+    ),
+    "bus_orbit_decay": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A storm-driven density increase raises decay rates without any fault.",
+            "Unintended or induced thrust produces the same semi-major-axis change as drag.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "Decay above the drag model is under-determined: a density "
+            "enhancement, a propulsion fault, and induced thrust all fit. The "
+            "space-weather window and propulsion telemetry separate them."
+        ),
+    ),
+    "bus_safe_mode": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Safe mode is a downstream effect; attributing the entry without the triggering symptom over-reads the event.",
+            "Fault protection can be tripped deliberately by a spoofed telemetry frame or a malformed command.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Safe-mode entry says only that fault protection fired. The verdict "
+            "belongs to the triggering symptom in the same cluster, not to the "
+            "entry itself."
+        ),
+    ),
+    # ---- Space weather ----------------------------------------------------
+    "space_weather_storm": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Storm indices are global; a storm does not by itself explain a single-satellite symptom.",
+            "Hostile activity timed to a storm window would be masked by it; the same-satellite RF, cyber, and orbit check still applies.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "A storm is a strong natural prior but not an alibi: keep the "
+            "same-satellite hostile-domain check inside the window before "
+            "crediting every symptom to the environment."
+        ),
+    ),
+    "space_weather_radio_burst": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Radio bursts are short; a symptom that outlasts the burst window is not explained by it.",
+            "Interference on a night-side pass cannot be a solar radio burst.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Credit a radio burst only for symptoms inside its window and on "
+            "sunlit geometry; anything else keeps its original explanation."
+        ),
+    ),
+    "space_weather_radiation": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Radiation enhancements raise upset rates but do not cause every reset; check the reset timing against the flux profile.",
+            "Shielded assets in low-inclination orbits see little of the enhancement.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "The enhancement is a valid natural prior for resets and saturation "
+            "on exposed assets only; it should not be applied to shielded or "
+            "low-inclination assets."
+        ),
+    ),
+    "space_weather_density": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A density enhancement affects every low-orbit object in the regime; a single asset decaying alone points elsewhere.",
+            "Decay rate should track the storm profile; a rate that persists after the window is not drag.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Drag from a density enhancement is fleet-wide and time-bound; a "
+            "lone asset or a persistent rate argues against the natural "
+            "explanation."
         ),
     ),
 }

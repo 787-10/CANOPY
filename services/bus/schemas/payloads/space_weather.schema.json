@@ -1,0 +1,86 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://canopy.local/schemas/payloads/space_weather.schema.json",
+  "title": "Space Weather Payload",
+  "description": "Payload of a space_weather Signal (docs/INTERFACE-SPEC.md §4). Space weather is global: the Signal location is {\"label\": \"geospace\"} and the payload carries no satellite_id.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_type",
+    "summary",
+    "observables"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "geomagnetic_storm",
+        "solar_radio_burst",
+        "radiation_enhancement",
+        "density_enhancement",
+        "quiet"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "beat": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "asset": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "observables": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "kp",
+        "dst_nt",
+        "f107",
+        "severity",
+        "valid_from",
+        "valid_to"
+      ],
+      "properties": {
+        "kp": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 9
+        },
+        "dst_nt": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "f107": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "severity": {
+          "description": "0..1: NOAA G-scale (storm, density) or S-scale (radiation) level divided by 5.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "valid_from": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "valid_to": {
+          "type": "string",
+          "format": "date-time"
+        }
+      }
+    }
+  }
+}

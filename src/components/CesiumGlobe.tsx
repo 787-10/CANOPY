@@ -73,6 +73,8 @@ const markerSvg = (
     | 'cyber'
     | 'satcom'
     | 'terrain'
+    | 'health'
+    | 'weather'
     | 'intel',
   stroke: string,
   fill = 'rgba(2,4,4,0.72)',
@@ -92,8 +94,12 @@ const markerSvg = (
                 ? '<path d="M9 25c5-1 10-5 14-14"/><path d="M13 26c2 2 7 0 12-5"/><path d="M23 11l5-4M23 11l-2-6"/><circle cx="12" cy="24" r="2.3" fill="currentColor" stroke="none"/>'
                 : kind === 'terrain'
                   ? '<path d="M5 25l7-11 5 7 4-5 10 9z"/><path d="M12 14l2 5M21 16l2 6"/>'
-                  : kind === 'intel'
-                    ? '<path d="M9 8h18v20H9z"/><path d="M13 14h10M13 19h10M13 24h6"/>'
+                  : kind === 'health'
+                    ? '<path d="M6 18h6l3-8 5 16 3-8h7"/><circle cx="18" cy="18" r="2.2" fill="currentColor" stroke="none"/>'
+                    : kind === 'weather'
+                      ? '<circle cx="18" cy="18" r="5"/><path d="M18 6v4M18 26v4M6 18h4M26 18h4M9.5 9.5l3 3M23.5 23.5l3 3M26.5 9.5l-3 3M12.5 23.5l-3 3"/>'
+                      : kind === 'intel'
+                        ? '<path d="M9 8h18v20H9z"/><path d="M13 14h10M13 19h10M13 24h6"/>'
         : '<path d="M18 7l11 11-11 11L7 18z"/><path d="M18 12v12M12 18h12"/><circle cx="18" cy="18" r="2.2" fill="currentColor" stroke="none"/>'
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -119,6 +125,8 @@ const markerKindForSignal = (signal: Signal) => {
     configured === 'satcom' ||
     configured === 'drone' ||
     configured === 'terrain' ||
+    configured === 'health' ||
+    configured === 'weather' ||
     configured === 'intel'
   ) {
     return configured
@@ -143,6 +151,12 @@ const markerKindForSignal = (signal: Signal) => {
   }
   if (signal.domain === 'terrain') {
     return 'terrain'
+  }
+  if (signal.domain === 'bus_health') {
+    return 'health'
+  }
+  if (signal.domain === 'space_weather') {
+    return 'weather'
   }
   return 'intel'
 }

@@ -27,6 +27,8 @@ ALLOWED_DOMAINS = {
     "satcom",
     "drone",
     "terrain",
+    "bus_health",
+    "space_weather",
 }
 
 ALLOWED_REALISM = {

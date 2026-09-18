@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from canopy.services.attrib import AttribService
 from canopy.services.bus import InProcessBus
 from canopy.services.decide import DecideService
-from canopy.services.fusion import FusionService
+from canopy.services.fusion import DEFAULT_WINDOWS, FusionService
 from canopy.services.kb import KB
 from canopy.services.llm import LLMClient
 from canopy.services.orbit import OrbitService
@@ -74,6 +74,7 @@ async def main(
     drain_s: float = 4.0,
     attrib_window_s: float = 2.0,
     kb_path: str | Path = DEFAULT_KB_PATH,
+    bus_health_lookback_s: int | None = None,
 ) -> None:
     logging.basicConfig(
         level=log_level,
@@ -90,7 +91,14 @@ async def main(
     orbit = OrbitService()
     log.info("Orbit service loaded with %d cached satellites", len(orbit.known_satellites()))
 
-    fusion = FusionService(bus)
+    fusion_windows = None
+    if bus_health_lookback_s is not None:
+        # Override only the bus_health look-back; its look-ahead and every
+        # other row keep the spec defaults.
+        fusion_windows = {
+            "bus_health": (bus_health_lookback_s, DEFAULT_WINDOWS["bus_health"][1])
+        }
+    fusion = FusionService(bus, windows=fusion_windows)
     attrib = AttribService(bus, llm, kb, window_s=attrib_window_s)
     decide = DecideService(bus, llm, orbit=orbit)
     ui = UIEventService(bus)
@@ -191,6 +199,15 @@ def cli() -> None:
         default=2.0,
         help="Sliding window over anomalies before attribution fires.",
     )
+    parser.add_argument(
+        "--bus-health-lookback-s",
+        type=int,
+        default=None,
+        help=(
+            "How far back (seconds) fusion searches for correlates of a "
+            f"bus_health signal. Default {DEFAULT_WINDOWS['bus_health'][0]}."
+        ),
+    )
     args = parser.parse_args()
 
     provider = _resolve_provider(llm_flag=args.llm, live_flag=args.live)
@@ -209,6 +226,7 @@ def cli() -> None:
                 scenario_max_delay_s=args.scenario_max_delay_s,
                 drain_s=args.drain_s,
                 attrib_window_s=args.attrib_window_s,
+                bus_health_lookback_s=args.bus_health_lookback_s,
             )
         )
     except KeyboardInterrupt:

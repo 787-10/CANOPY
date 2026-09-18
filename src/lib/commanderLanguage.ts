@@ -54,6 +54,16 @@ const domainCopy: Record<
     meaning: 'Terrain may block line-of-sight or relay coverage.',
     commanderQuestion: 'Should the relay geometry change?',
   },
+  bus_health: {
+    label: 'Spacecraft health',
+    meaning: 'Onboard telemetry shows a satellite subsystem degrading or faulting.',
+    commanderQuestion: 'Is this an internal fault or something acting on the satellite?',
+  },
+  space_weather: {
+    label: 'Space weather',
+    meaning: 'Solar or geomagnetic activity may be affecting satellites, links, or GPS.',
+    commanderQuestion: 'Could the environment explain this before assuming attack?',
+  },
 }
 
 const eventTypeOverrides: Record<string, string> = {
@@ -166,6 +176,8 @@ const actionByDomain: Record<Domain, string> = {
   satcom: 'Prepare alternate BLOS path or request space-link support.',
   drone: 'Keep ISR moving through the healthiest relay node.',
   terrain: 'Move relay geometry or raise the drone if needed.',
+  bus_health: 'Route to the space support cell for spacecraft recovery; do not assume attack.',
+  space_weather: 'Treat as environmental context; check GPS, SATCOM, and satellite health against it.',
 }
 
 const sourceAliases: Record<string, string> = {
@@ -376,6 +388,8 @@ const shortActionByDomain: Record<Domain, string> = {
   satcom: 'protect backup path',
   drone: 'preserve ISR relay',
   terrain: 'adjust geometry',
+  bus_health: 'check spacecraft recovery',
+  space_weather: 'weigh environmental cause',
 }
 
 const friendlySourceLabel = (signal: Signal) => {

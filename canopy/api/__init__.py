@@ -19,7 +19,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from typing import Any, get_args
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
@@ -27,7 +27,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from canopy._engine import build_engine, resolve_provider, start_engine_tasks
 from canopy.services.scenario_replay import ScenarioReplayService
-from canopy.services.schemas.events import Signal
+from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
 
 log = logging.getLogger(__name__)
@@ -35,6 +35,11 @@ log = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = ROOT / "scenarios"
 SCENARIO_REGISTRY = load_scenario_registry()
+
+# Domains that POST /stress may block. Derived from the ``Domain`` literal so
+# the gateway cannot drift from the schema vocabulary again (a hand-typed copy
+# here once lagged the literal by two domains).
+_ALLOWED_DOMAINS: frozenset[str] = frozenset(get_args(Domain))
 
 # Topic patterns we forward to clients, paired with the kind tag they get
 # tagged with in the WebSocket envelope.
@@ -214,11 +219,6 @@ def create_app() -> FastAPI:
     async def post_signal(signal: Signal) -> dict[str, Any]:
         await app.state.engine.bus.publish(f"signals.{signal.domain}", signal)
         return {"status": "queued", "id": signal.id}
-
-    _ALLOWED_DOMAINS = {
-        "sda", "orbit", "osint", "humint", "rf_ew", "cyber",
-        "pnt", "satcom", "drone", "terrain",
-    }
 
     @app.get("/stress")
     async def get_stress() -> dict[str, Any]:

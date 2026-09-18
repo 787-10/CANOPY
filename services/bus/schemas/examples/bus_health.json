@@ -1,0 +1,44 @@
+{
+  "id": "sig_bus_health_000001",
+  "ts": "2026-09-17T14:32:12Z",
+  "domain": "bus_health",
+  "source": "internal-diagnosis",
+  "realism": "mock_operational",
+  "confidence": 0.81,
+  "location": {
+    "label": "LEO-SCIENCE-1"
+  },
+  "payload": {
+    "event_type": "link_margin_drop",
+    "summary": "LEO-SCIENCE-1 downlink margin falling 0.42 dB/s since 14:32:10Z; consistent with amplifier degradation.",
+    "asset": "LEO-SCIENCE-1",
+    "satellite_id": "ctb://centralblue.dev/leo-science-1",
+    "observables": {
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "onset_ts": "2026-09-17T14:32:10Z",
+      "onset_clock_domain": "simulation",
+      "sim_time_s": 812.0,
+      "rate_of_change": -0.42,
+      "rate_unit": "dB/s",
+      "physics_consistency": 0.83,
+      "physics_basis": "belief:pa_degradation=0.79;shape=ramp",
+      "shape": "ramp",
+      "recommended_recovery": {
+        "action_id": "switch_redundant_amplifier",
+        "target_subsystem": "comms",
+        "requires_approval": true,
+        "rationale": "Primary amplifier output trending down; redundant unit nominal."
+      },
+      "norad_cat_id": "99901",
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1"
+    }
+  },
+  "provenance": {
+    "source_id": "internal-diagnosis",
+    "collector": "megalith-bus-health-adapter",
+    "method": "rule_fdir+belief",
+    "generated_at": "2026-09-17T14:32:12Z",
+    "notes": "epoch=2026-09-17T14:18:38Z"
+  }
+}

@@ -3231,6 +3231,14 @@
   --domain-color: var(--domain-context);
 }
 
+.event-feed__raw-entry[data-domain='bus_health'] {
+  --domain-color: #f08cb0;
+}
+
+.event-feed__raw-entry[data-domain='space_weather'] {
+  --domain-color: #8fe3b5;
+}
+
 .event-feed__raw-row {
   display: grid;
   grid-template-columns: 74px 108px 150px minmax(0, 1.5fr) 58px minmax(120px, 0.8fr);
@@ -3780,6 +3788,14 @@
 .event-feed__raw-entry[data-domain='humint'],
 .event-feed__raw-entry[data-domain='terrain'] {
   --domain-color: var(--domain-context);
+}
+
+.event-feed__raw-entry[data-domain='bus_health'] {
+  --domain-color: #f08cb0;
+}
+
+.event-feed__raw-entry[data-domain='space_weather'] {
+  --domain-color: #8fe3b5;
 }
 
 .event-feed__raw-row {

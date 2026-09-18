@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -115,8 +116,14 @@ def build_engine(
     temperature: float = 0.0,
     seed: int = 1337,
     llm: LLMClient | None = None,
+    fusion_windows: Mapping[str, tuple[int, int]] | None = None,
 ) -> Engine:
-    """Wire up the in-process bus, KB, LLM, and the four async services."""
+    """Wire up the in-process bus, KB, LLM, and the four async services.
+
+    ``fusion_windows`` overrides entries of the fusion per-domain
+    ``(look-back s, look-ahead s)`` table (``fusion.DEFAULT_WINDOWS``,
+    docs/INTERFACE-SPEC.md §2); entries not given keep their defaults.
+    """
     bus = InProcessBus()
     kb = KB.load_from_json(kb_path)
     log.info("KB loaded: %d entries from %s", len(kb), kb_path)
@@ -139,7 +146,10 @@ def build_engine(
     tracer = Tracer(bus)
     tool_ctx, tools = build_tool_registry(kb=kb, orbit=orbit, tracer=tracer)
     fusion = FusionService(
-        bus, tracer=tracer, blocked_domains=blocked_domains_provider
+        bus,
+        tracer=tracer,
+        blocked_domains=blocked_domains_provider,
+        windows=fusion_windows,
     )
     attrib = AttribService(
         bus,

@@ -1,0 +1,31 @@
+{
+  "id": "sig_space_weather_000001",
+  "ts": "2026-09-17T14:20:00Z",
+  "domain": "space_weather",
+  "source": "noaa-swpc",
+  "realism": "mock_operational",
+  "confidence": 0.9,
+  "location": {
+    "label": "geospace"
+  },
+  "payload": {
+    "event_type": "geomagnetic_storm",
+    "summary": "Geomagnetic storm in progress (G2): Kp 6.33, Dst -112 nT; valid 14:00Z to 20:00Z.",
+    "observables": {
+      "kp": 6.33,
+      "dst_nt": -112,
+      "f107": 158.4,
+      "severity": 0.4,
+      "valid_from": "2026-09-17T14:00:00Z",
+      "valid_to": "2026-09-17T20:00:00Z"
+    }
+  },
+  "provenance": {
+    "source_id": "noaa-swpc",
+    "citation": "https://www.swpc.noaa.gov/products/planetary-k-index",
+    "collector": "megalith-space-weather-adapter",
+    "method": "fixture",
+    "generated_at": "2026-09-17T14:20:00Z",
+    "notes": "fixture=swpc_kp_2026-09-17.json"
+  }
+}

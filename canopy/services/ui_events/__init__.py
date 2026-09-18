@@ -44,6 +44,7 @@ _ACTION_TITLES: dict[Action, str] = {
     "space_link_interdiction_request": "Space-link interdiction requested",
     "sda_tasking": "SDA tasking issued",
     "threat_warning": "Threat warning",
+    "recovery_recommendation": "Recovery recommendation",
 }
 
 _BEAT_RAW_TO_DISPLAY = {"1": "1", "2": "2", "3": "3", "4": "4", "47": "4.7"}
@@ -60,6 +61,11 @@ def _extract_demo_beat(source_signal_ids: list[str]) -> str | None:
 
 
 def _severity_for(decision: Decision, attribution: Attribution | None) -> UISeverity:
+    # A recovery recommendation is a local-authority response to an internal
+    # or natural finding, not a threat escalation: it stays medium even when
+    # the attribution is confident (docs/INTERFACE-SPEC.md §6).
+    if decision.action == "recovery_recommendation":
+        return "medium"
     if decision.authority == "request" or decision.action in _HIGH_SEVERITY_ACTIONS:
         return "high"
     if attribution is not None and attribution.confidence >= _HIGH_SEVERITY_CONFIDENCE:
@@ -69,7 +75,9 @@ def _severity_for(decision: Decision, attribution: Attribution | None) -> UISeve
 
 def _title_for(decision: Decision, attribution: Attribution | None) -> str:
     base = _ACTION_TITLES.get(decision.action, decision.action.replace("_", " ").title())
-    if attribution and attribution.actor not in ("Unknown", "Multi-actor"):
+    # "None" is the actor for internal_fault / natural_external verdicts
+    # (docs/INTERFACE-SPEC.md §5); it is not a name to append to a title.
+    if attribution and attribution.actor not in ("Unknown", "Multi-actor", "None"):
         return f"{base} — {attribution.actor}"
     return base
 

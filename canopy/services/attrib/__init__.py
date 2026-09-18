@@ -43,6 +43,48 @@ _KIND_DOMAINS: dict[str, set[Domain]] = {
     "orbital_collection_risk": {"orbit"},
     "orbital_collection_overlap": {"orbit"},
     "orbital_collection_correlated": {"orbit"},
+    # Drone (protective autonomous actions and tracks).
+    "drone_relay_handoff": {"drone"},
+    "drone_relay_candidate_ready": {"drone"},
+    "drone_relay_mesh_status": {"drone"},
+    "drone_fdir_recovery": {"drone"},
+    "drone_base_defense_posture": {"drone"},
+    "drone_uas_track": {"drone"},
+    # Terrain / HUMINT.
+    "terrain_masking_risk": {"terrain"},
+    "humint_report": {"humint"},
+    # OSINT: correlation outputs, contexts, and the semantic cluster emitted
+    # by the osint_cluster service (which fusion's pattern map never sees).
+    "osint_convergence": {"osint"},
+    "osint_commander_update": {"osint"},
+    "osint_close_approach_assessment": {"osint"},
+    "osint_campaign_assessment": {"osint"},
+    "osint_collection_cue": {"osint"},
+    "osint_multi_domain_attack": {"osint"},
+    "osint_iran_c5isr_assessment": {"osint"},
+    "osint_space_support_hold": {"osint"},
+    "osint_space_base_defense": {"osint"},
+    "osint_collection_risk": {"osint"},
+    "osint_relay_resilience": {"osint"},
+    "osint_fdir_assessment": {"osint"},
+    "osint_blockade_notice": {"osint"},
+    "osint_missile_uas_context": {"osint"},
+    "osint_militia_uas_context": {"osint"},
+    "osint_semantic_cluster": {"osint"},
+    # Bus health: the internal-diagnosis lane (docs/INTERFACE-SPEC.md §3).
+    # Missing or stale bus telemetry is treated as this domain being blocked.
+    "bus_link_margin": {"bus_health"},
+    "bus_sensor_saturation": {"bus_health"},
+    "bus_attitude_disturbance": {"bus_health"},
+    "bus_unexpected_reset": {"bus_health"},
+    "bus_power_thermal": {"bus_health"},
+    "bus_orbit_decay": {"bus_health"},
+    "bus_safe_mode": {"bus_health"},
+    # Space weather (docs/INTERFACE-SPEC.md §4).
+    "space_weather_storm": {"space_weather"},
+    "space_weather_radio_burst": {"space_weather"},
+    "space_weather_radiation": {"space_weather"},
+    "space_weather_density": {"space_weather"},
 }
 
 

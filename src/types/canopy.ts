@@ -1,14 +1,50 @@
-export type Domain =
-  | 'orbit'
-  | 'rf_ew'
-  | 'cyber'
-  | 'osint'
-  | 'humint'
-  | 'sda'
-  | 'pnt'
-  | 'satcom'
-  | 'drone'
-  | 'terrain'
+// Vocabulary mirrored from canopy/services/schemas/events.py. The Python
+// `Literal[...]`s are the source of truth; DOMAINS / ACTIONS repeat their
+// members in the same order and the union types are derived from them, so a
+// member can't exist at runtime without also being part of the type (and
+// vice versa). `canopy.parity.test.ts` checks the arrays against the Python
+// file on disk.
+export const DOMAINS = [
+  'sda',
+  'orbit',
+  'osint',
+  'humint',
+  'rf_ew',
+  'cyber',
+  'pnt',
+  'satcom',
+  'drone',
+  'terrain',
+  'bus_health',
+  'space_weather',
+] as const satisfies readonly string[]
+
+export type Domain = (typeof DOMAINS)[number]
+
+export const ACTIONS = [
+  'passive_defense',
+  'active_defense_escort',
+  'active_defense_counterattack',
+  'orbital_strike_request',
+  'terrestrial_strike_request',
+  'space_link_interdiction_request',
+  'sda_tasking',
+  'threat_warning',
+  'recovery_recommendation',
+] as const satisfies readonly string[]
+
+export type Action = (typeof ACTIONS)[number]
+
+// Three-way verdict on an anomaly cluster (docs/INTERFACE-SPEC.md §5).
+// `VerdictBasis` records whether the deterministic rule lane or the LLM
+// reasoning lane set the final value.
+export type Verdict =
+  | 'internal_fault'
+  | 'natural_external'
+  | 'hostile_external'
+  | 'unknown'
+
+export type VerdictBasis = 'rule' | 'reasoning'
 
 export type Realism =
   | 'real_source'
@@ -36,6 +72,8 @@ export type SignalPayload = {
   summary: string
   beat?: string
   asset?: string
+  /** `ctb://<authority>/<spacecraft-id>` (docs/INTERFACE-SPEC.md §1). */
+  satellite_id?: string | null
   observables?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -84,13 +122,22 @@ export type Attribution = {
   predicted_next: string | null
   kb_citations: string[]
   source_signal_ids: string[]
+  // Three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so pre-existing
+  // fixtures and scenarios stay valid; the engine serializes unset values as
+  // null and `verdict_evidence` as an empty list.
+  verdict?: Verdict | null
+  /** 0..1, copied from the strongest bus anomaly in the cluster. */
+  physics_consistency?: number | null
+  verdict_basis?: VerdictBasis | null
+  verdict_evidence?: string[]
+  satellite_id?: string | null
 }
 
 export type Decision = {
   id: string
   ts: string
   attribution_id: string
-  action: string
+  action: Action
   target: string
   rationale: string
   authority: Authority

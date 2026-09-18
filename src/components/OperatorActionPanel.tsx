@@ -1,6 +1,9 @@
 import { useEventStore, type ManeuverDemo } from '../store/eventStore'
+import type { Action } from '../types/canopy'
 
-const ACTION_LABELS: Record<string, string> = {
+// Exhaustive over the Action vocabulary (types/canopy.ts) so adding an action
+// without a label is a typecheck error, not a title-cased fallback.
+const ACTION_LABELS: Record<Action, string> = {
   active_defense_escort: 'Active defense escort',
   active_defense_counterattack: 'Active defense counterattack',
   orbital_strike_request: 'Orbital strike request',
@@ -9,6 +12,7 @@ const ACTION_LABELS: Record<string, string> = {
   sda_tasking: 'SDA tasking',
   threat_warning: 'Threat warning',
   passive_defense: 'Passive defense',
+  recovery_recommendation: 'Recovery recommendation',
 }
 
 // Map engine action → which Cesium animation runs on Accept. Evasion is
@@ -29,7 +33,7 @@ const actionToDemoType = (action: string): ManeuverDemo['demoType'] => {
 }
 
 const formatAction = (action: string) =>
-  ACTION_LABELS[action] ??
+  (ACTION_LABELS as Record<string, string | undefined>)[action] ??
   action
     .split(/[_\s]+/)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

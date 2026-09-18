@@ -40,6 +40,8 @@ type SignalVisualCategory =
   | 'satcom'
   | 'drone'
   | 'terrain'
+  | 'health'
+  | 'weather'
   | 'intel'
 
 type CoordinateSignal = { point: [number, number]; signal: Signal }
@@ -53,6 +55,8 @@ const categoryColors: Record<SignalVisualCategory, string> = {
   satcom: '#33f2f0',
   drone: '#a9c76a',
   terrain: '#b7a58a',
+  health: '#f08cb0',
+  weather: '#8fe3b5',
   intel: '#f5f7f0',
 }
 
@@ -64,6 +68,8 @@ const categorySymbols: Record<SignalVisualCategory, string> = {
   satcom: '⌐',
   drone: '△',
   terrain: '▰',
+  health: '⌇',
+  weather: '☼',
   intel: '◇',
 }
 
@@ -203,6 +209,29 @@ const createMissionIcon = (category: SignalVisualCategory, color: string) => {
       context.lineTo(22, 13)
       context.lineTo(28, 23)
       context.closePath()
+    })
+  } else if (category === 'health') {
+    // Telemetry pulse trace: flat, spike, flat.
+    strokePath(() => {
+      context.moveTo(8, 17)
+      context.lineTo(13, 17)
+      context.lineTo(15, 11)
+      context.lineTo(19, 23)
+      context.lineTo(21, 17)
+      context.lineTo(28, 17)
+    })
+  } else if (category === 'weather') {
+    // Sun disc with four rays.
+    strokePath(() => {
+      context.arc(18, 16, 4.5, 0, Math.PI * 2)
+      context.moveTo(18, 6)
+      context.lineTo(18, 9)
+      context.moveTo(18, 23)
+      context.lineTo(18, 26)
+      context.moveTo(8, 16)
+      context.lineTo(11, 16)
+      context.moveTo(25, 16)
+      context.lineTo(28, 16)
     })
   } else {
     context.strokeStyle = '#f5f7f0'
@@ -411,6 +440,8 @@ const visualCategoryForSignal = (signal: Signal): SignalVisualCategory => {
     configured === 'satcom' ||
     configured === 'drone' ||
     configured === 'terrain' ||
+    configured === 'health' ||
+    configured === 'weather' ||
     configured === 'intel'
   ) {
     return configured
@@ -436,6 +467,12 @@ const visualCategoryForSignal = (signal: Signal): SignalVisualCategory => {
   }
   if (signal.domain === 'terrain') {
     return 'terrain'
+  }
+  if (signal.domain === 'bus_health') {
+    return 'health'
+  }
+  if (signal.domain === 'space_weather') {
+    return 'weather'
   }
   return 'intel'
 }
