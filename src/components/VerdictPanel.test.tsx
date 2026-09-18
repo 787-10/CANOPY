@@ -1,8 +1,8 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import { VerdictPanel } from './VerdictPanel'
 import { useEventStore } from '../store/eventStore'
-import { makeAttribution, makeDecision, makeKBEntry } from '../test/factories'
+import { makeAttribution, makeKBEntry } from '../test/factories'
 import type { Verdict } from '../types/canopy'
 
 beforeEach(() => {
@@ -30,7 +30,6 @@ const snapshotOf = (container: HTMLElement) => {
       section?.querySelector('[role="meter"]')?.getAttribute('aria-valuenow') ??
       null,
     basis: query('verdict-basis'),
-    satellite: query('verdict-satellite'),
     verdictEvidence: list('verdict-evidence'),
     evidence: list('evidence'),
     headline: section?.querySelector('.verdict-panel__headline')?.textContent ?? null,
@@ -62,7 +61,6 @@ describe('VerdictPanel — one distinct state per verdict', () => {
       physics: '0.83',
       meterNow: '0.83',
       basis: 'Rule lane',
-      satellite: SAT,
       verdictEvidence: [],
       evidence: ['Amplifier output ramp matches degradation model'],
       headline: 'Internal fault on LEO-SCIENCE-1',
@@ -96,7 +94,6 @@ describe('VerdictPanel — one distinct state per verdict', () => {
       physics: '0.41',
       meterNow: '0.41',
       basis: 'Rule lane',
-      satellite: SAT,
       verdictEvidence: [],
       evidence: ['G2 storm window overlaps the decay onset'],
       headline: 'Natural external on LEO-SCIENCE-1',
@@ -125,7 +122,6 @@ describe('VerdictPanel — one distinct state per verdict', () => {
       physics: '0.22',
       meterNow: '0.22',
       basis: 'Reasoning lane',
-      satellite: SAT,
       verdictEvidence: ['rf_anomaly on the same uplink 90 s before onset'],
       evidence: ['Link margin step, not ramp'],
       headline: 'Hostile external: pattern consistent with Ghost Lance cell',
@@ -153,7 +149,6 @@ describe('VerdictPanel — one distinct state per verdict', () => {
       physics: 'not scored',
       meterNow: null,
       basis: 'Rule lane',
-      satellite: 'not identified',
       verdictEvidence: ['high consistency but hostile context in window'],
       evidence: [],
       headline: 'Unknown on the affected spacecraft',
@@ -200,7 +195,6 @@ describe('VerdictPanel — absent verdict and empty states', () => {
       physics: 'not scored',
       meterNow: null,
       basis: 'no lane recorded',
-      satellite: 'not identified',
       verdictEvidence: [],
       evidence: ['RF burst timing matches known pre-jam rehearsal pattern'],
       headline: 'Ghost Lance cell pattern under review',
@@ -245,78 +239,5 @@ describe('VerdictPanel — absent verdict and empty states', () => {
       />,
     )
     expect(screen.getByText('Counter-C2 isolation')).toBeInTheDocument()
-  })
-})
-
-describe('VerdictPanel — decision section', () => {
-  it('shows the recovery block of a recovery_recommendation', () => {
-    render(
-      <VerdictPanel
-        attribution={makeAttribution('att-r', { verdict: 'internal_fault' })}
-        decision={makeDecision('dec-r', {
-          attribution_id: 'att-r',
-          action: 'recovery_recommendation',
-          authority: 'local',
-          rationale: 'Primary amplifier is degrading; the redundant unit is nominal.',
-          recovery: {
-            action_id: 'switch_redundant_amplifier',
-            target_subsystem: 'comms',
-            requires_approval: true,
-            rationale: 'Primary amplifier output trending down; redundant unit nominal.',
-            source: 'internal-diagnosis',
-            satellite_id: SAT,
-          },
-        })}
-      />,
-    )
-    const recovery = within(screen.getByTestId('recovery'))
-    expect(recovery.getByText('Switch redundant amplifier')).toBeInTheDocument()
-    expect(recovery.getByText('switch_redundant_amplifier')).toBeInTheDocument()
-    expect(recovery.getByText('Comms')).toBeInTheDocument()
-    expect(recovery.getByText('Operator approval required')).toBeInTheDocument()
-    expect(recovery.getByText('internal diagnosis')).toBeInTheDocument()
-    expect(
-      recovery.getByText(
-        'Primary amplifier output trending down; redundant unit nominal.',
-      ),
-    ).toBeInTheDocument()
-    expect(screen.queryByTestId('gate-chip')).not.toBeInTheDocument()
-  })
-
-  it('shows a gate-blocked decision with the reason as a chip and the prefix stripped', () => {
-    render(
-      <VerdictPanel
-        attribution={makeAttribution('att-b', { verdict: 'internal_fault' })}
-        decision={makeDecision('dec-b', {
-          attribution_id: 'att-b',
-          action: 'threat_warning',
-          authority: 'local',
-          rationale:
-            '[gate:threat/uplink_jamming_active] Recovery on comms withheld while jamming is active.',
-          recovery: null,
-        })}
-      />,
-    )
-    const chip = screen.getByTestId('gate-chip')
-    expect(chip).toHaveTextContent('Blocked: Active jamming detected')
-    expect(chip).toHaveAttribute('title', 'threat/uplink_jamming_active')
-    expect(
-      screen.getByText('Recovery on comms withheld while jamming is active.'),
-    ).toBeInTheDocument()
-    expect(screen.queryByText(/\[gate:/)).not.toBeInTheDocument()
-  })
-
-  it('renders the request packet of a request-authority decision', () => {
-    render(
-      <VerdictPanel
-        attribution={makeAttribution('att-p')}
-        decision={makeDecision('dec-p', {
-          attribution_id: 'att-p',
-          request_packet: { packet_id: 'REQ-009', ttl_minutes: 6 },
-        })}
-      />,
-    )
-    expect(screen.getByText('REQ-009')).toBeInTheDocument()
-    expect(screen.getByText(/"ttl_minutes": 6/)).toBeInTheDocument()
   })
 })

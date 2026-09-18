@@ -130,11 +130,11 @@ describe('BusHealthCard — F2 fields', () => {
 })
 
 describe('BusHealthCard — zoomed and capture mode', () => {
-  it('zoomed adds the spacecraft id, the summary and the extra basis fields', () => {
+  it('zoomed adds the summary and the extra basis fields, without the spacecraft URI', () => {
     render(<BusHealthCard signal={makeBusHealthSignal('sig-bh-6')} zoomed />)
     const card = screen.getByTestId('bus-health-card')
     expect(card).toHaveClass('bus-health-card--zoomed')
-    expect(card).toHaveTextContent(SIM01)
+    expect(card).not.toHaveTextContent(SIM01)
     expect(card).toHaveTextContent('belief weight 0.60')
     expect(card).toHaveTextContent('rate slope')
     expect(card).toHaveTextContent('consistent with amplifier degradation')

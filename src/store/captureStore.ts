@@ -1,19 +1,16 @@
 // Capture mode (MEGALITH demo plan §6): the console state used for the
-// screenshots and the video. Enabled by `?capture=1` on any route or by the
-// toggle in the top bar; the choice persists in sessionStorage so it
-// survives the Brigade <-> Operator <-> Spacecraft page loads.
+// screenshots and the video. Enabled by `?capture=1` on any route (the demo
+// launcher sets it), left with `?capture=0`; the choice persists in
+// sessionStorage so it survives the page loads between the console, the
+// Spacecraft page, the signal card and the run scorecard.
 //
 // What capture mode does:
 //
-//  1. Hides everything labelled stub, debug, TODO or demo mode, and every
-//     dev-only control. Components check `useCaptureStore` and skip these
-//     elements entirely (not only via CSS), see CAPTURE_HIDES below.
-//  2. Fixes a 1920x1080-safe layout: `[data-capture="1"]` on <html> pins the
-//     Brigade rails to 300 / 380 px, removes the corner clip-paths, turns
-//     off animations and transitions so a frame never catches a fade, and
-//     forces the dark theme (`color-scheme: dark`).
-//  3. Collapses the reasoning-trace pane by default (capture S1 wants it
-//     collapsed; S5 opens it with one click).
+//  1. Fixes a 1920x1080-safe layout: `[data-capture="1"]` on <html> pins the
+//     decision column, removes the corner clip-paths, turns off animations
+//     and transitions so a frame never catches a fade, and forces the dark
+//     theme (`color-scheme: dark`).
+//  2. Hides the two remaining developer footers, see CAPTURE_HIDES.
 import { create } from 'zustand'
 
 export const CAPTURE_QUERY_PARAM = 'capture'
@@ -22,14 +19,6 @@ export const CAPTURE_STORAGE_KEY = 'megalith-capture'
 /** Everything capture mode hides, by component. Kept as data so the test
  *  and the hand-back document the same list. */
 export const CAPTURE_HIDES: ReadonlyArray<{ component: string; hides: string }> = [
-  { component: 'ScenarioRail', hides: 'scenario library list (dev replay buttons)' },
-  { component: 'EventFeed', hides: 'Flow tab (the scripted "LLM decision flow" animation is a placeholder, not engine output)' },
-  { component: 'EventFeed', hides: 'raw JSON envelope under an expanded row' },
-  { component: 'ReasoningPanel', hides: 'reset button (clears engine state)' },
-  { component: 'CesiumGlobe / MapStage', hides: 'imagery-mode debug label ("Loading imagery", "Ion world imagery")' },
-  { component: 'AorMap', hides: 'basemap switch (Imagery / Muted)' },
-  { component: 'StressMode', hides: 'explanatory hint paragraph (the controls stay: F9 needs them)' },
-  { component: 'Top bar', hides: 'nothing: page links stay so the capture session can move between Brigade, Spacecraft and Run; the toggle reads "REC" while on' },
   { component: 'BusHealthCard', hides: 'signal id and provenance footer' },
   { component: 'RunSummary', hides: 'raw trace ids next to each stage timing' },
 ]

@@ -1,5 +1,4 @@
 import { useEffect, useRef } from 'react'
-import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import {
   gateReasonLabel,
@@ -50,38 +49,12 @@ interface Props {
 
 export function ReasoningPanel({ compact = false }: Props) {
   const traces = useEventStore((s) => s.traces)
-  const capture = useCaptureStore((s) => s.enabled)
   const ref = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     const el = ref.current
     if (el) el.scrollTop = el.scrollHeight
   }, [traces.length])
-
-  const clear = () => {
-    // Full session reset — wipes every engine event slice the demo
-    // accumulates (traces, anomalies, decisions, attributions, signals,
-    // ui_events, OSINT embedding snapshot, lookup tables, pending
-    // approval) but preserves KB (fetched once at mount) and live
-    // connection state. Persisted sessionStorage gets updated on the
-    // next setState since the persist middleware writes through.
-    useEventStore.setState({
-      signals: [],
-      anomalies: [],
-      attributions: [],
-      decisions: [],
-      uiEvents: [],
-      traces: [],
-      embeddingSnapshot: null,
-      signalsById: {},
-      attributionsById: {},
-      decisionsById: {},
-      pendingApproval: null,
-      takeoverEvent: null,
-      selectedEventId: null,
-      approvedEventIds: new Set(),
-    })
-  }
 
   return (
     <section
@@ -90,20 +63,7 @@ export function ReasoningPanel({ compact = false }: Props) {
     >
       <div className="panel__header">
         <h2 id="reasoning-title">Reasoning trace</h2>
-        <div className="reasoning-panel__head-actions">
-          <span>{traces.length} lines</span>
-          {capture ? null : (
-            <button
-              type="button"
-              className="reasoning-panel__clear"
-              onClick={clear}
-              title="Reset all engine state — traces, anomalies, decisions, embeddings, action log, approvals"
-              data-capture-hide
-            >
-              reset
-            </button>
-          )}
-        </div>
+        <span>{traces.length} lines</span>
       </div>
       <div className="reasoning-panel__stream" ref={ref}>
         {traces.length === 0 ? (

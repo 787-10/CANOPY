@@ -15,15 +15,10 @@ import { selectEpisodeAttribution } from '../lib/episode'
 
 const API_URL = import.meta.env.VITE_CANOPY_API_URL ?? 'http://localhost:8000'
 
-type RunBundleProbe =
-  | { state: 'probing' }
-  | { state: 'absent'; status: number | null }
-  | { state: 'present'; bundle: Record<string, unknown> }
-
-/** S8: run scorecard. The gateway exposes no run-bundle endpoint today, so
- *  the page probes `GET /runs/latest` once and, when it is absent, renders
- *  the stage timings from the reasoning trace plus the model provider from
- *  `GET /health`. */
+/** S8: run scorecard. Stage timings from the reasoning trace, the verdict
+ *  and decision from the store, the model provider from `GET /health`. The
+ *  bundle written by `make demo-run` (inputs, outputs, commit hashes, model
+ *  digest) lives on disk under docs/demo/runs/<run-id>/. */
 export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) {
   useCanopySocket()
   const capture = useCaptureStore((s) => s.enabled)
@@ -34,7 +29,6 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
   const signals = useEventStore((s) => s.signals)
   const [health, setHealth] = useState<HealthSummary | null>(null)
   const [healthError, setHealthError] = useState<string | null>(null)
-  const [bundle, setBundle] = useState<RunBundleProbe>({ state: 'probing' })
 
   useEffect(() => {
     let cancelled = false
@@ -48,18 +42,6 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
       })
       .catch((cause: unknown) => {
         if (!cancelled) setHealthError(cause instanceof Error ? cause.message : 'unreachable')
-      })
-    fetchImpl(`${API_URL}/runs/latest`)
-      .then(async (response) => {
-        if (!response.ok) {
-          if (!cancelled) setBundle({ state: 'absent', status: response.status })
-          return
-        }
-        const body = (await response.json()) as Record<string, unknown>
-        if (!cancelled) setBundle({ state: 'present', bundle: body })
-      })
-      .catch(() => {
-        if (!cancelled) setBundle({ state: 'absent', status: null })
       })
     return () => {
       cancelled = true
@@ -139,7 +121,7 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             </div>
             <div>
               <dt>Model digest</dt>
-              <dd>not exposed by the gateway; recorded in the run bundle</dd>
+              <dd>recorded in the run bundle on disk</dd>
             </div>
             <div>
               <dt>Console</dt>
@@ -189,31 +171,6 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             cluster's first anomaly arrived and the emitting stage's own duration. Current
             prototype timings; nothing is rounded to a target.
           </p>
-        </section>
-
-        <section className="panel run-panel run-panel--bundle">
-          <div className="panel__header">
-            <h2>Run bundle</h2>
-            <span data-testid="bundle-state">{bundle.state}</span>
-          </div>
-          {bundle.state === 'present' ? (
-            <dl className="run-facts">
-              {Object.entries(bundle.bundle)
-                .filter(([, value]) => typeof value !== 'object' || value === null)
-                .map(([key, value]) => (
-                  <div key={key}>
-                    <dt>{key.replaceAll('_', ' ')}</dt>
-                    <dd>{String(value)}</dd>
-                  </div>
-                ))}
-            </dl>
-          ) : (
-            <p className="run-note" data-testid="bundle-note">
-              {bundle.state === 'probing'
-                ? 'Checking the gateway for a run-bundle endpoint…'
-                : 'The gateway exposes no run-bundle endpoint (GET /runs/latest not found). The bundle written by `make demo-run` lives in docs/demo/runs/<run-id>/ with the submodule commit hashes and the model digest; this page shows what the console itself can read.'}
-            </p>
-          )}
         </section>
       </section>
     </main>

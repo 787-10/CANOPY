@@ -3,7 +3,7 @@ import { render, screen } from '@testing-library/react'
 import { VerdictPanel } from './VerdictPanel'
 import { useEventStore } from '../store/eventStore'
 import { GATE_REASON_CODES, gateReasonLabel } from '../lib/commanderLanguage'
-import { makeAttribution, makeDecision, makeTrace, SIM01 } from '../test/factories'
+import { makeAttribution, makeTrace, SIM01 } from '../test/factories'
 
 beforeEach(() => {
   useEventStore.getState().reset()
@@ -114,48 +114,10 @@ describe('VerdictPanel — F3 provisional badge, revision and timing', () => {
   })
 })
 
-describe('VerdictPanel — F8 withheld-recovery chip', () => {
-  it.each(GATE_REASON_CODES)('renders "Recovery withheld: … : <label>" for %s', (reasonCode) => {
-    render(
-      <VerdictPanel
-        attribution={final('att-w')}
-        decision={makeDecision('dec-w', {
-          attribution_id: 'att-w',
-          action: 'threat_warning',
-          authority: 'local',
-          rationale: 'Hostile uplink interference; defensive response.',
-          withheld_recovery: {
-            action_id: 'reset_transponder_chain',
-            target_subsystem: 'comms',
-            reason_code: reasonCode,
-            source: 'internal-diagnosis',
-          },
-        })}
-      />,
-    )
-    const chip = screen.getByTestId('withheld-chip')
-    expect(chip).toHaveTextContent(
-      `Recovery withheld: Reset transponder chain on Comms: ${gateReasonLabel(reasonCode)}`,
-    )
-    expect(chip).toHaveAttribute('title', reasonCode)
-    expect(chip).toHaveClass('verdict-panel__chip--withheld')
-    // The gate chip is a different thing and must not appear for a withheld block.
-    expect(screen.queryByTestId('gate-chip')).not.toBeInTheDocument()
-  })
-
+describe('gate reason labels', () => {
   it('labels the two verdict reason codes exactly as the spec words them', () => {
     expect(gateReasonLabel('verdict/hostile_external')).toBe('Verdict: hostile external')
     expect(gateReasonLabel('verdict/unknown')).toBe('Verdict: unknown')
     expect(GATE_REASON_CODES).toHaveLength(6)
-  })
-
-  it('renders no chip when the decision withheld nothing', () => {
-    render(
-      <VerdictPanel
-        attribution={final('att-n')}
-        decision={makeDecision('dec-n', { attribution_id: 'att-n', withheld_recovery: null })}
-      />,
-    )
-    expect(screen.queryByTestId('withheld-chip')).not.toBeInTheDocument()
   })
 })

@@ -47,13 +47,13 @@ describe('run summary helpers', () => {
     expect(resolveRoute('/demo', '?run=B&autostart=1')).toEqual({ page: 'demo', run: 'B', autostart: true })
     expect(resolveRoute('/spacecraft', '?sat=SIM-01')).toEqual({ page: 'spacecraft', sat: 'SIM-01' })
     expect(resolveRoute('/signal', '?id=sig-1')).toEqual({ page: 'signal', id: 'sig-1' })
-    expect(resolveRoute('/operator', '')).toEqual({ page: 'operator' })
+    expect(resolveRoute('/operator', '')).toEqual({ page: 'brigade' })
     expect(resolveRoute('/anything', '?capture=1')).toEqual({ page: 'brigade' })
   })
 })
 
 describe('RunSummary page (S8)', () => {
-  it('renders stage timings from the trace and the provider from /health when no bundle endpoint exists', async () => {
+  it('renders stage timings from the trace and the provider from /health', async () => {
     const store = useEventStore.getState()
     store.ingestSignal(makeSignal('megalith-link-margin-b-003'))
     store.ingestAttribution(
@@ -123,26 +123,16 @@ describe('RunSummary page (S8)', () => {
     expect(screen.getByTestId('timing-decide-latency')).toHaveTextContent('5,300 ms')
     expect(screen.getByTestId('timing-fusion-stage')).toHaveTextContent('0 ms')
     expect(screen.getByText(/Recovery withheld: Reset transponder chain on Comms/)).toBeInTheDocument()
-    await waitFor(() => expect(screen.getByTestId('bundle-state')).toHaveTextContent('absent'))
-    expect(screen.getByTestId('bundle-note')).toHaveTextContent(/no run-bundle endpoint/)
-    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/runs\/latest$/))
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/health$/))
   })
 
-  it('prefers the launched run for the scenario id and renders a bundle when the gateway has one', async () => {
+  it('prefers the launched run for the scenario id', async () => {
     sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'A', stem: 'megalith_link_margin_a.jsonl', startedAt: 'x' }))
-    const fetchImpl = vi.fn((url: string) =>
-      Promise.resolve(
-        url.endsWith('/health')
-          ? response(200, { status: 'ok', llm: 'StubLLMClient' })
-          : response(200, { run_id: 'run-a-001', model_digest: 'sha256:abc', nested: { ignored: true } }),
-      ),
-    )
+    const fetchImpl = vi.fn(() => Promise.resolve(response(200, { status: 'ok', llm: 'StubLLMClient' })))
     render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
     expect(screen.getByTestId('run-scenario')).toHaveTextContent('megalith_link_margin_a.jsonl')
-    await waitFor(() => expect(screen.getByTestId('bundle-state')).toHaveTextContent('present'))
-    expect(screen.getByText('run-a-001')).toBeInTheDocument()
-    expect(screen.getByText('sha256:abc')).toBeInTheDocument()
-    expect(screen.queryByText('[object Object]')).not.toBeInTheDocument()
+    expect(screen.queryByText(/run-bundle endpoint/)).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
   })
 

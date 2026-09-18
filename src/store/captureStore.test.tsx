@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen } from '@testing-library/react'
 import {
   CAPTURE_HIDES,
   CAPTURE_STORAGE_KEY,
@@ -62,53 +62,45 @@ describe('capture mode — flag', () => {
 
   it('documents what it hides, one entry per component that checks the store', () => {
     const components = new Set(CAPTURE_HIDES.map((entry) => entry.component))
-    for (const name of ['ScenarioRail', 'EventFeed', 'ReasoningPanel', 'StressMode', 'AorMap', 'BusHealthCard', 'RunSummary']) {
+    for (const name of ['BusHealthCard', 'RunSummary']) {
       expect([...components].some((component) => component.includes(name)), name).toBe(true)
     }
     expect(CAPTURE_HIDES.every((entry) => entry.hides.length > 0)).toBe(true)
   })
 })
 
-describe('capture mode — hidden controls', () => {
-  it('ReasoningPanel drops the reset button', () => {
+describe('capture mode — developer chrome is gone in both modes', () => {
+  it('ReasoningPanel has no reset button', () => {
     useEventStore.getState().ingestTrace(makeTrace('t1'))
     const { unmount } = render(<ReasoningPanel />)
-    expect(screen.getByRole('button', { name: 'reset' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: 'reset' })).not.toBeInTheDocument()
     unmount()
     useCaptureStore.getState().setEnabled(true)
     render(<ReasoningPanel />)
     expect(screen.queryByRole('button', { name: 'reset' })).not.toBeInTheDocument()
   })
 
-  it('EventFeed drops the Flow tab and the raw JSON envelope but keeps the bus-health card', () => {
+  it('EventFeed has no view tabs and opens the bus-health card in place', () => {
     const signal = makeBusHealthSignal('sig-cap')
-    const { unmount } = render(<EventFeed signals={[signal]} />)
-    expect(screen.getByRole('tab', { name: 'Flow' })).toBeInTheDocument()
-    unmount()
-    useCaptureStore.getState().setEnabled(true)
     render(<EventFeed signals={[signal]} />)
-    expect(screen.queryByRole('tab', { name: 'Flow' })).not.toBeInTheDocument()
-    screen.getByRole('button', { name: /link margin drop/i }).click()
-    // Card yes, JSON no.
-    expect(screen.queryByTestId('bus-health-card')).toBeNull()
+    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: /map focus/i })).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /link margin drop/i }))
+    expect(screen.getByRole('link', { name: 'Zoom' })).toHaveAttribute('href', '/signal?id=sig-cap')
   })
 
-  it('StressMode keeps the controls (F9) but drops the hint', () => {
-    const { unmount } = render(<StressMode />)
-    expect(screen.getByText(/Block input domains to simulate degraded ISR/)).toBeInTheDocument()
-    unmount()
-    useCaptureStore.getState().setEnabled(true)
+  it('StressMode keeps the controls (F9) without the hint paragraph', () => {
     render(<StressMode />)
     expect(screen.queryByText(/Block input domains to simulate degraded ISR/)).not.toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Apply' })).toBeInTheDocument()
     expect(screen.getByLabelText('RF / EW')).toBeInTheDocument()
   })
 
-  it('TopBar reads REC while on and its links carry capture=1', () => {
+  it('TopBar has no capture toggle and its links carry capture=1 while on', () => {
     useCaptureStore.getState().setEnabled(true)
-    render(<TopBar title="Brigade COP" current="brigade" />)
-    expect(screen.getByTestId('capture-toggle')).toHaveTextContent('REC')
-    expect(screen.getByTestId('capture-toggle')).toHaveAttribute('aria-pressed', 'true')
+    render(<TopBar title="Console" current="brigade" />)
+    expect(screen.queryByTestId('capture-toggle')).not.toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: 'Operator' })).not.toBeInTheDocument()
     expect(screen.getByRole('link', { name: 'Spacecraft' })).toHaveAttribute(
       'href',
       '/spacecraft?capture=1',
@@ -118,12 +110,12 @@ describe('capture mode — hidden controls', () => {
 
 describe('branding', () => {
   it('the top bar is MEGALITH and CANOPY appears only as the external-awareness subsystem', () => {
-    render(<TopBar title="Brigade COP" current="brigade" />)
+    render(<TopBar title="Console" current="brigade" />)
     expect(screen.getByTestId('brand')).toHaveTextContent('MEGALITH')
     expect(screen.getByTestId('subsystem-external')).toHaveTextContent('External awareness')
     expect(screen.getByTestId('subsystem-external')).toHaveTextContent('CANOPY')
     expect(screen.getByTestId('subsystem-internal')).toHaveTextContent('Internal diagnosis')
-    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Brigade COP')
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Console')
     // No other CANOPY mention outside the subsystem strip.
     const strip = screen.getByRole('list', { name: 'MEGALITH subsystems' })
     const outside = document.body.textContent!.replace(strip.textContent!, '')

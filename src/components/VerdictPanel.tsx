@@ -1,26 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
 import {
-  gateReasonLabel,
   noVerdictCopy,
-  parseGateRationale,
-  recoveryActionLabel,
   spacecraftDisplayName,
-  subsystemLabel,
   verdictBasisCopy,
   verdictCopy,
   verdictHeadline,
 } from '../lib/commanderLanguage'
 import { attributionTimings, formatMs } from '../lib/timing'
 import { useEventStore } from '../store/eventStore'
-import type { Attribution, Decision, Verdict } from '../types/canopy'
+import type { Attribution, Verdict } from '../types/canopy'
 import { KBCitationCard } from './KBCitationCard'
-import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
 type VerdictPanelProps = {
   /** Latest attribution, or null while the engine is still correlating. */
   attribution: Attribution | null
-  /** The decision taken on that attribution, when one has been published. */
-  decision?: Decision | null
   /** Compact layout for the Brigade decision stack. */
   compact?: boolean
 }
@@ -34,18 +27,11 @@ const verdictState = (attribution: Attribution | null): VerdictState =>
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
 
-const formatAction = (action: string) =>
-  action.replaceAll('_', ' ').replace(/^\w/, (c) => c.toUpperCase())
-
 /** Why fault versus attack: the verdict badge, the physics-consistency
- *  meter, which lane set the call, and every string the engine cited. Folds
- *  the former DecisionDetail (decision, request packet, KB citations) and
- *  NarrationPanel (assessment narrative) into one analyst-facing surface. */
-export function VerdictPanel({
-  attribution,
-  decision = null,
-  compact = false,
-}: VerdictPanelProps) {
+ *  meter, which lane set the call, and every string the engine cited. The
+ *  decision taken on the verdict is the OperatorActionPanel's, shown beside
+ *  this panel in the console. */
+export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps) {
   const state = verdictState(attribution)
   const copy = state === 'absent' ? noVerdictCopy : verdictCopy[state]
   const physics =
@@ -57,10 +43,8 @@ export function VerdictPanel({
   const evidence = attribution?.evidence ?? []
   const citations = attribution?.kb_citations ?? []
   const satelliteId = attribution?.satellite_id ?? null
-  const gate = decision ? parseGateRationale(decision.rationale) : null
   const provisional = attribution?.provisional === true
   const revision = attribution?.revision ?? 0
-  const withheld = decision?.withheld_recovery ?? null
 
   return (
     <section
@@ -182,12 +166,6 @@ export function VerdictPanel({
                 <small>{attribution.doctrine_match}</small>
               ) : null}
             </div>
-            <div>
-              <dt>Satellite</dt>
-              <dd data-testid="verdict-satellite">
-                {satelliteId ?? 'not identified'}
-              </dd>
-            </div>
             {attribution.predicted_next ? (
               <div>
                 <dt>Forecast</dt>
@@ -244,76 +222,6 @@ export function VerdictPanel({
         </>
       ) : null}
 
-      {decision ? (
-        <section
-          className={`verdict-panel__section verdict-panel__decision${
-            gate?.reasonCode ? ' verdict-panel__decision--blocked' : ''
-          }`}
-          aria-label="Decision"
-        >
-          <h3>Decision</h3>
-          <p className="verdict-panel__decision-head">
-            <strong>{formatAction(decision.action)}</strong>
-            <span>authority: {decision.authority}</span>
-            {gate?.reasonCode ? (
-              <span
-                className="verdict-panel__chip verdict-panel__chip--blocked"
-                data-testid="gate-chip"
-                title={gate.reasonCode}
-              >
-                Blocked: {gateReasonLabel(gate.reasonCode)}
-              </span>
-            ) : null}
-            {withheld ? (
-              <WithheldRecoveryChip withheld={withheld} variant="verdict-panel" />
-            ) : null}
-          </p>
-          <p className="verdict-panel__rationale">{gate?.text ?? decision.rationale}</p>
-          {decision.target ? (
-            <p className="verdict-panel__target">Target: {decision.target}</p>
-          ) : null}
-          {decision.recovery ? (
-            <dl className="verdict-panel__facts verdict-panel__recovery" data-testid="recovery">
-              <div>
-                <dt>Recovery action</dt>
-                <dd>{recoveryActionLabel(decision.recovery.action_id)}</dd>
-                <small>{decision.recovery.action_id}</small>
-              </div>
-              <div>
-                <dt>Target subsystem</dt>
-                <dd>{subsystemLabel(decision.recovery.target_subsystem)}</dd>
-              </div>
-              <div>
-                <dt>Approval</dt>
-                <dd>
-                  {decision.recovery.requires_approval
-                    ? 'Operator approval required'
-                    : 'No approval required'}
-                </dd>
-              </div>
-              <div>
-                <dt>Source</dt>
-                <dd>internal diagnosis</dd>
-              </div>
-              <div className="verdict-panel__facts-wide">
-                <dt>Recovery rationale</dt>
-                <dd>{decision.recovery.rationale}</dd>
-              </div>
-            </dl>
-          ) : null}
-          {decision.request_packet ? (
-            <details className="details-panel details-panel--nested">
-              <summary>
-                <span>Request packet</span>
-                <span>{String(decision.request_packet.packet_id ?? decision.id)}</span>
-              </summary>
-              <pre className="verdict-panel__packet">
-                {JSON.stringify(decision.request_packet, null, 2)}
-              </pre>
-            </details>
-          ) : null}
-        </section>
-      ) : null}
     </section>
   )
 }

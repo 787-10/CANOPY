@@ -104,12 +104,6 @@ export function BusHealthCard({
           <dd data-testid="bus-health-rate">{record.rateLabel ?? 'no window'}</dd>
           {record.shape ? <small>shape: {record.shape}</small> : null}
         </div>
-        {zoomed ? (
-          <div className="bus-health-card__facts-wide">
-            <dt>Spacecraft id</dt>
-            <dd>{record.satelliteId ?? 'not identified'}</dd>
-          </div>
-        ) : null}
       </dl>
 
       <PhysicsMeter record={record} />

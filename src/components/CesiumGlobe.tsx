@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import type { CSSProperties } from 'react'
 import {
   ArcGisMapServerImageryProvider,
   ArcType,
@@ -32,7 +31,6 @@ import {
   clearN2YOSatelliteLayers,
   currentN2YODisplayPoint,
   deselectN2YOSatellite,
-  FAMILY_COLOR_HEX,
   FAMILY_SHORT_LABEL,
   getN2YOOrbitMotion,
   isN2YOGeostationaryFamily,
@@ -57,7 +55,6 @@ import {
   groundStationsFromSignals,
   mergeGroundStations,
 } from '../lib/groundStations'
-import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import type { Signal } from '../types/canopy'
 
@@ -211,14 +208,6 @@ const isFamilyVisible = (
   selection: SatelliteFamilySelection,
   family: N2YOSatelliteFamily,
 ) => selection === 'all' || selection.includes(family)
-
-const isFamilyControlActive = (
-  selection: SatelliteFamilySelection,
-  familyFilter: SatelliteFamilyFilter,
-) =>
-  familyFilter === 'all'
-    ? selection === 'all'
-    : selection !== 'all' && selection.includes(familyFilter)
 
 const localAorBounds = {
   west: -116.61,
@@ -400,12 +389,11 @@ export function CesiumGlobe({
   const signalEntityIdsRef = useRef<Set<string>>(new Set())
   const stationEntityIdsRef = useRef<Set<string>>(new Set())
   const n2yoLayersRef = useRef<N2YOLayerState[]>([])
-  const capture = useCaptureStore((s) => s.enabled)
   const loadedN2yoSatelliteIdsRef = useRef<Set<number>>(new Set())
   const selectedN2yoLayerRef = useRef<N2YOLayerState | null>(null)
-  const [activeLayer, setActiveLayer] = useState('baseline')
-  const [imageryMode, setImageryMode] = useState('Loading imagery')
-  const [realSatelliteStatus, setRealSatelliteStatus] = useState('Satellites')
+  const [, setActiveLayer] = useState('baseline')
+  const [, setImageryMode] = useState('Loading imagery')
+  const [, setRealSatelliteStatus] = useState('Satellites')
   const [satelliteFamilySelection, setSatelliteFamilySelection] =
     useState<SatelliteFamilySelection>([])
   const [selectedSatellite, setSelectedSatellite] = useState<N2YOLayerState | null>(null)
@@ -413,7 +401,7 @@ export function CesiumGlobe({
     useState<N2YODisplayPoint | null>(null)
   const [showAllOrbits, setShowAllOrbits] = useState(false)
   const [n2yoLayerCount, setN2yoLayerCount] = useState(0)
-  const [orbitCapableLayerCount, setOrbitCapableLayerCount] = useState(0)
+  const [, setOrbitCapableLayerCount] = useState(0)
   const showAllOrbitsRef = useRef(false)
   const satelliteFamilySelectionRef = useRef<SatelliteFamilySelection>([])
   const maneuverDemo = useEventStore((s) => s.maneuverDemo)
@@ -711,7 +699,18 @@ export function CesiumGlobe({
       const polygon = signalPolygon(signal)
       const isFocus = signal.id === focusSignalId
       const isCorrelated = correlatedIds.has(signal.id)
-      const shouldLabel = isFocus && signals.length <= 8
+      // The RF interference report (the emitter estimate) is always
+      // labelled: capture S1 needs it to read as such next to the station
+      // and the spacecraft, not as an anonymous mark. The other RF-domain
+      // report of a run (frame loss at the station) sits on the station and
+      // keeps the station's label.
+      const isRf = signal.domain === 'rf_ew' && signal.payload.event_type === 'rf_interference'
+      const bearing = signal.payload.observables?.bearing_deg
+      const rfLabel =
+        typeof bearing === 'number'
+          ? `RF interference\nemitter estimate, bearing ${Math.round(bearing)}°`
+          : 'RF interference\nemitter estimate'
+      const shouldLabel = isRf || (isFocus && signals.length <= 8)
       const markerKind = markerKindForSignal(signal)
 
       if (point) {
@@ -721,10 +720,10 @@ export function CesiumGlobe({
           position: Cartesian3.fromDegrees(point.lon, point.lat, point.height),
           billboard: {
             color: Color.WHITE,
-            height: isFocus ? 30 : isCorrelated ? 27 : 24,
+            height: isFocus || isRf ? 30 : isCorrelated ? 27 : 24,
             image: markerSvg(markerKind, markerColorHex(color)),
             scaleByDistance: new NearFarScalar(1500000, 1.0, 25000000, 0.36),
-            width: isFocus ? 30 : isCorrelated ? 27 : 24,
+            width: isFocus || isRf ? 30 : isCorrelated ? 27 : 24,
           },
           label: {
             backgroundColor: MAP_PANEL.withAlpha(0.84),
@@ -735,7 +734,7 @@ export function CesiumGlobe({
             show: shouldLabel,
             showBackground: true,
             style: LabelStyle.FILL,
-            text: 'FOCUS',
+            text: isRf ? rfLabel : 'FOCUS',
           },
           description: commanderSignalSummary(signal).oneLine,
         })
@@ -1048,11 +1047,10 @@ export function CesiumGlobe({
     if (!viewer || viewer.isDestroyed()) {
       return
     }
-    const selection = satelliteFamilySelectionRef.current
-    const next: SatelliteFamilySelection =
-      selection === 'all' ? 'all' : selection.includes('SIM') ? selection : [...selection, 'SIM']
+    // The console shows the synthetic spacecraft only (demo plan section 6:
+    // no real catalog objects); the family selection is fixed to SIM.
+    const next: SatelliteFamilySelection = ['SIM']
     satelliteFamilySelectionRef.current = next
-    setSatelliteFamilySelection(next)
     void ensureN2YOSatellitesLoaded(next).then(() => {
       if (viewer.isDestroyed()) return
       // Signals name the station in the hostile run; the natural and internal
@@ -1070,80 +1068,8 @@ export function CesiumGlobe({
         : RESET_CAMERA_DESTINATION
       viewer.camera.flyTo({ destination: anchor, duration: 0.9 })
     })
-    // Loads once per stream that carries a synthetic spacecraft; the family
-    // filter buttons stay in control afterwards.
+    // Loads once per stream that carries a synthetic spacecraft.
   }, [displayMode, syntheticInStream, ensureN2YOSatellitesLoaded, signals])
-
-  const applySatelliteFamilyFilter = (familyFilter: SatelliteFamilyFilter) => {
-    const viewer = viewerRef.current
-    if (!viewer || viewer.isDestroyed()) {
-      return
-    }
-
-    const nextSelection: SatelliteFamilySelection =
-      familyFilter === 'all'
-        ? 'all'
-        : satelliteFamilySelectionRef.current === 'all'
-          ? [familyFilter]
-          : satelliteFamilySelectionRef.current.includes(familyFilter)
-            ? satelliteFamilySelectionRef.current.filter(
-                (family) => family !== familyFilter,
-              )
-            : [...satelliteFamilySelectionRef.current, familyFilter]
-
-    satelliteFamilySelectionRef.current = nextSelection
-    setSatelliteFamilySelection(nextSelection)
-    void ensureN2YOSatellitesLoaded(nextSelection)
-  }
-
-  const loadRealSatellites = () => {
-    const viewer = viewerRef.current
-    if (!viewer || viewer.isDestroyed()) {
-      return
-    }
-
-    viewer.dataSources.removeAll()
-    if (selectedN2yoLayerRef.current) {
-      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-    }
-    selectedN2yoLayerRef.current = null
-    setSelectedSatellite(null)
-    setN2YOOrbitsVisible(viewer, n2yoLayersRef.current, false)
-    showAllOrbitsRef.current = false
-    setShowAllOrbits(false)
-    viewer.clock.shouldAnimate = true
-    setActiveLayer('real-satellite')
-    syncN2YOLayerVisibility(viewer, satelliteFamilySelectionRef.current)
-    viewer.camera.flyTo({
-      destination: RESET_CAMERA_DESTINATION,
-      duration: 0.8,
-    })
-  }
-
-  const toggleAllOrbits = () => {
-    const viewer = viewerRef.current
-    if (!viewer || viewer.isDestroyed()) {
-      return
-    }
-    if (activeLayer !== 'real-satellite' || n2yoLayersRef.current.length === 0) {
-      showAllOrbitsRef.current = false
-      setShowAllOrbits(false)
-      return
-    }
-
-    setShowAllOrbits((current) => {
-      const next = !current
-      if (next && selectedN2yoLayerRef.current) {
-        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-        selectedN2yoLayerRef.current = null
-        setSelectedSatellite(null)
-      }
-      setN2YOOrbitsVisible(viewer, visibleOrbitCapableLayers(), next)
-      showAllOrbitsRef.current = next
-      viewer.scene.requestRender()
-      return next
-    })
-  }
 
   useEffect(() => {
     if (displayMode === 'globe') {
@@ -1856,80 +1782,6 @@ export function CesiumGlobe({
   return (
     <>
       <div className="cesium-globe" ref={containerRef} />
-      <div className="cesium-scenario-controls" aria-label="Map layers">
-        <button
-          className={activeLayer === 'local-aor' ? 'is-active' : ''}
-          onClick={loadVehicle}
-          type="button"
-        >
-          Local AOR
-        </button>
-        <button
-          className={activeLayer === 'real-satellite' ? 'is-active' : ''}
-          onClick={loadRealSatellites}
-          type="button"
-        >
-          {realSatelliteStatus}
-        </button>
-        <button onClick={resetDynamicSources} type="button">
-          Reset
-        </button>
-      </div>
-      {activeLayer === 'real-satellite' ? (
-        <>
-          <div className="satellite-family-controls" aria-label="Satellite families">
-            {(capture
-              ? SATELLITE_FAMILY_FILTERS.filter((familyFilter) => familyFilter === 'SIM')
-              : SATELLITE_FAMILY_FILTERS
-            ).map((familyFilter) => (
-              <button
-                className={
-                  isFamilyControlActive(satelliteFamilySelection, familyFilter)
-                    ? 'is-active'
-                    : ''
-                }
-                disabled={realSatelliteStatus === 'Loading sats'}
-                key={familyFilter}
-                onClick={() => applySatelliteFamilyFilter(familyFilter)}
-                style={
-                  familyFilter === 'all'
-                    ? undefined
-                    : ({
-                        '--satellite-family-color':
-                          FAMILY_COLOR_HEX[familyFilter],
-                      } as CSSProperties)
-                }
-                type="button"
-                title={
-                  familyFilter === 'all'
-                    ? 'Show every satellite family'
-                    : `${familyFilter}: ${FAMILY_SHORT_LABEL[familyFilter]}`
-                }
-              >
-                <span aria-hidden="true" className="satellite-family-controls__swatch" />
-                <span className="satellite-family-controls__label">
-                  {familyFilter === 'all' ? 'All' : familyFilter}
-                </span>
-                {familyFilter !== 'all' ? (
-                  <span className="satellite-family-controls__sub">
-                    {FAMILY_SHORT_LABEL[familyFilter]}
-                  </span>
-                ) : null}
-              </button>
-            ))}
-          </div>
-          <button
-            aria-pressed={showAllOrbits}
-            className={showAllOrbits ? 'orbit-toggle orbit-toggle--active' : 'orbit-toggle'}
-            disabled={orbitCapableLayerCount === 0}
-            onClick={toggleAllOrbits}
-            type="button"
-          >
-            <span className="orbit-toggle__box" aria-hidden="true" />
-            <span>Orbits</span>
-          </button>
-        </>
-      ) : null}
       {selectedSatellite ? (
         <aside className="satellite-detail" aria-label="Selected satellite">
           <span>Selected Satellite</span>
@@ -2070,11 +1922,6 @@ export function CesiumGlobe({
           </div>
         </aside>
       ) : null}
-      {capture ? null : (
-        <div className="map-stage__mode" data-capture-hide>
-          {imageryMode}
-        </div>
-      )}
       <div className="cesium-credits" ref={creditRef} />
     </>
   )

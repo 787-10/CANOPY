@@ -1,11 +1,11 @@
-import { useEventStore, type ManeuverDemo } from '../store/eventStore'
+import { useEventStore } from '../store/eventStore'
 import {
   gateReasonLabel,
   parseGateRationale,
   recoveryActionLabel,
   subsystemLabel,
 } from '../lib/commanderLanguage'
-import type { Action } from '../types/canopy'
+import type { Action, Decision } from '../types/canopy'
 import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
 // Exhaustive over the Action vocabulary (types/canopy.ts) so adding an action
@@ -22,25 +22,6 @@ const ACTION_LABELS: Record<Action, string> = {
   recovery_recommendation: 'Recovery recommendation',
 }
 
-// Map engine action → which Cesium animation runs on Accept. Evasion is
-// the default since it's the broadest visualisation (shared-orbit threat
-// + plane change) and reads correctly even for actions without a more
-// specific story (threat_warning, passive_defense, sda_tasking). A
-// recovery_recommendation never reaches this: it is an onboard action
-// on the friendly bus, so Accept skips the orbital demo entirely.
-const actionToDemoType = (action: string): ManeuverDemo['demoType'] => {
-  if (
-    action === 'orbital_strike_request' ||
-    action === 'active_defense_counterattack'
-  ) {
-    return 'strike'
-  }
-  if (action === 'space_link_interdiction_request') {
-    return 'interdiction'
-  }
-  return 'evasion'
-}
-
 const formatAction = (action: string) =>
   (ACTION_LABELS as Record<string, string | undefined>)[action] ??
   action
@@ -48,12 +29,22 @@ const formatAction = (action: string) =>
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ')
 
-/** Operator-facing review surface for the latest decide-stage output.
- *  Lives in the left rail under the scenario list. When the engine
- *  produces a Decision, the operator can ACCEPT (authorize the action)
- *  or DENY (refuse it). Status persists per-decision via Zustand. */
-export function OperatorActionPanel() {
-  const decision = useEventStore((s) => s.decisions[0] ?? null)
+type OperatorActionPanelProps = {
+  /** The decision to review. The console passes the episode's decision
+   *  (the one taken on the satellite cluster's verdict); left out, the
+   *  newest decision in the store is shown. */
+  decision?: Decision | null
+}
+
+/** Operator-facing review surface for the decide-stage output: the action,
+ *  its authority and target, the recovery block or the withheld recovery,
+ *  and ACCEPT (authorize) / DENY (refuse). Status persists per decision in
+ *  the store. Accepting records the decision and nothing else: a recovery
+ *  runs on the friendly bus and a defensive response is routed to the
+ *  authority named, neither is animated. */
+export function OperatorActionPanel({ decision: episodeDecision }: OperatorActionPanelProps = {}) {
+  const newestDecision = useEventStore((s) => s.decisions[0] ?? null)
+  const decision = episodeDecision === undefined ? newestDecision : episodeDecision
   const accepted = useEventStore((s) =>
     decision ? s.acceptedDecisionIds.has(decision.id) : false,
   )
@@ -63,7 +54,6 @@ export function OperatorActionPanel() {
   const acceptDecision = useEventStore((s) => s.acceptDecision)
   const deferDecision = useEventStore((s) => s.deferDecision)
   const clearDecisionStatus = useEventStore((s) => s.clearDecisionStatus)
-  const startManeuverDemo = useEventStore((s) => s.startManeuverDemo)
 
   // Render nothing until the engine produces a decision. The empty
   // space stays empty rather than carrying placeholder chrome — the
@@ -91,31 +81,7 @@ export function OperatorActionPanel() {
         ? 'Recovery withheld'
         : 'Engine recommendation'
 
-  const accept = () => {
-    acceptDecision(decision.id)
-    if (isRecovery) {
-      // A recovery is executed on the friendly bus (switch a redundant
-      // unit, enter safe mode, ...). There is no orbital manoeuvre to
-      // show, so the accept is recorded in the store and nothing else.
-      return
-    }
-    const packet = (decision.request_packet ?? {}) as Record<string, unknown>
-    const burn = (packet.recommended_burn ?? {}) as Record<string, unknown>
-    const preMissKm = Number(packet.pre_miss_km ?? 0)
-    const postMissKm = Number(packet.post_miss_km ?? preMissKm + 80)
-    const dvMs = Number(burn.dv_m_s ?? 1.5)
-    startManeuverDemo({
-      decisionId: decision.id,
-      startedAt: Date.now(),
-      durationMs: 15000,
-      preMissKm,
-      postMissKm,
-      dvMs,
-      friendlyLabel: typeof burn.sat === 'string' ? burn.sat : undefined,
-      hostileLabel: typeof burn.against === 'string' ? burn.against : undefined,
-      demoType: actionToDemoType(decision.action),
-    })
-  }
+  const accept = () => acceptDecision(decision.id)
 
   return (
     <section

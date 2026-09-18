@@ -201,5 +201,7 @@ export function stageTimings(
 export function formatMs(value: number | null): string {
   if (value === null) return 'n/a'
   if (value >= 10_000) return `${(value / 1000).toFixed(1)} s`
+  // The fast lane publishes in a fraction of a millisecond; keep that visible.
+  if (value > 0 && value < 10) return `${value.toFixed(1)} ms`
   return `${Math.round(value).toLocaleString('en-US')} ms`
 }

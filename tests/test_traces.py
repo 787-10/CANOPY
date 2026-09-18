@@ -183,3 +183,16 @@ def test_marks_are_bounded_oldest_first():
         tracer.mark(key)
     assert tracer.t0_for("a") is None
     assert tracer.t0_for("d") is not None
+
+
+
+def test_clear_marks_forgets_first_wins_arrivals() -> None:
+    """A retake of the same scenario re-uses anomaly ids; reset must drop the marks."""
+    tracer = Tracer(InProcessBus())
+    first = tracer.mark("anom-1", 100.0)
+    assert tracer.mark("anom-1", 200.0) == first  # first wins
+    assert tracer.t0_for("anom-1") == 100.0
+    assert tracer.clear_marks() == {"marks": 1}
+    assert tracer.t0_for("anom-1") is None
+    assert tracer.mark("anom-1", 300.0) == 300.0
+    assert tracer.clear_marks() == {"marks": 1}

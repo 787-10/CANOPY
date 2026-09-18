@@ -2,11 +2,10 @@ import type { ReactNode } from 'react'
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 
-export type ConsolePage = 'brigade' | 'operator' | 'spacecraft' | 'run' | 'signal' | 'demo'
+export type ConsolePage = 'brigade' | 'spacecraft' | 'run' | 'signal' | 'demo'
 
 const PAGES: Array<{ page: ConsolePage; label: string; href: string }> = [
-  { page: 'brigade', label: 'Brigade', href: '/brigade' },
-  { page: 'operator', label: 'Operator', href: '/operator' },
+  { page: 'brigade', label: 'Console', href: '/brigade' },
   { page: 'spacecraft', label: 'Spacecraft', href: '/spacecraft' },
   { page: 'run', label: 'Run', href: '/runs' },
 ]
@@ -23,10 +22,11 @@ type TopBarProps = {
 
 /** The MEGALITH top bar. The console is MEGALITH; CANOPY appears only as
  *  the external-awareness subsystem in the strip, next to the internal
- *  diagnosis module and the verdict lane. */
+ *  diagnosis module and the verdict lane. Capture mode (the fixed 1920x1080
+ *  layout for screenshots) is set by the demo launcher or `?capture=1` and
+ *  left with `?capture=0`; page links carry the flag along. */
 export function TopBar({ title, current, right, subsystems = true }: TopBarProps) {
   const capture = useCaptureStore((s) => s.enabled)
-  const toggleCapture = useCaptureStore((s) => s.toggle)
 
   return (
     <header className="app-header app-header--megalith" data-page={current}>
@@ -52,20 +52,6 @@ export function TopBar({ title, current, right, subsystems = true }: TopBarProps
             ),
           )}
         </nav>
-        <button
-          type="button"
-          className={`capture-toggle${capture ? ' capture-toggle--on' : ''}`}
-          onClick={toggleCapture}
-          aria-pressed={capture}
-          title={
-            capture
-              ? 'Capture mode on: dev controls hidden, 1920x1080 layout. Click to leave.'
-              : 'Capture mode: hide dev controls and fix the 1920x1080 layout'
-          }
-          data-testid="capture-toggle"
-        >
-          {capture ? '● REC' : 'Capture'}
-        </button>
       </div>
     </header>
   )

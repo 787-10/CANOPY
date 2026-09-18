@@ -90,6 +90,18 @@ class Tracer:
             self._marks.popitem(last=False)
         return value
 
+    def clear_marks(self) -> dict[str, int]:
+        """Forget every arrival mark; returns how many were dropped.
+
+        Part of the engine reset: anomaly ids are deterministic per scenario,
+        so a replay of the same run would otherwise inherit the previous
+        take's first-wins marks and report its provisional verdict minutes
+        late.
+        """
+        count = len(self._marks)
+        self._marks.clear()
+        return {"marks": count}
+
     def t0_for(self, *keys: str | None) -> float | None:
         """The earliest recorded arrival among ``keys``, or ``None``."""
         found = [self._marks[k] for k in keys if k is not None and k in self._marks]

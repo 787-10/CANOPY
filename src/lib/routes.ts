@@ -2,16 +2,14 @@
 // switches on this.
 export type Route =
   | { page: 'brigade' }
-  | { page: 'operator' }
   | { page: 'spacecraft'; sat: string | null }
   | { page: 'signal'; id: string | null }
   | { page: 'demo'; run: string | null; autostart: boolean }
   | { page: 'run' }
 
-/** Unknown paths fall back to the Brigade view. */
+/** Unknown paths (the retired /operator among them) fall back to the console. */
 export function resolveRoute(pathname: string, search: string): Route {
   const params = new URLSearchParams(search)
-  if (pathname.startsWith('/operator')) return { page: 'operator' }
   if (pathname.startsWith('/spacecraft')) {
     return { page: 'spacecraft', sat: params.get('sat') }
   }

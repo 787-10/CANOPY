@@ -112,6 +112,8 @@ describe('stageTimings', () => {
     expect(rows.find((row) => row.stage === 'fusion')?.note).toMatch(/no anomaly trace/)
     expect(formatMs(null)).toBe('n/a')
     expect(formatMs(38.2)).toBe('38 ms')
+    expect(formatMs(0.1)).toBe('0.1 ms')
+    expect(formatMs(0)).toBe('0 ms')
     expect(formatMs(4480.7)).toBe('4,481 ms')
     expect(formatMs(12_500)).toBe('12.5 s')
   })

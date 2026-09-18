@@ -187,6 +187,10 @@ async def reset_engine(engine: Engine) -> dict[str, dict[str, int]]:
     cleared["fusion"] = engine.fusion.reset()
     cleared["decide"] = engine.decide.reset()
     cleared["ui_events"] = engine.ui_events.reset()
+    # The shared tracer's first-wins arrival marks are keyed by anomaly id,
+    # which repeats between replays of one scenario: without this a retake
+    # measures latency_ms from the previous take.
+    cleared["tracer"] = engine.tracer.clear_marks()
     await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
     return cleared
 

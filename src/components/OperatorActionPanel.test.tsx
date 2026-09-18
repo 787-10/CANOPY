@@ -109,26 +109,25 @@ describe('OperatorActionPanel — recovery recommendations', () => {
     expect(screen.getByText('Accepted')).toBeInTheDocument()
   })
 
-  it('Accept on a counterspace action still starts the maneuver demo (regression guard)', () => {
+  it('Accept on a counterspace action records it and starts no animation', () => {
     const decision = makeDecision('d-escort', {
       action: 'active_defense_escort',
-      request_packet: {
-        pre_miss_km: 12,
-        post_miss_km: 90,
-        recommended_burn: { dv_m_s: 2.5, sat: 'SAT-BRAVO', against: 'OBJ-7' },
-      },
+      request_packet: { pre_miss_km: 12, post_miss_km: 90 },
     })
     useEventStore.getState().ingestDecision(decision)
     render(<OperatorActionPanel />)
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
-    const demo = useEventStore.getState().maneuverDemo
-    expect(demo?.decisionId).toBe('d-escort')
-    expect(demo?.demoType).toBe('evasion')
-    expect(demo?.preMissKm).toBe(12)
-    expect(demo?.postMissKm).toBe(90)
-    expect(demo?.dvMs).toBe(2.5)
-    expect(demo?.friendlyLabel).toBe('SAT-BRAVO')
-    expect(demo?.hostileLabel).toBe('OBJ-7')
+    expect(useEventStore.getState().acceptedDecisionIds.has('d-escort')).toBe(true)
+    expect(useEventStore.getState().maneuverDemo).toBeNull()
+  })
+
+  it('shows the decision it is given rather than the newest in the store', () => {
+    const newest = makeDecision('d-newest', { action: 'threat_warning', authority: 'local' })
+    const episode = makeDecision('d-episode', { action: 'passive_defense', authority: 'local' })
+    useEventStore.getState().ingestDecision(episode)
+    useEventStore.getState().ingestDecision(newest)
+    render(<OperatorActionPanel decision={episode} />)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Passive defense')
   })
 
   it('Deny on a recovery records the denial without touching the demo', () => {
