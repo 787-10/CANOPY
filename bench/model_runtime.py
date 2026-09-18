@@ -5,9 +5,10 @@ import os
 import subprocess
 from hashlib import sha256
 from pathlib import Path
+from collections.abc import Sequence
 from typing import Any
 
-from bench.specs import ModelSpec
+from bench.specs import ModelSpec, ScenarioSpec
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -16,8 +17,15 @@ def _file_hash(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
 
-def benchmark_provenance() -> dict[str, Any]:
-    """Hash every static input that changes benchmark interpretation."""
+def benchmark_provenance(cases: Sequence[ScenarioSpec] | None = None) -> dict[str, Any]:
+    """Hash every static input that changes benchmark interpretation.
+
+    ``cases`` are the scenarios the suite actually runs; by default the public
+    benchmark cases (``ScenarioRegistry.benchmark_cases()``). Held-out cases
+    (``visibility: ["heldout"]``) are hashed only when a suite passes them
+    explicitly, so adding held-out scenarios does not change the public
+    suite hash.
+    """
     from canopy.services.attrib.prompts import (
         attribution_system_prompt,
         reconcile_system_prompt,
@@ -34,9 +42,10 @@ def benchmark_provenance() -> dict[str, Any]:
     file_hashes = {name: _file_hash(path) for name, path in files.items()}
     from bench.specs import load_scenario_registry
 
+    if cases is None:
+        cases = load_scenario_registry().benchmark_cases()
     scenario_hashes = {
-        f"scenarios/{case.file}": _file_hash(case.scenario_path)
-        for case in load_scenario_registry().cases
+        f"scenarios/{case.file}": _file_hash(case.scenario_path) for case in cases
     }
     variants_root = ROOT / "bench" / "scenarios"
     variant_hashes = {

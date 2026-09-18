@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
-from typing import Protocol
+from typing import Any, Protocol
 
 from canopy.services.kb.models import KBEntry
 from canopy.services.schemas.events import (
@@ -28,9 +28,19 @@ class LLMClient(Protocol):
         ...
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: Any | None = None,
     ) -> Attribution:
-        """Primary attribution agent — first pass, before red-team challenge."""
+        """Primary attribution agent — first pass, before red-team challenge.
+
+        ``rule_verdict`` is the deterministic fast-lane verdict
+        (docs/INTERFACE-SPEC.md §5.1). Structurally it is any object with
+        ``verdict``, ``confidence`` and ``basis`` attributes; clients pass it
+        into the prompt and the validator.
+        """
         ...
 
     async def attribute_redteam(
@@ -48,6 +58,8 @@ class LLMClient(Protocol):
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: Any | None = None,
     ) -> Attribution:
         """Reconciler agent — produces the final, calibrated attribution."""
         ...

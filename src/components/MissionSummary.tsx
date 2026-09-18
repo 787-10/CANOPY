@@ -1,7 +1,11 @@
 import type { Attribution, Decision, UIEvent } from '../types/canopy'
 import type { Signal } from '../types/canopy'
 import type { ScenarioDefinition } from '../data/scenarioLibrary'
-import { commanderEventSummary, commanderSignalSummary } from '../lib/commanderLanguage'
+import {
+  commanderEventSummary,
+  commanderSignalSummary,
+  verdictHeadline,
+} from '../lib/commanderLanguage'
 
 type MissionSummaryProps = {
   attribution: Attribution | null
@@ -37,7 +41,7 @@ export function MissionSummary({
   const headline = uiEvent
     ? commanderBrief.headline
     : attribution
-      ? `${attribution.actor} pattern under review`
+      ? verdictHeadline(attribution)
       : scenario.name
   const summary = uiEvent
     ? commanderBrief.body

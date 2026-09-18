@@ -7,18 +7,42 @@ from datetime import UTC, datetime, timedelta
 from typing import Any
 
 from canopy.services.bus import Bus
-from canopy.services.decide.tools import DecisionTool, ToolContext, dispatch
+from canopy.services.decide.prompts import (
+    RecoveryContext,
+    recovery_context,
+    recovery_rationale,
+    with_recovery_context,
+)
+from canopy.services.decide.tools import (
+    GATE_DOWNGRADE_ACTION,
+    REASON_AUTHORITY_MISMATCH,
+    DecisionTool,
+    Gate,
+    GateContext,
+    GateResult,
+    ToolContext,
+    dispatch,
+    policy_gate,
+)
 from canopy.services.llm import LLMClient
+from canopy.services.llm.validation import validate_and_repair_decision
 from canopy.services.orbit import (
     MIN_OPERATIONAL_LEAD_S,
     OrbitService,
 )
-from canopy.services.schemas.events import Action, Anomaly, Attribution, Decision
+from canopy.services.schemas.events import (
+    ACTION_AUTHORITY,
+    Action,
+    Anomaly,
+    Attribution,
+    Authority,
+    Decision,
+)
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
-__all__ = ["DecideService"]
+__all__ = ["DecideService", "Gate", "GateContext", "GateResult", "default_gate"]
 
 
 # Request-authority actions whose request_packet should be enriched with
@@ -36,6 +60,29 @@ _AUTHORIZATION_LATENCY = timedelta(seconds=60)
 
 _ANOMALY_CACHE_SIZE = 256
 
+# How far around the cluster's time the gate looks for threat context on the
+# same satellite (docs/INTERFACE-SPEC.md §7, matches the bus_health look-back
+# in §2).
+DEFAULT_GATE_LOOKBACK_S = 600.0
+
+RECOVERY_ACTION: Action = "recovery_recommendation"
+
+
+def default_gate() -> Gate:
+    """The gate DecideService runs when none is injected.
+
+    The full threat-context gate (rules R1–R4, docs/INTERFACE-SPEC.md §7)
+    lives in the MEGALITH package, which depends on CANOPY and not the other
+    way round; when CANOPY runs on its own the policy rules R3 and R4 still
+    apply through :func:`policy_gate`.
+    """
+    try:
+        from megalith.gate import threat_context_gate
+    except ImportError:
+        log.info("megalith.gate unavailable; decide gate enforces policy rules only")
+        return policy_gate
+    return threat_context_gate
+
 
 class DecideService:
     """Decision-stage service.
@@ -43,13 +90,26 @@ class DecideService:
     Subscribes to ``attributions.*``, calls ``LLMClient.decide(...)``, and
     publishes Decision events to ``decisions.{authority}``.
 
-    When wired with an ``OrbitService`` (the default in :mod:`canopy.cli`),
-    request-authority Decisions whose attribution chain includes an
-    ``orbital_rpo_risk`` anomaly get enriched: the ``request_packet`` gains
-    a ``recommended_burn`` block plus ``pre_miss_km`` / ``post_miss_km``.
-    The Δv is sized by ``OrbitService.recommended_dv`` against the lead time
-    available from the originating signal's TCA observable, and the new miss
-    distance is computed via Clohessy-Wiltshire impulsive math.
+    Between the model's answer and publish, in order:
+
+    1. **Recovery routing** (spec §6). When the verdict is internal_fault or
+       natural_external and an anomaly in the cluster carries an
+       internal-diagnosis ``recommended_recovery``, the decision is a local
+       ``recovery_recommendation`` carrying that block. The block is handed to
+       the model as context on the attribution; whatever comes back is made to
+       honour the rule and the §6 invariants.
+    2. **Maneuver enrichment.** When wired with an ``OrbitService`` (the
+       default in :mod:`canopy.cli`), request-authority Decisions whose
+       attribution chain includes an ``orbital_rpo_risk`` anomaly get a
+       ``recommended_burn`` block plus ``pre_miss_km`` / ``post_miss_km``
+       in the ``request_packet``, sized by ``OrbitService.recommended_dv``
+       and Clohessy-Wiltshire impulsive math.
+    3. **Routing validation.** ``routing.validate`` runs on every decision;
+       a disagreement with ``ACTION_AUTHORITY`` repairs the authority.
+    4. **The gate** (spec §7): an injected ``Gate`` callable sees the
+       decision plus every recent anomaly on the same satellite. A block is
+       republished as a local ``threat_warning`` with the reason code in the
+       rationale and a warn trace; an authority mismatch is repaired.
     """
 
     def __init__(
@@ -63,6 +123,8 @@ class DecideService:
         tools: list[DecisionTool] | None = None,
         tool_ctx: ToolContext | None = None,
         kb=None,
+        gate: Gate | None = None,
+        lookback_s: float = DEFAULT_GATE_LOOKBACK_S,
     ) -> None:
         self._bus = bus
         self._llm = llm
@@ -82,9 +144,15 @@ class DecideService:
             )
         self._tools = tools
         self._tool_ctx = tool_ctx
+        self._gate: Gate = gate if gate is not None else default_gate()
+        self._lookback = timedelta(seconds=float(lookback_s))
         self._anomaly_cache: OrderedDict[str, Anomaly] = OrderedDict()
         self._cache_size = anomaly_cache_size
         self.errors: list[dict[str, str]] = []
+
+    @property
+    def gate(self) -> Gate:
+        return self._gate
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:
@@ -107,8 +175,11 @@ class DecideService:
                     "decide received non-Attribution on %s: %r", topic, type(event)
                 )
                 continue
+            cluster = self._cluster_anomalies(event)
+            recovery = recovery_context(event, cluster)
+            llm_input = event if recovery is None else with_recovery_context(event, recovery)
             try:
-                decision = await self._llm.decide(event)
+                decision = await self._llm.decide(llm_input)
             except Exception as exc:
                 self.errors.append(
                     {
@@ -121,7 +192,10 @@ class DecideService:
                     "decide: LLMClient.decide failed for attribution=%s", event.id
                 )
                 continue
+            decision = await self._route_recovery(decision, event, recovery)
             decision = await self._maybe_enrich_with_tools(decision, event)
+            decision = await self._validate_routing(decision, event)
+            decision = await self._apply_gate(decision, event, cluster)
             await self._bus.publish(f"decisions.{decision.authority}", decision)
             log.info(
                 "decide published id=%s action=%s authority=%s",
@@ -140,6 +214,228 @@ class DecideService:
                     attribution_id=event.id,
                     actor=event.actor,
                 )
+
+    # ---- Cluster and threat context ----------------------------------------
+
+    def _cluster_anomalies(self, attribution: Attribution) -> list[Anomaly]:
+        """The cached anomalies this attribution covers, in attribution order."""
+        found: list[Anomaly] = []
+        for aid in attribution.anomaly_ids:
+            anomaly = self._anomaly_cache.get(aid)
+            if anomaly is not None:
+                found.append(anomaly)
+        return found
+
+    def _gate_context(
+        self, attribution: Attribution, cluster: list[Anomaly], decision: Decision
+    ) -> GateContext:
+        """Everything recent on the attribution's satellite (spec §7).
+
+        The cluster's anomalies are always in; so is every cached anomaly whose
+        payload ``satellite_id`` matches and whose time falls within the
+        look-back of the decision time. The decision time is the cluster's
+        latest anomaly (scenario time), not the wall clock the Decision was
+        stamped with, so replayed scenarios see their own context.
+        """
+        satellite_id = attribution.satellite_id
+        if satellite_id is None:
+            for anomaly in cluster:
+                sat = anomaly.payload.get("satellite_id")
+                if isinstance(sat, str) and sat:
+                    satellite_id = sat
+                    break
+        cluster_ts = [_ensure_utc(a.ts) for a in cluster]
+        t_ref = max(cluster_ts) if cluster_ts else _ensure_utc(decision.ts)
+        seen = {a.id for a in cluster}
+        anomalies = list(cluster)
+        if satellite_id is not None:
+            for anomaly in self._anomaly_cache.values():
+                if anomaly.id in seen or anomaly.payload.get("satellite_id") != satellite_id:
+                    continue
+                if abs(_ensure_utc(anomaly.ts) - t_ref) <= self._lookback:
+                    anomalies.append(anomaly)
+                    seen.add(anomaly.id)
+        anomalies.sort(key=lambda a: (_ensure_utc(a.ts), a.id))
+        return GateContext(
+            satellite_id=satellite_id,
+            verdict=attribution.verdict,
+            anomalies=tuple(anomalies),
+        )
+
+    # ---- Recovery routing (spec §6) -----------------------------------------
+
+    async def _route_recovery(
+        self,
+        decision: Decision,
+        attribution: Attribution,
+        recovery: RecoveryContext | None,
+    ) -> Decision:
+        """Make the decision honour the recovery rule and the §6 invariants."""
+        if recovery is not None:
+            if decision.action != RECOVERY_ACTION:
+                replaced = decision.action
+                decision = decision.model_copy(
+                    update={
+                        "action": RECOVERY_ACTION,
+                        "authority": ACTION_AUTHORITY[RECOVERY_ACTION],
+                        "target": recovery.target,
+                        "rationale": recovery_rationale(recovery, attribution),
+                        "request_packet": None,
+                        "recovery": recovery.block,
+                    }
+                )
+                await self._trace(
+                    "info",
+                    f"recovery routed: {recovery.block.action_id} on "
+                    f"{recovery.block.target_subsystem} replaces {replaced} "
+                    f"(verdict {attribution.verdict})",
+                    decision,
+                    attribution,
+                    action_id=recovery.block.action_id,
+                    replaced=replaced,
+                )
+                return decision
+            update: dict[str, Any] = {}
+            if decision.recovery != recovery.block:
+                # Live clients build the Decision from the tool payload without
+                # the block, and a model may have edited it; the cluster's
+                # block is the one the operator sees.
+                update["recovery"] = recovery.block
+            if decision.authority != "local":
+                update["authority"] = "local"
+            if decision.request_packet is not None:
+                update["request_packet"] = None
+            if not decision.target:
+                update["target"] = recovery.target
+            return decision.model_copy(update=update) if update else decision
+        if decision.action == RECOVERY_ACTION:
+            # Nothing to recommend: no block anywhere in the cluster.
+            note = "no internal-diagnosis recovery available; downgraded to threat_warning"
+            decision = decision.model_copy(
+                update={
+                    "action": GATE_DOWNGRADE_ACTION,
+                    "authority": ACTION_AUTHORITY[GATE_DOWNGRADE_ACTION],
+                    "request_packet": None,
+                    "recovery": None,
+                    "rationale": f"{decision.rationale} [{note}]",
+                }
+            )
+            await self._trace("warn", f"recovery downgraded: {note}", decision, attribution)
+            return decision
+        if decision.recovery is not None:
+            return decision.model_copy(update={"recovery": None})
+        return decision
+
+    # ---- Routing validation and the gate (spec §7) --------------------------
+
+    async def _validate_routing(self, decision: Decision, attribution: Attribution) -> Decision:
+        """Run ``routing.validate`` on every decision and act on a mismatch."""
+        tool = self._tool_by_name().get("routing.validate")
+        if tool is None or self._tool_ctx is None:
+            return decision
+        result = await dispatch(
+            tool,
+            {"action": decision.action, "authority": decision.authority},
+            self._tool_ctx,
+            ref_id=decision.id,
+        )
+        if result.get("valid") is True or "error" in result:
+            return decision
+        expected = ACTION_AUTHORITY.get(decision.action)
+        if expected is None or expected == decision.authority:
+            # An action outside the taxonomy is the gate's R3, not a repair.
+            return decision
+        repaired = self._repair_authority(
+            decision, expected, note=f"routing: {result.get('reason', 'authority mismatch')}"
+        )
+        await self._trace(
+            "warn",
+            f"routing repaired {decision.action}: authority {decision.authority} → {expected}",
+            repaired,
+            attribution,
+            reason_code=REASON_AUTHORITY_MISMATCH,
+        )
+        return repaired
+
+    async def _apply_gate(
+        self, decision: Decision, attribution: Attribution, cluster: list[Anomaly]
+    ) -> Decision:
+        ctx = self._gate_context(attribution, cluster, decision)
+        result: GateResult = self._gate(decision, ctx)
+        if not result.allow:
+            reason = result.reason_code or "policy/blocked"
+            downgrade: Action = result.downgrade_to or GATE_DOWNGRADE_ACTION
+            blocked = decision.model_copy(
+                update={
+                    "action": downgrade,
+                    "authority": ACTION_AUTHORITY.get(downgrade, "local"),
+                    "recovery": None,
+                    "request_packet": None,
+                    "rationale": f"[gate:{reason}] {decision.rationale}",
+                }
+            )
+            await self._trace(
+                "warn",
+                f"gate blocked {decision.action}: {reason}",
+                blocked,
+                attribution,
+                reason_code=reason,
+                blocked_action=decision.action,
+                note=result.note,
+                satellite_id=ctx.satellite_id,
+                context_anomaly_ids=[a.id for a in ctx.anomalies],
+            )
+            return blocked
+        if result.reason_code == REASON_AUTHORITY_MISMATCH:
+            expected = ACTION_AUTHORITY[decision.action]
+            repaired = self._repair_authority(decision, expected, note=result.note or "gate")
+            await self._trace(
+                "warn",
+                f"gate repaired {decision.action}: {REASON_AUTHORITY_MISMATCH}",
+                repaired,
+                attribution,
+                reason_code=REASON_AUTHORITY_MISMATCH,
+                note=result.note,
+            )
+            return repaired
+        return decision
+
+    @staticmethod
+    def _repair_authority(decision: Decision, expected: Authority, *, note: str) -> Decision:
+        """Set the authority the taxonomy requires and fix the packet to match.
+
+        Goes through the decision validator so a repair to ``request`` gains
+        the minimal packet and a repair to ``local`` drops it, the same way a
+        live model output would.
+        """
+        data = decision.model_dump()
+        data["authority"] = expected
+        data["rationale"] = f"{decision.rationale} [authority repaired to {expected}: {note}]"
+        data = validate_and_repair_decision(data)
+        data.pop("_validation_notes", None)
+        return Decision.model_validate(data)
+
+    async def _trace(
+        self,
+        level: str,
+        message: str,
+        decision: Decision,
+        attribution: Attribution,
+        **payload: Any,
+    ) -> None:
+        if self._tracer is None:
+            return
+        await self._tracer.emit(
+            "decide",
+            level,  # type: ignore[arg-type]
+            message,
+            ref_id=decision.id,
+            attribution_id=attribution.id,
+            **payload,
+        )
+
+    def _tool_by_name(self) -> dict[str, DecisionTool]:
+        return {tool.name: tool for tool in (self._tools or [])}
 
     # ---- Maneuver enrichment ---------------------------------------------
 
@@ -205,7 +501,7 @@ class DecideService:
             actual_lead_s = None
             t_burn = signal_burn_time
 
-        tool_by_name = {tool.name: tool for tool in self._tools}
+        tool_by_name = self._tool_by_name()
 
         # 1) kb.lookup — pull KB context for the actor.
         kb_tool = tool_by_name.get("kb.lookup")
@@ -265,7 +561,7 @@ class DecideService:
             "lead_seconds": sim_result.get("lead_seconds"),
         }
 
-        # 3) request.draft — assemble the CJFSCC request packet.
+        # 4) request.draft — assemble the CJFSCC request packet.
         draft_tool = tool_by_name.get("request.draft")
         request_packet: dict[str, Any] = dict(decision.request_packet or {})
         if draft_tool is not None:
@@ -295,16 +591,7 @@ class DecideService:
                 round(actual_lead_s, 0) if actual_lead_s is not None else None
             )
 
-        # 4) routing.validate — confirm the action+authority pairing.
-        routing_tool = tool_by_name.get("routing.validate")
-        if routing_tool is not None:
-            await dispatch(
-                routing_tool,
-                {"action": decision.action, "authority": decision.authority},
-                self._tool_ctx,
-                ref_id=decision.id,
-            )
-
+        # routing.validate runs for every decision in ``_validate_routing``.
         return decision.model_copy(update={"request_packet": request_packet})
 
 

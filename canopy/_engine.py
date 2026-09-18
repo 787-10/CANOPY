@@ -9,14 +9,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
 from canopy.services.attrib import AttribService
 from canopy.services.bus import InProcessBus
-from canopy.services.decide import DecideService
+from canopy.services.decide import DecideService, Gate
 from canopy.services.decide.tools import build_tool_registry
 from canopy.services.fusion import FusionService
 from canopy.services.kb import KB
@@ -117,12 +117,19 @@ def build_engine(
     seed: int = 1337,
     llm: LLMClient | None = None,
     fusion_windows: Mapping[str, tuple[int, int]] | None = None,
+    decision_gate: Gate | None = None,
+    bus_health_registry: Callable[[], set[str]] | None = None,
 ) -> Engine:
     """Wire up the in-process bus, KB, LLM, and the four async services.
 
     ``fusion_windows`` overrides entries of the fusion per-domain
     ``(look-back s, look-ahead s)`` table (``fusion.DEFAULT_WINDOWS``,
     docs/INTERFACE-SPEC.md §2); entries not given keep their defaults.
+
+    ``decision_gate`` is the callable DecideService runs between tool
+    enrichment and publish (spec §7); ``None`` selects the threat-context
+    gate from ``megalith.gate`` when that package is installed, else the
+    policy-only gate.
     """
     bus = InProcessBus()
     kb = KB.load_from_json(kb_path)
@@ -160,6 +167,7 @@ def build_engine(
         blocked_domains=blocked_domains_provider,
         multi_agent=multi_agent,
         kb_context_mode=attrib_kb_context,
+        bus_health_registry=bus_health_registry,
     )
     decide = DecideService(
         bus,
@@ -168,6 +176,7 @@ def build_engine(
         tracer=tracer,
         tools=tools,
         tool_ctx=tool_ctx,
+        gate=decision_gate,
     )
     ui_events = UIEventService(bus)
     osint_cluster = (

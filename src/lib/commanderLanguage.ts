@@ -1,4 +1,12 @@
-import type { Domain, Signal, UIEvent } from '../types/canopy'
+import type {
+  Attribution,
+  Domain,
+  ReasoningTrace,
+  Signal,
+  UIEvent,
+  Verdict,
+  VerdictBasis,
+} from '../types/canopy'
 
 const domainCopy: Record<
   Domain,
@@ -66,7 +74,171 @@ const domainCopy: Record<
   },
 }
 
+// ---------------------------------------------------------------------------
+// Event-type copy for the two spacecraft-environment domains
+// (docs/INTERFACE-SPEC.md §3 and §4). Domain copy above is the fallback for
+// event types not listed here. `tier` is the map-effect severity the event
+// deserves on its own (signalEffects.ts consumes danger/watch sets); the
+// wording stays neutral: a bus symptom or a storm is never described as an
+// attack, that call belongs to the verdict.
+// ---------------------------------------------------------------------------
+
+export type EventTypeCopy = {
+  label: string
+  meaning: string
+  commanderQuestion: string
+  tier: 'nominal' | 'watch' | 'danger'
+}
+
+export const BUS_HEALTH_EVENT_TYPES = [
+  'link_margin_drop',
+  'sensor_saturation',
+  'attitude_disturbance',
+  'unexpected_reset',
+  'power_thermal_excursion',
+  'orbit_decay',
+  'safe_mode_entry',
+] as const
+
+export type BusHealthEventType = (typeof BUS_HEALTH_EVENT_TYPES)[number]
+
+export const SPACE_WEATHER_EVENT_TYPES = [
+  'geomagnetic_storm',
+  'solar_radio_burst',
+  'radiation_enhancement',
+  'density_enhancement',
+] as const
+
+export type SpaceWeatherEventType = (typeof SPACE_WEATHER_EVENT_TYPES)[number]
+
+const busHealthEventCopy: Record<BusHealthEventType, EventTypeCopy> = {
+  link_margin_drop: {
+    label: 'Link margin drop',
+    meaning:
+      'Downlink or uplink margin is falling faster than the pass geometry explains.',
+    commanderQuestion:
+      'Is the transmitter degrading, or is something on the ground or in the environment eating the margin?',
+    tier: 'watch',
+  },
+  sensor_saturation: {
+    label: 'Sensor saturation',
+    meaning:
+      'A sensor is pinned at its limit and its readings cannot be trusted.',
+    commanderQuestion:
+      'Is the sensor itself failing, or is it being flooded by a bright or noisy source?',
+    tier: 'watch',
+  },
+  attitude_disturbance: {
+    label: 'Attitude disturbance',
+    meaning:
+      'The spacecraft pointing moved in a way the control loop did not command.',
+    commanderQuestion:
+      'Is a wheel or thruster misbehaving, or is an outside force acting on the vehicle?',
+    tier: 'watch',
+  },
+  unexpected_reset: {
+    label: 'Unexpected reset',
+    meaning: 'A flight computer or subsystem rebooted without a command.',
+    commanderQuestion:
+      'Did a component fault, a radiation hit, or an outside command cause the reset?',
+    tier: 'danger',
+  },
+  power_thermal_excursion: {
+    label: 'Power / thermal excursion',
+    meaning: 'Bus power or temperature moved outside its expected band.',
+    commanderQuestion:
+      'Is a battery, panel, or heater failing, or is the environment driving it?',
+    tier: 'watch',
+  },
+  orbit_decay: {
+    label: 'Orbit decay',
+    meaning: 'Altitude is dropping faster than the predicted drag.',
+    commanderQuestion:
+      'Is atmospheric density up, or is the spacecraft venting or thrusting on its own?',
+    tier: 'watch',
+  },
+  safe_mode_entry: {
+    label: 'Safe mode entry',
+    meaning:
+      'The spacecraft dropped to a minimal protective mode; mission support from it is paused.',
+    commanderQuestion:
+      'What tripped safe mode, and how long until support from this satellite returns?',
+    tier: 'danger',
+  },
+}
+
+const spaceWeatherEventCopy: Record<SpaceWeatherEventType, EventTypeCopy> = {
+  geomagnetic_storm: {
+    label: 'Geomagnetic storm',
+    meaning:
+      'A geomagnetic storm is in progress; drag, spacecraft charging, and GPS accuracy all degrade during it.',
+    commanderQuestion:
+      'Could the storm explain satellite, GPS, or link symptoms before anything else is assumed?',
+    tier: 'watch',
+  },
+  solar_radio_burst: {
+    label: 'Solar radio burst',
+    meaning:
+      'The Sun is emitting strong radio noise; GPS and some links degrade on the sunlit side.',
+    commanderQuestion:
+      'Are link or GPS symptoms on the sunlit side lining up with this burst?',
+    tier: 'watch',
+  },
+  radiation_enhancement: {
+    label: 'Radiation enhancement',
+    meaning:
+      'Energetic particle flux is elevated; single-event upsets and resets become more likely.',
+    commanderQuestion:
+      'Could a radiation hit explain a reset or sensor problem on the affected satellite?',
+    tier: 'watch',
+  },
+  density_enhancement: {
+    label: 'Atmospheric density increase',
+    meaning:
+      'Upper-atmosphere density is elevated, so low-orbit drag and decay increase.',
+    commanderQuestion:
+      'Does this account for faster orbit decay before anything else is assumed?',
+    tier: 'watch',
+  },
+}
+
+const eventTypeCopyTable: Record<string, EventTypeCopy> = {
+  ...busHealthEventCopy,
+  ...spaceWeatherEventCopy,
+}
+
+/** Event-type copy for the bus_health and space_weather vocabularies; null
+ *  for every other event type (callers fall back to domain copy). */
+export function eventTypeCopy(eventType: string): EventTypeCopy | null {
+  return eventTypeCopyTable[eventType] ?? null
+}
+
+/** Map-effect tier an event type earns on its own, independent of
+ *  confidence. Only the spacecraft-environment event types are tiered here;
+ *  the legacy danger/watch sets live in signalEffects.ts. */
+export function eventTypeWatchTier(eventType: string): EventTypeCopy['tier'] {
+  return eventTypeCopyTable[eventType]?.tier ?? 'nominal'
+}
+
+/** The question a commander should be asking about this report. Event-type
+ *  copy wins over the domain default. */
+export function commanderQuestion(signal: Signal): string {
+  return (
+    eventTypeCopy(signal.payload.event_type)?.commanderQuestion ??
+    domainCopy[signal.domain].commanderQuestion
+  )
+}
+
+const meaningOverrides = (
+  table: Record<string, EventTypeCopy>,
+): Record<string, string> =>
+  Object.fromEntries(
+    Object.entries(table).map(([eventType, copy]) => [eventType, copy.meaning]),
+  )
+
 const eventTypeOverrides: Record<string, string> = {
+  ...meaningOverrides(busHealthEventCopy),
+  ...meaningOverrides(spaceWeatherEventCopy),
   alternate_pnt_check: 'Non-GPS navigation check completed.',
   alternate_pnt_restored: 'Alternate navigation is stable enough for limited movement.',
   approach_masking_check: 'Terrain creates a low-altitude approach gap.',
@@ -240,6 +412,11 @@ export function domainLabel(domain: Domain): string {
 }
 
 export function signalKindLabel(signal: Signal): string {
+  const typed = eventTypeCopy(signal.payload.event_type)
+  if (typed) {
+    return typed.label
+  }
+
   switch (signal.payload.event_type) {
   case 'approach_masking_check':
     return 'Masked UAS lane'
@@ -629,11 +806,123 @@ const oneLineForSignal = (signal: Signal) => {
     case 'blockade_notice':
       return 'Theater warning starts the convoy space-support clock.'
     default:
-      return `${signal.payload.summary}; ${shortActionByDomain[signal.domain]}.`
+      return (
+        spacecraftEnvironmentOneLine(signal) ??
+        `${signal.payload.summary}; ${shortActionByDomain[signal.domain]}.`
+      )
     }
   })()
 
   return clampOneLine(oneLine)
+}
+
+/** Subsystem ids from docs/INTERFACE-SPEC.md §3 in operator spelling. */
+export function subsystemLabel(subsystem: string | null | undefined): string {
+  switch (subsystem) {
+  case 'adcs':
+    return 'ADCS'
+  case 'cdh':
+    return 'C&DH'
+  case 'comms':
+    return 'Comms'
+  case 'power':
+    return 'Power'
+  case 'thermal':
+    return 'Thermal'
+  case 'propulsion':
+    return 'Propulsion'
+  case 'payload':
+    return 'Payload'
+  default:
+    return subsystem ? titleCaseSlug(subsystem) : 'Unknown subsystem'
+  }
+}
+
+const stringValue = (value: unknown): string | null =>
+  typeof value === 'string' && value.trim() ? value : null
+
+/** Row-level facts for the two spacecraft-environment domains: what the
+ *  event feed shows beside the one-liner. Empty for every other domain. */
+export function spacecraftEnvironmentFacts(
+  signal: Signal,
+): Array<{ key: string; label: string; value: string }> {
+  const observables = signal.payload.observables ?? {}
+
+  if (signal.domain === 'bus_health') {
+    const subsystem = stringValue(observables.subsystem)
+    const symptom = stringValue(observables.symptom)
+    const physicsConsistency = numberValue(observables.physics_consistency)
+    return [
+      {
+        key: 'subsystem',
+        label: 'subsystem',
+        value: subsystemLabel(subsystem),
+      },
+      {
+        key: 'symptom',
+        label: 'symptom',
+        value: symptom ? symptom.replaceAll('_', ' ') : 'not stated',
+      },
+      {
+        key: 'physics',
+        label: 'physics',
+        value:
+          physicsConsistency === null
+            ? 'not scored'
+            : physicsConsistency.toFixed(2),
+      },
+    ]
+  }
+
+  if (signal.domain === 'space_weather') {
+    const kp = numberValue(observables.kp)
+    return [
+      {
+        key: 'event',
+        label: 'event',
+        value:
+          eventTypeCopy(signal.payload.event_type)?.label ??
+          signal.payload.event_type.replaceAll('_', ' '),
+      },
+      { key: 'kp', label: 'Kp', value: kp === null ? 'n/a' : kp.toFixed(1) },
+    ]
+  }
+
+  return []
+}
+
+const spacecraftEnvironmentOneLine = (signal: Signal): string | null => {
+  const copy = eventTypeCopy(signal.payload.event_type)
+  if (!copy) {
+    return null
+  }
+
+  const observables = signal.payload.observables ?? {}
+
+  if (signal.domain === 'bus_health') {
+    const asset = stringValue(signal.payload.asset) ?? 'Spacecraft'
+    const subsystem = stringValue(observables.subsystem)
+    const rate = numberValue(observables.rate_of_change)
+    const rateUnit = stringValue(observables.rate_unit)
+    const physicsConsistency = numberValue(observables.physics_consistency)
+    const where = subsystem ? ` in ${subsystemLabel(subsystem).toLowerCase()}` : ''
+    const trend =
+      rate !== null && rateUnit ? ` at ${rate.toFixed(2)} ${rateUnit}` : ''
+    const physics =
+      physicsConsistency === null
+        ? shortActionByDomain.bus_health
+        : `physics consistency ${physicsConsistency.toFixed(2)}`
+    return `${asset}: ${copy.label.toLowerCase()}${where}${trend}; ${physics}.`
+  }
+
+  const kp = numberValue(observables.kp)
+  const dst = numberValue(observables.dst_nt)
+  const readings = [
+    kp === null ? null : `Kp ${kp.toFixed(1)}`,
+    dst === null ? null : `Dst ${Math.round(dst)} nT`,
+  ].filter((reading): reading is string => reading !== null)
+  const withReadings = readings.length ? ` with ${readings.join(', ')}` : ''
+  return `${copy.label}${withReadings}; ${shortActionByDomain.space_weather}.`
 }
 
 export function commanderSignalSummary(signal: Signal): {
@@ -659,13 +948,14 @@ export function commanderSignalSummary(signal: Signal): {
       ? observables.space_dependency
       : null
   const action = operationalAction ?? actionByDomain[signal.domain]
+  const typedCopy = eventTypeCopy(signal.payload.event_type)
 
   return {
     label: signalKindLabel(signal),
     headline: signal.payload.summary,
     oneLine: oneLineForSignal(signal),
     detail: plainEventName(signal),
-    whyItMatters: spaceDependency ?? copy.meaning,
+    whyItMatters: spaceDependency ?? typedCopy?.meaning ?? copy.meaning,
     action,
     location: friendlyLocationLabel(signal),
     confidenceLabel: `${confidence}% confidence`,
@@ -703,4 +993,164 @@ export function commanderEventSummary(event: UIEvent | null): {
         ? 'Commander decision requested'
         : 'Awareness update',
   }
+}
+
+// ---------------------------------------------------------------------------
+// Verdict, basis, gate and recovery copy (docs/INTERFACE-SPEC.md §5 to §7).
+// One place for the wording so the verdict panel, the operator action panel
+// and the reasoning trace agree on what each state is called.
+// ---------------------------------------------------------------------------
+
+export type VerdictCopy = {
+  label: string
+  meaning: string
+}
+
+export const verdictCopy: Record<Verdict, VerdictCopy> = {
+  internal_fault: {
+    label: 'Internal fault',
+    meaning:
+      'The physics of the symptom match an onboard failure. Nothing outside the spacecraft needs to be acting on it.',
+  },
+  natural_external: {
+    label: 'Natural external',
+    meaning:
+      'The space environment accounts for the symptom: storm, radiation, or drag, not a component and not an actor.',
+  },
+  hostile_external: {
+    label: 'Hostile external',
+    meaning:
+      'Onboard physics do not explain the symptom and it lines up with activity attributed to an actor.',
+  },
+  unknown: {
+    label: 'Unknown',
+    meaning:
+      'Evidence points both ways or is too thin to call. Treat the cause as unresolved.',
+  },
+}
+
+export const noVerdictCopy: VerdictCopy = {
+  label: 'No verdict yet',
+  meaning:
+    'This attribution carries no fault-versus-attack call; only the actor pattern and its evidence are available.',
+}
+
+export function verdictLabel(verdict: Verdict | null | undefined): string {
+  return verdict ? verdictCopy[verdict].label : noVerdictCopy.label
+}
+
+export const verdictBasisCopy: Record<VerdictBasis, VerdictCopy> = {
+  rule: {
+    label: 'Rule lane',
+    meaning:
+      'The deterministic fast lane set this verdict from physics consistency and threat context; no model judgement is involved.',
+  },
+  reasoning: {
+    label: 'Reasoning lane',
+    meaning:
+      'The model changed the rule verdict and cited the evidence below for the change.',
+  },
+}
+
+/** Headline an analyst reads first: verdict-aware, and the legacy
+ *  actor-pattern sentence for attributions without a verdict. */
+export function verdictHeadline(attribution: Attribution): string {
+  const verdict = attribution.verdict ?? null
+  if (!verdict) {
+    return `${attribution.actor} pattern under review`
+  }
+  if (verdict === 'hostile_external') {
+    return `Hostile external: pattern consistent with ${attribution.actor}`
+  }
+  const subject = attribution.satellite_id
+    ? spacecraftDisplayName(attribution.satellite_id)
+    : 'the affected spacecraft'
+  return `${verdictCopy[verdict].label} on ${subject}`
+}
+
+/** `ctb://<authority>/<spacecraft-id>` -> `<spacecraft-id>` in upper case;
+ *  anything else is returned as given (docs/INTERFACE-SPEC.md §1). */
+export function spacecraftDisplayName(satelliteId: string): string {
+  const match = satelliteId.match(/^ctb:\/\/[^/]+\/(.+)$/)
+  return match ? match[1].toUpperCase() : satelliteId
+}
+
+export type GateRationale = {
+  /** `threat/uplink_jamming_active` style reason code, null when not gated. */
+  reasonCode: string | null
+  /** The rationale with the `[gate:<code>] ` prefix removed. */
+  text: string
+}
+
+/** Split a decision rationale that the threat-context gate prefixed with
+ *  `[gate:<reason_code>] ` (docs/INTERFACE-SPEC.md §7). */
+export function parseGateRationale(rationale: string): GateRationale {
+  const match = rationale.match(/^\[gate:([^\]]+)\]\s*([\s\S]*)$/)
+  if (!match) {
+    return { reasonCode: null, text: rationale }
+  }
+  return { reasonCode: match[1].trim(), text: match[2].trim() }
+}
+
+const gateReasonLabels: Record<string, string> = {
+  'threat/uplink_jamming_active': 'Uplink jamming active',
+  'threat/hostile_close_approach': 'Hostile close approach',
+  'policy/unselectable_action': 'Action not selectable',
+  'policy/authority_mismatch': 'Authority mismatch',
+}
+
+export function gateReasonLabel(reasonCode: string): string {
+  const known = gateReasonLabels[reasonCode]
+  if (known) {
+    return known
+  }
+  const tail = reasonCode.split('/').pop() ?? reasonCode
+  return titleCaseSlug(tail)
+}
+
+/** `switch_redundant_amplifier` -> `Switch redundant amplifier`. */
+export function recoveryActionLabel(actionId: string): string {
+  const spaced = actionId.replaceAll(/[-_]+/g, ' ').trim()
+  return spaced ? spaced.charAt(0).toUpperCase() + spaced.slice(1) : actionId
+}
+
+const VERDICTS: readonly Verdict[] = [
+  'internal_fault',
+  'natural_external',
+  'hostile_external',
+  'unknown',
+]
+
+export const isVerdict = (value: unknown): value is Verdict =>
+  typeof value === 'string' && (VERDICTS as readonly string[]).includes(value)
+
+export type TraceAnnotations = {
+  verdict: Verdict | null
+  physicsConsistency: number | null
+  /** Reason code of a gate block, null for every other trace. */
+  gateReasonCode: string | null
+}
+
+/** Attrib traces carry the verdict and physics score in their payload
+ *  (docs/INTERFACE-SPEC.md §5); the gate's block trace is a decide-stage
+ *  warn whose message starts with "gate blocked <action>: <reason_code>"
+ *  (§7). A `reason_code` payload field wins over parsing the message. */
+export function traceAnnotations(trace: ReasoningTrace): TraceAnnotations {
+  const payload = trace.payload ?? {}
+  const verdict = isVerdict(payload.verdict) ? payload.verdict : null
+  const physicsConsistency =
+    typeof payload.physics_consistency === 'number' &&
+    Number.isFinite(payload.physics_consistency)
+      ? payload.physics_consistency
+      : null
+  const blocked =
+    trace.stage === 'decide' &&
+    trace.level === 'warn' &&
+    trace.message.startsWith('gate blocked')
+  const gateReasonCode = blocked
+    ? typeof payload.reason_code === 'string' && payload.reason_code
+      ? payload.reason_code
+      : (trace.message.match(/:\s*(\S+)\s*$/)?.[1] ?? 'gate')
+    : null
+  return { verdict, physicsConsistency, gateReasonCode }
 }

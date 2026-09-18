@@ -1,4 +1,5 @@
 import type { Domain, Signal } from '../types/canopy'
+import { eventTypeWatchTier } from './commanderLanguage'
 
 export type SignalEffectState = 'nominal' | 'watch' | 'danger'
 
@@ -41,11 +42,21 @@ export const signalEffectState = (signal: Signal | null): SignalEffectState => {
     return 'nominal'
   }
 
-  if (dangerEvents.has(signal.payload.event_type) || signal.confidence >= 0.9) {
+  const tier = eventTypeWatchTier(signal.payload.event_type)
+
+  if (
+    tier === 'danger' ||
+    dangerEvents.has(signal.payload.event_type) ||
+    signal.confidence >= 0.9
+  ) {
     return 'danger'
   }
 
-  if (watchEvents.has(signal.payload.event_type) || signal.confidence >= 0.78) {
+  if (
+    tier === 'watch' ||
+    watchEvents.has(signal.payload.event_type) ||
+    signal.confidence >= 0.78
+  ) {
     return 'watch'
   }
 

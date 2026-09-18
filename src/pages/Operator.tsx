@@ -2,7 +2,13 @@ import { useEventStore } from '../store/eventStore'
 import { ActionLog } from '../components/ActionLog'
 import { EmbeddingViz } from '../components/EmbeddingViz'
 import { ReasoningPanel } from '../components/ReasoningPanel'
+import { VerdictPanel } from '../components/VerdictPanel'
 import { useCanopySocket } from '../hooks/useCanopySocket'
+import {
+  parseGateRationale,
+  subsystemLabel,
+  verdictLabel,
+} from '../lib/commanderLanguage'
 
 export function Operator() {
   // Open the same WebSocket Brigade uses so live engine output streams
@@ -14,7 +20,16 @@ export function Operator() {
 
   const signals = useEventStore((s) => s.signals)
   const anomalies = useEventStore((s) => s.anomalies)
+  const attributions = useEventStore((s) => s.attributions)
+  const attributionsById = useEventStore((s) => s.attributionsById)
   const decisions = useEventStore((s) => s.decisions)
+
+  const latestAttribution = attributions[0] ?? null
+  // Newest decision taken on the latest attribution: a gate-republished
+  // threat_warning sits ahead of the recovery it replaced.
+  const verdictDecision = latestAttribution
+    ? (decisions.find((d) => d.attribution_id === latestAttribution.id) ?? null)
+    : null
 
   return (
     <main className="operator-shell">
@@ -55,20 +70,46 @@ export function Operator() {
             <p className="operator-shell__empty">No authority requests</p>
           ) : (
             <ul className="operator-list">
-              {decisions.map((d) => (
-                <li key={d.id}>
-                  <span className="operator-list__kind">{d.action}</span>
-                  <span className="operator-list__sev">
-                    {d.authority} · {d.target}
-                  </span>
-                </li>
-              ))}
+              {decisions.map((d) => {
+                const gate = parseGateRationale(d.rationale)
+                const verdict = attributionsById[d.attribution_id]?.verdict
+                return (
+                  <li key={d.id}>
+                    <span className="operator-list__kind">
+                      {d.action}
+                      {gate.reasonCode ? (
+                        <span className="operator-list__chip operator-list__chip--blocked">
+                          blocked · {gate.reasonCode}
+                        </span>
+                      ) : null}
+                      {d.recovery ? (
+                        <span className="operator-list__chip operator-list__chip--recovery">
+                          {d.recovery.action_id} →{' '}
+                          {subsystemLabel(d.recovery.target_subsystem)}
+                          {d.recovery.requires_approval ? ' · approval' : ''}
+                        </span>
+                      ) : null}
+                      {verdict ? (
+                        <span
+                          className={`operator-list__chip operator-list__chip--verdict operator-list__chip--${verdict}`}
+                        >
+                          {verdictLabel(verdict).toLowerCase()}
+                        </span>
+                      ) : null}
+                    </span>
+                    <span className="operator-list__sev">
+                      {d.authority} · {d.target}
+                    </span>
+                  </li>
+                )
+              })}
             </ul>
           )}
           <div className="operator-shell__footer" aria-live="polite">
             {signals.length} signals streamed
           </div>
         </div>
+        <VerdictPanel attribution={latestAttribution} decision={verdictDecision} />
         <ActionLog limit={20} />
         <EmbeddingViz />
         <ReasoningPanel />

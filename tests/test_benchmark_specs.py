@@ -12,10 +12,21 @@ ROOT = Path(__file__).resolve().parent.parent
 def test_registry_is_the_complete_demo_and_seed_source() -> None:
     registry = load_scenario_registry()
 
-    assert len(registry.cases) == 11
+    public = [case for case in registry.cases if "heldout" not in case.visibility]
+    heldout = [case for case in registry.cases if "heldout" in case.visibility]
+    assert len(public) == 11
+    assert len(heldout) == 18
+    assert len(registry.cases) == len(public) + len(heldout)
     assert {case.file for case in registry.demo_cases()} == {
         path.name for path in (ROOT / "scenarios").glob("*.jsonl")
     }
+    # Held-out scenarios never reach the demo or the public benchmark unless a
+    # suite asks for them explicitly.
+    assert not {case.id for case in heldout} & {case.id for case in registry.demo_cases()}
+    assert not {case.id for case in heldout} & {case.id for case in registry.benchmark_cases()}
+    assert len(registry.benchmark_cases()) == 11
+    assert all(case.split == "heldout" for case in heldout)
+    assert all(case.file.startswith("heldout/") for case in heldout)
     assert all(case.expected.actors for case in registry.benchmark_cases())
     assert all(case.expected.actions for case in registry.benchmark_cases())
     assert all(case.expected.authorities for case in registry.benchmark_cases())

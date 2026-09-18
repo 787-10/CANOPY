@@ -9,6 +9,7 @@ import { ReasoningPanel } from '../components/ReasoningPanel'
 import { ScenarioRail } from '../components/ScenarioRail'
 import { ScenarioTimeline } from '../components/ScenarioTimeline'
 import { StressMode } from '../components/StressMode'
+import { VerdictPanel } from '../components/VerdictPanel'
 import { defaultScenario, scenarios } from '../data/scenarioLibrary'
 import { useCanopyMissionState } from '../hooks/useCanopyMissionState'
 import { useCanopySocket } from '../hooks/useCanopySocket'
@@ -175,6 +176,17 @@ export function Brigade() {
     socketState.attributions[0] ?? (beatIndex >= 4 ? beatAttribution : null)
   const latestDecision =
     socketState.decisions[0] ?? (beatIndex >= 5 ? beatDecision : null)
+  // The decision the verdict panel explains is the one taken on the latest
+  // attribution (newest first, so a gate-republished threat_warning wins
+  // over the recovery it replaced), not simply the newest decision.
+  const verdictDecision = latestAttribution
+    ? (socketState.decisions.find(
+        (decision) => decision.attribution_id === latestAttribution.id,
+      ) ??
+      (latestDecision?.attribution_id === latestAttribution.id
+        ? latestDecision
+        : null))
+    : null
   const latestUiEvent = socketState.uiEvents[0] ?? null
   const approvalEvent = pendingApproval ?? latestUiEvent
   const hasApprovalRequest =
@@ -302,6 +314,13 @@ export function Brigade() {
               />
             </CollapsibleStackSection>
           ) : null}
+          <CollapsibleStackSection title="Verdict">
+            <VerdictPanel
+              attribution={latestAttribution}
+              decision={verdictDecision}
+              compact
+            />
+          </CollapsibleStackSection>
           <CollapsibleStackSection title="Timeline">
             <ScenarioTimeline
               offsets={playbackTimeline.offsets}

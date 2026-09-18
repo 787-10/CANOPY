@@ -24,6 +24,7 @@ from typing import Any
 from canopy.services.kb import KB
 from canopy.services.kb.models import KBEntry
 from canopy.services.llm.validation import (
+    RuleVerdictLike,
     validate_and_repair_attribution,
     validate_and_repair_decision,
 )
@@ -37,6 +38,15 @@ from canopy.services.schemas.events import (
 log = logging.getLogger(__name__)
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+
+def _verdict_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Verdict lane fields from a validated attribution payload (spec §5)."""
+    return {
+        "verdict": payload.get("verdict"),
+        "verdict_basis": payload.get("verdict_basis"),
+        "verdict_evidence": list(payload.get("verdict_evidence") or []),
+    }
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
 DEFAULT_TIMEOUT_S = 180.0
 
@@ -91,24 +101,28 @@ class OllamaLLMClient:
         return await self.attribute_primary(anomalies, kb_context)
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
             attribution_system_prompt,
+            attribution_tool,
             attribution_user_prompt,
         )
 
         source_ids = [sid for a in anomalies for sid in a.source_signal_ids]
         relevant = self._resolve_kb_context(anomalies, kb_context)
 
-        schema = ATTRIBUTION_TOOL["input_schema"]
+        schema = attribution_tool(rule_verdict)["input_schema"]
         payload = await self._chat(
             system=attribution_system_prompt(),
-            user=attribution_user_prompt(anomalies, relevant),
+            user=attribution_user_prompt(anomalies, relevant, rule_verdict),
             schema=schema,
         )
-        payload = self._repair_attribution(payload)
+        payload = self._repair_attribution(payload, rule_verdict)
         return Attribution(
             anomaly_ids=[a.id for a in anomalies],
             actor=str(payload.get("actor", "Unknown")),
@@ -118,6 +132,7 @@ class OllamaLLMClient:
             predicted_next=payload.get("predicted_next"),
             kb_citations=list(payload.get("kb_citations", [])),
             source_signal_ids=list(dict.fromkeys(source_ids)),
+            **_verdict_fields(payload),
         )
 
     async def attribute_redteam(
@@ -153,21 +168,23 @@ class OllamaLLMClient:
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
+            attribution_tool,
             reconcile_system_prompt,
             reconcile_user_prompt,
         )
 
         relevant = self._resolve_kb_context(anomalies, kb_context)
-        schema = ATTRIBUTION_TOOL["input_schema"]
+        schema = attribution_tool(rule_verdict)["input_schema"]
         payload = await self._chat(
             system=reconcile_system_prompt(),
-            user=reconcile_user_prompt(primary, challenge, anomalies, relevant),
+            user=reconcile_user_prompt(primary, challenge, anomalies, relevant, rule_verdict),
             schema=schema,
         )
-        payload = self._repair_attribution(payload)
+        payload = self._repair_attribution(payload, rule_verdict)
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
             actor=str(payload.get("actor", primary.actor)),
@@ -177,6 +194,7 @@ class OllamaLLMClient:
             predicted_next=payload.get("predicted_next"),
             kb_citations=list(payload.get("kb_citations", [])),
             source_signal_ids=list(primary.source_signal_ids),
+            **_verdict_fields(payload),
         )
 
     def _resolve_kb_context(
@@ -228,14 +246,20 @@ class OllamaLLMClient:
             rationale=payload["rationale"],
             authority=payload["authority"],
             request_packet=payload.get("request_packet"),
+            # The validator has already normalised an echoed recovery block
+            # to a well-formed dict or None (spec §6 invariants); keep it so
+            # the round trip is not lossy.
+            recovery=payload.get("recovery"),
             source_signal_ids=list(attribution.source_signal_ids),
         )
 
     # ---- HTTP plumbing ----------------------------------------------------
 
-    def _repair_attribution(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _repair_attribution(
+        self, payload: dict[str, Any], rule_verdict: RuleVerdictLike | None = None
+    ) -> dict[str, Any]:
         raw = dict(payload)
-        validation = validate_and_repair_attribution(payload)
+        validation = validate_and_repair_attribution(payload, rule_verdict)
         self.validation_events.append(
             {
                 "stage": "attribution",

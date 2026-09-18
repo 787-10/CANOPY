@@ -1,4 +1,10 @@
 import { useEventStore, type ManeuverDemo } from '../store/eventStore'
+import {
+  gateReasonLabel,
+  parseGateRationale,
+  recoveryActionLabel,
+  subsystemLabel,
+} from '../lib/commanderLanguage'
 import type { Action } from '../types/canopy'
 
 // Exhaustive over the Action vocabulary (types/canopy.ts) so adding an action
@@ -18,7 +24,9 @@ const ACTION_LABELS: Record<Action, string> = {
 // Map engine action → which Cesium animation runs on Accept. Evasion is
 // the default since it's the broadest visualisation (shared-orbit threat
 // + plane change) and reads correctly even for actions without a more
-// specific story (threat_warning, passive_defense, sda_tasking).
+// specific story (threat_warning, passive_defense, sda_tasking). A
+// recovery_recommendation never reaches this: it is an onboard action
+// on the friendly bus, so Accept skips the orbital demo entirely.
 const actionToDemoType = (action: string): ManeuverDemo['demoType'] => {
   if (
     action === 'orbital_strike_request' ||
@@ -69,15 +77,67 @@ export function OperatorActionPanel() {
     : deferred
       ? 'denied'
       : 'pending'
+  const isRecovery = decision.action === 'recovery_recommendation'
+  const recovery = isRecovery ? (decision.recovery ?? null) : null
+  const gate = parseGateRationale(decision.rationale)
+  const isBlocked = gate.reasonCode !== null
+  const eyebrow = isRecovery
+    ? 'Internal diagnosis recommendation'
+    : isBlocked
+      ? 'Engine recommendation · gate blocked'
+      : 'Engine recommendation'
+
+  const accept = () => {
+    acceptDecision(decision.id)
+    if (isRecovery) {
+      // A recovery is executed on the friendly bus (switch a redundant
+      // unit, enter safe mode, ...). There is no orbital manoeuvre to
+      // show, so the accept is recorded in the store and nothing else.
+      return
+    }
+    const packet = (decision.request_packet ?? {}) as Record<string, unknown>
+    const burn = (packet.recommended_burn ?? {}) as Record<string, unknown>
+    const preMissKm = Number(packet.pre_miss_km ?? 0)
+    const postMissKm = Number(packet.post_miss_km ?? preMissKm + 80)
+    const dvMs = Number(burn.dv_m_s ?? 1.5)
+    startManeuverDemo({
+      decisionId: decision.id,
+      startedAt: Date.now(),
+      durationMs: 15000,
+      preMissKm,
+      postMissKm,
+      dvMs,
+      friendlyLabel: typeof burn.sat === 'string' ? burn.sat : undefined,
+      hostileLabel: typeof burn.against === 'string' ? burn.against : undefined,
+      demoType: actionToDemoType(decision.action),
+    })
+  }
 
   return (
     <section
-      className={`operator-action operator-action--${status}`}
+      className={[
+        'operator-action',
+        `operator-action--${status}`,
+        isRecovery ? 'operator-action--recovery' : '',
+        isBlocked ? 'operator-action--blocked' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       aria-labelledby="operator-action-title"
+      data-decision-kind={isRecovery ? 'recovery' : isBlocked ? 'blocked' : 'action'}
     >
       <header className="operator-action__head">
-        <span className="operator-action__eyebrow">Engine recommendation</span>
+        <span className="operator-action__eyebrow">{eyebrow}</span>
         <h2 id="operator-action-title">{formatAction(decision.action)}</h2>
+        {isBlocked ? (
+          <span
+            className="operator-action__chip operator-action__chip--blocked"
+            data-testid="gate-chip"
+            title={gateReasonLabel(gate.reasonCode ?? '')}
+          >
+            <b>blocked</b> {gate.reasonCode}
+          </span>
+        ) : null}
       </header>
 
       <dl className="operator-action__meta">
@@ -91,40 +151,56 @@ export function OperatorActionPanel() {
         </div>
       </dl>
 
-      <p className="operator-action__rationale">{decision.rationale}</p>
+      {recovery ? (
+        <dl className="operator-action__recovery" data-testid="recovery-block">
+          <div>
+            <dt>Action id</dt>
+            <dd>
+              <code>{recovery.action_id}</code>
+              <span>{recoveryActionLabel(recovery.action_id)}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Target subsystem</dt>
+            <dd>{subsystemLabel(recovery.target_subsystem)}</dd>
+          </div>
+          <div>
+            <dt>Requires approval</dt>
+            <dd
+              className={
+                recovery.requires_approval
+                  ? 'operator-action__flag operator-action__flag--required'
+                  : 'operator-action__flag'
+              }
+            >
+              {recovery.requires_approval ? 'Yes' : 'No'}
+            </dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd>internal diagnosis</dd>
+          </div>
+          <div className="operator-action__recovery-wide">
+            <dt>Recovery rationale</dt>
+            <dd>{recovery.rationale}</dd>
+          </div>
+        </dl>
+      ) : isRecovery ? (
+        <p className="operator-action__rationale operator-action__rationale--missing">
+          Recovery block missing from this decision; nothing to execute.
+        </p>
+      ) : null}
+
+      {!recovery || recovery.rationale !== gate.text ? (
+        <p className="operator-action__rationale">{gate.text}</p>
+      ) : null}
 
       {status === 'pending' ? (
         <div className="operator-action__buttons" role="group">
           <button
             type="button"
             className="operator-action__btn operator-action__btn--accept"
-            onClick={() => {
-              acceptDecision(decision.id)
-              const packet = (decision.request_packet ?? {}) as Record<
-                string,
-                unknown
-              >
-              const burn = (packet.recommended_burn ?? {}) as Record<
-                string,
-                unknown
-              >
-              const preMissKm = Number(packet.pre_miss_km ?? 0)
-              const postMissKm = Number(packet.post_miss_km ?? preMissKm + 80)
-              const dvMs = Number(burn.dv_m_s ?? 1.5)
-              startManeuverDemo({
-                decisionId: decision.id,
-                startedAt: Date.now(),
-                durationMs: 15000,
-                preMissKm,
-                postMissKm,
-                dvMs,
-                friendlyLabel:
-                  typeof burn.sat === 'string' ? burn.sat : undefined,
-                hostileLabel:
-                  typeof burn.against === 'string' ? burn.against : undefined,
-                demoType: actionToDemoType(decision.action),
-              })
-            }}
+            onClick={accept}
           >
             Accept
           </button>

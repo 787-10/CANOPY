@@ -29,7 +29,11 @@ type MissionStateOptions = {
   mapFocusMinConfidence?: number
 }
 
-const spaceDomains = new Set<Domain>(['orbit', 'sda'])
+// Spacecraft health reports from the internal-diagnosis lane belong with the
+// satellites the brigade depends on, so they feed the space status card.
+// Space weather stays outside both cards: it is environmental context for
+// the verdict, not a support-degradation signal in its own right.
+const spaceDomains = new Set<Domain>(['orbit', 'sda', 'bus_health'])
 const commsDomains = new Set<Domain>([
   'satcom',
   'rf_ew',

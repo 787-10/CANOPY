@@ -84,11 +84,22 @@ def _title_for(decision: Decision, attribution: Attribution | None) -> str:
 
 def _build_message(decision: Decision, attribution: Attribution | None) -> str:
     parts = [decision.rationale]
+    recovery_clause = _recovery_clause(decision)
+    if recovery_clause:
+        parts.append(recovery_clause)
     if attribution is not None:
-        actor_clause = (
-            f"Attributed actor: {attribution.actor} "
-            f"(confidence {attribution.confidence:.2f})."
-        )
+        if attribution.actor == "None" and attribution.verdict:
+            # internal_fault / natural_external: there is no actor to name
+            # (docs/INTERFACE-SPEC.md §5); name the finding instead.
+            actor_clause = (
+                f"Verdict: {attribution.verdict.replace('_', ' ')} "
+                f"(confidence {attribution.confidence:.2f})."
+            )
+        else:
+            actor_clause = (
+                f"Attributed actor: {attribution.actor} "
+                f"(confidence {attribution.confidence:.2f})."
+            )
         parts.append(actor_clause)
         if attribution.predicted_next:
             parts.append(f"Forecast: {attribution.predicted_next}")
@@ -96,6 +107,26 @@ def _build_message(decision: Decision, attribution: Attribution | None) -> str:
     if maneuver_clause:
         parts.append(maneuver_clause)
     return " ".join(parts)
+
+
+def _recovery_clause(decision: Decision) -> str | None:
+    """Name the recovery a recovery_recommendation carries (spec §6)."""
+    recovery = decision.recovery
+    if recovery is None:
+        return None
+    approval = (
+        "requires operator approval" if recovery.requires_approval else "no approval required"
+    )
+    return (
+        f"Recommended recovery: {recovery.action_id} on the "
+        f"{recovery.target_subsystem} subsystem ({approval}); "
+        f"source {recovery.source}."
+    )
+
+
+def _needs_approval(decision: Decision) -> bool:
+    """A recovery that needs sign-off gets the operator panel's approve control."""
+    return decision.recovery is not None and decision.recovery.requires_approval
 
 
 def _maneuver_clause(request_packet: dict | None) -> str | None:
@@ -165,17 +196,25 @@ class UIEventService:
     def _build_ui_event(
         self, decision: Decision, attribution: Attribution | None
     ) -> UIEvent:
+        # A request-authority decision and a recovery that requires approval
+        # both surface an approve control; everything else is a threat update.
         is_request = decision.authority == "request"
+        needs_approval = _needs_approval(decision)
+        wants_recommendation = is_request or needs_approval
         ui_type: UIEventType = (
-            "recommendation_created" if is_request else "threat_updated"
+            "recommendation_created" if wants_recommendation else "threat_updated"
         )
         recommendation = (
             Recommendation(
                 id=f"rec-{decision.id}",
-                summary=decision.rationale,
+                summary=(
+                    _recovery_clause(decision) or decision.rationale
+                    if needs_approval and not is_request
+                    else decision.rationale
+                ),
                 approveLabel="APPROVE",
             )
-            if is_request
+            if wants_recommendation
             else None
         )
         confidence = attribution.confidence if attribution else 0.5

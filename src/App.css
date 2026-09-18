@@ -137,7 +137,6 @@
 .scenario-rail,
 .mission-summary,
 .event-feed,
-.narration,
 .approve-banner,
 .details-panel,
 .panel {
@@ -159,7 +158,6 @@
 .scenario-rail::before,
 .mission-summary::before,
 .event-feed::before,
-.narration::before,
 .approve-banner::before,
 .panel::before {
   position: absolute;
@@ -176,7 +174,6 @@
 .scenario-rail::after,
 .mission-summary::after,
 .event-feed::after,
-.narration::after,
 .approve-banner::after,
 .panel::after {
   position: absolute;
@@ -564,7 +561,6 @@
 }
 
 .mission-summary > *,
-.narration > *,
 .approve-banner > *,
 .event-feed > *,
 .panel > * {
@@ -605,19 +601,11 @@
   font-weight: 500;
 }
 
-.mission-summary__main p:last-child,
-.narration__plain {
+.mission-summary__main p:last-child {
   display: -webkit-box;
   overflow: hidden;
   -webkit-box-orient: vertical;
-}
-
-.mission-summary__main p:last-child {
   -webkit-line-clamp: 2;
-}
-
-.narration__plain {
-  -webkit-line-clamp: 4;
 }
 
 .mission-summary__action strong {
@@ -2252,7 +2240,6 @@
   font-weight: 760;
 }
 
-.narration,
 .approve-banner,
 .panel {
   padding: 12px;
@@ -2530,12 +2517,6 @@
   opacity: 0.62;
 }
 
-.narration__plain {
-  color: var(--text-primary);
-  font-size: 0.92rem;
-  line-height: 1.34;
-}
-
 .details-panel {
   margin-top: 12px;
   background: rgba(0, 0, 0, 0.24);
@@ -2568,38 +2549,6 @@
 .details-panel--nested,
 .details-panel--compact {
   border-color: var(--line);
-}
-
-.narration__facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin: 0;
-  padding: 0 14px 12px;
-}
-
-.narration__facts div {
-  border: 1px solid var(--line);
-  padding: 10px;
-}
-
-.narration__facts dt {
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 650;
-}
-
-.narration__facts dd {
-  margin: 6px 0 0;
-  color: var(--white);
-}
-
-.narration__evidence {
-  display: grid;
-  gap: 8px;
-  margin: 0;
-  padding: 0 14px 14px 34px;
-  color: var(--text-muted);
 }
 
 .approve-banner {
@@ -3908,18 +3857,19 @@
 .operator-grid {
   display: grid;
   /* Layout intent (not equal columns):
-     - left column narrow (220px) — Anomaly Queue + Decision Rail stacked
-     - middle column 1fr  — System Actions
-     - right column 1.5fr — Reasoning Trace (most important)
-     - bottom row spans all three for OSINT Embedding (wider than tall)
+     - left column narrow (320px) — Anomaly Queue + Decision Rail stacked
+     - second column 1fr  — Verdict (why fault versus attack)
+     - third column 0.9fr — System Actions
+     - right column 1.4fr — Reasoning Trace (most important)
+     - bottom row spans all four for OSINT Embedding (wider than tall)
      The minmax(0, …) on rows lets the grid children shrink below their
      intrinsic content size so list/stream overflows scroll inside. */
-  grid-template-columns: 384px minmax(0, 1fr) minmax(0, 1.5fr);
+  grid-template-columns: 320px minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.4fr);
   grid-template-rows: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 0.7fr);
   grid-template-areas:
-    "anom actions trace"
-    "decis actions trace"
-    "embed embed embed";
+    "anom verdict actions trace"
+    "decis verdict actions trace"
+    "embed embed embed embed";
   gap: 10px;
   margin-top: 18px;
   flex: 1 1 auto;
@@ -3932,6 +3882,11 @@
 
 .operator-panel--decision {
   grid-area: decis;
+}
+
+.operator-grid > .verdict-panel {
+  grid-area: verdict;
+  overflow-y: auto;
 }
 
 .operator-grid > .action-log {
@@ -4396,8 +4351,7 @@
 
   .mission-summary__kicker,
   .mission-summary__main p:last-child,
-  .mission-summary__action strong,
-  .narration__plain {
+  .mission-summary__action strong {
     font-size: 0.78rem;
     line-height: 1.28;
   }
@@ -4406,7 +4360,6 @@
     margin-top: 5px;
   }
 
-  .narration,
   .approve-banner,
   .panel {
     padding: 10px;
@@ -4432,10 +4385,6 @@
   .scenario-timeline__row {
     grid-template-columns: 44px 66px minmax(0, 1fr);
     gap: 6px;
-  }
-
-  .narration {
-    max-height: 250px;
   }
 
   .nav-crosshair {
@@ -4549,9 +4498,16 @@
     font-size: 0.76rem;
   }
 
-  .narration__facts,
   .operator-grid {
     grid-template-columns: 1fr;
+    grid-template-rows: auto;
+    grid-template-areas:
+      "anom"
+      "decis"
+      "verdict"
+      "actions"
+      "trace"
+      "embed";
   }
 
   .scenario-list {
@@ -5708,4 +5664,616 @@
   .satellite-detail {
     right: calc(var(--right-rail, 352px) + 14px);
   }
+}
+
+/* ---- Verdict panel (why fault versus attack) ---------------------------
+   One badge colour per verdict, reused by the reasoning-trace chips and
+   the operator decision rail: internal fault borrows the bus-health pink,
+   natural external the space-weather green, hostile external the red the
+   rest of the console already uses for threats, unknown the violet of the
+   decide stage. "absent" is the explicit no-verdict state for legacy
+   attributions. */
+:root {
+  --verdict-internal: #f08cb0;
+  --verdict-natural: #8fe3b5;
+  --verdict-hostile: #ff7b6d;
+  --verdict-unknown: #b3aff0;
+  --verdict-absent: rgba(182, 190, 178, 0.72);
+}
+
+.verdict-panel {
+  --verdict-color: var(--verdict-absent);
+  --verdict-soft: rgba(182, 190, 178, 0.08);
+  --verdict-line: rgba(182, 190, 178, 0.38);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+}
+
+.verdict-panel--internal_fault {
+  --verdict-color: var(--verdict-internal);
+  --verdict-soft: rgba(240, 140, 176, 0.12);
+  --verdict-line: rgba(240, 140, 176, 0.55);
+}
+
+.verdict-panel--natural_external {
+  --verdict-color: var(--verdict-natural);
+  --verdict-soft: rgba(143, 227, 181, 0.12);
+  --verdict-line: rgba(143, 227, 181, 0.55);
+}
+
+.verdict-panel--hostile_external {
+  --verdict-color: var(--verdict-hostile);
+  --verdict-soft: rgba(255, 123, 109, 0.13);
+  --verdict-line: rgba(255, 123, 109, 0.6);
+}
+
+.verdict-panel--unknown {
+  --verdict-color: var(--verdict-unknown);
+  --verdict-soft: rgba(179, 175, 240, 0.12);
+  --verdict-line: rgba(179, 175, 240, 0.55);
+}
+
+.verdict-panel .panel__header {
+  margin-bottom: 0;
+}
+
+.verdict-panel__subject {
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__badge-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.verdict-panel__badge {
+  border: 1px solid var(--verdict-line);
+  border-radius: 2px;
+  background: var(--verdict-soft);
+  color: var(--verdict-color);
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 5px 10px;
+}
+
+.verdict-panel__badge--absent {
+  border-style: dashed;
+}
+
+.verdict-panel__confidence {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-panel__headline {
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 1rem;
+  font-weight: 720;
+  line-height: 1.2;
+}
+
+.verdict-panel__meaning {
+  color: var(--text-muted);
+  font-size: 0.84rem;
+  line-height: 1.38;
+}
+
+.verdict-panel__meter-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+}
+
+.verdict-panel__meter-label {
+  color: var(--text-subtle);
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* 0 = nothing onboard explains the symptom, 1 = fully consistent with
+   onboard physics. The fill is always the bus-health pink because the
+   scale means the same thing whatever the verdict turned out to be. */
+.verdict-panel__meter {
+  position: relative;
+  height: 8px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  background:
+    repeating-linear-gradient(
+      90deg,
+      transparent 0 calc(25% - 1px),
+      rgba(220, 227, 213, 0.18) calc(25% - 1px) 25%
+    ),
+    rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.verdict-panel__meter-fill {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, rgba(240, 140, 176, 0.45), var(--verdict-internal));
+  transition: width 0.3s ease;
+}
+
+.verdict-panel__meter-value {
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.verdict-panel__meter-value--absent {
+  grid-column: 2 / span 2;
+  color: var(--text-subtle);
+  font-style: italic;
+  font-weight: 500;
+  text-align: right;
+}
+
+.verdict-panel__facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+
+.verdict-panel__facts div {
+  min-width: 0;
+  border: 1px solid var(--line);
+  padding: 8px 10px;
+}
+
+.verdict-panel__facts dt {
+  color: var(--text-subtle);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__facts dd {
+  margin: 4px 0 0;
+  color: var(--text-primary);
+  font-size: 0.8rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.verdict-panel__facts small {
+  display: block;
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.verdict-panel__facts-wide {
+  grid-column: 1 / -1;
+}
+
+.verdict-panel__section h3 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__list {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.35;
+}
+
+.verdict-panel__list--verdict {
+  color: var(--text-primary);
+}
+
+.verdict-panel__list--verdict li::marker {
+  color: var(--verdict-color);
+}
+
+.verdict-panel__empty {
+  color: var(--text-subtle);
+  font-size: 0.76rem;
+  font-style: italic;
+}
+
+.verdict-panel__citations {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.verdict-panel__decision {
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.verdict-panel__decision--blocked {
+  border-top-color: rgba(224, 92, 79, 0.5);
+}
+
+.verdict-panel__decision-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-primary);
+  font-size: 0.84rem;
+}
+
+.verdict-panel__decision-head span {
+  color: var(--text-muted);
+  font-size: 0.74rem;
+}
+
+.verdict-panel__chip {
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  padding: 2px 7px;
+  font-size: 0.64rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__decision-head .verdict-panel__chip--blocked {
+  border-color: rgba(224, 92, 79, 0.6);
+  background: rgba(224, 92, 79, 0.12);
+  color: #ff9d92;
+}
+
+.verdict-panel__rationale {
+  margin-top: 6px;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  line-height: 1.38;
+}
+
+.verdict-panel__target {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.verdict-panel__recovery {
+  margin-top: 8px;
+}
+
+.verdict-panel__recovery div {
+  border-color: rgba(240, 140, 176, 0.3);
+  background: rgba(240, 140, 176, 0.05);
+}
+
+.verdict-panel__packet {
+  max-height: 160px;
+  margin: 0;
+  overflow: auto;
+  padding: 8px 12px 12px;
+  color: rgba(245, 247, 240, 0.78);
+  font-size: 0.66rem;
+  line-height: 1.3;
+  white-space: pre-wrap;
+}
+
+/* Brigade decision stack: the section is not the grown one, so the panel
+   scrolls inside its own box instead of pushing the timeline down. */
+.verdict-panel--compact {
+  gap: 8px;
+  max-height: 440px;
+  padding: 10px 12px;
+  overflow-y: auto;
+}
+
+.verdict-panel--compact .verdict-panel__headline {
+  font-size: 0.92rem;
+}
+
+.verdict-panel--compact .verdict-panel__meaning {
+  font-size: 0.78rem;
+}
+
+/* KB citation cards (previously reachable only through the unmounted
+   DecisionDetail, which never had styles). */
+.kb-card {
+  border: 1px solid var(--line);
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 10px;
+  font-size: 0.76rem;
+}
+
+.kb-card__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  color: var(--text-subtle);
+  font-size: 0.64rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.kb-card__id {
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+.kb-card__title {
+  margin-top: 4px;
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.kb-card__summary {
+  margin-top: 2px;
+  color: var(--text-muted);
+  line-height: 1.35;
+}
+
+.kb-card__implications {
+  margin: 6px 0 0;
+  padding-left: 16px;
+  color: var(--text-muted);
+}
+
+/* ---- Reasoning trace: verdict / physics chips and gate blocks ---------- */
+.reasoning-line {
+  grid-template-areas:
+    "time stage spacer"
+    "msg msg msg"
+    "chips chips chips";
+}
+
+.reasoning-line__chips {
+  grid-area: chips;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.reasoning-line__chip {
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  padding: 1px 6px;
+  color: var(--text-muted);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+}
+
+.reasoning-line__chip--blocked {
+  border-color: rgba(224, 92, 79, 0.7);
+  background: rgba(224, 92, 79, 0.14);
+  color: #ff9d92;
+  font-weight: 700;
+}
+
+.reasoning-line__chip--internal_fault {
+  border-color: rgba(240, 140, 176, 0.6);
+  color: var(--verdict-internal);
+}
+
+.reasoning-line__chip--natural_external {
+  border-color: rgba(143, 227, 181, 0.6);
+  color: var(--verdict-natural);
+}
+
+.reasoning-line__chip--hostile_external {
+  border-color: rgba(255, 123, 109, 0.6);
+  color: var(--verdict-hostile);
+}
+
+.reasoning-line__chip--unknown {
+  border-color: rgba(179, 175, 240, 0.6);
+  color: var(--verdict-unknown);
+}
+
+.reasoning-line__chip--physics {
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.reasoning-line--blocked {
+  border-left: 3px solid rgba(224, 92, 79, 0.8);
+  padding-left: 6px;
+  background: linear-gradient(90deg, rgba(224, 92, 79, 0.12), transparent 60%);
+}
+
+.reasoning-line--blocked .reasoning-line__msg {
+  color: #ff9d92;
+  font-weight: 700;
+}
+
+/* ---- Operator action panel: recovery block and gate chip --------------- */
+.operator-action--recovery {
+  border-left-color: var(--verdict-internal);
+  background:
+    linear-gradient(180deg, rgba(240, 140, 176, 0.08), transparent 70%),
+    rgba(7, 11, 11, 0.78);
+}
+
+.operator-action--blocked {
+  border-left-color: var(--red);
+}
+
+.operator-action__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  margin-top: 4px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  font-family: "JetBrains Mono", "SF Mono", "Menlo", monospace;
+  font-size: 0.64rem;
+}
+
+.operator-action__chip b {
+  font-family: var(--font-sans);
+  font-size: 0.6rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.operator-action__chip--blocked {
+  border-color: rgba(224, 92, 79, 0.6);
+  background: rgba(224, 92, 79, 0.12);
+  color: #ffb8ae;
+}
+
+.operator-action__chip--blocked b {
+  color: var(--verdict-hostile);
+}
+
+.operator-action__recovery {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 10px;
+  margin: 0;
+  border: 1px solid rgba(240, 140, 176, 0.3);
+  background: rgba(240, 140, 176, 0.05);
+  padding: 8px 10px;
+}
+
+.operator-action__recovery div {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.operator-action__recovery dt {
+  color: var(--text-subtle);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.operator-action__recovery dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.76rem;
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.operator-action__recovery dd code {
+  display: block;
+  color: var(--verdict-internal);
+  font-size: 0.7rem;
+}
+
+.operator-action__recovery dd span {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.operator-action__recovery-wide {
+  grid-column: 1 / -1;
+}
+
+.operator-action__flag--required {
+  color: var(--amber);
+}
+
+.operator-action__rationale--missing {
+  color: #ff9d92;
+}
+
+/* ---- Event feed: bus-health and space-weather facts -------------------- */
+.event-feed__raw-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 3px;
+}
+
+.event-feed__raw-fact {
+  border: 1px solid color-mix(in srgb, var(--domain-color, #33f2f0) 45%, transparent);
+  border-radius: 2px;
+  background: color-mix(in srgb, var(--domain-color, #33f2f0) 10%, transparent);
+  color: var(--domain-color, rgba(51, 242, 240, 0.82));
+  font-size: 0.56rem;
+  line-height: 1.2;
+  padding: 1px 5px;
+  white-space: nowrap;
+}
+
+.event-feed__raw-fact em {
+  margin-right: 2px;
+  font-size: 0.5rem;
+  font-style: normal;
+  letter-spacing: 0.05em;
+  opacity: 0.7;
+  text-transform: uppercase;
+}
+
+/* ---- Operator decision rail chips -------------------------------------- */
+.operator-list__chip {
+  display: inline-block;
+  margin-left: 6px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  padding: 0 5px;
+  color: var(--text-muted);
+  font-size: 0.6rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  vertical-align: middle;
+}
+
+.operator-list__chip--blocked {
+  border-color: rgba(224, 92, 79, 0.6);
+  color: #ff9d92;
+}
+
+.operator-list__chip--recovery {
+  border-color: rgba(240, 140, 176, 0.5);
+  color: var(--verdict-internal);
+}
+
+.operator-list__chip--internal_fault {
+  border-color: rgba(240, 140, 176, 0.5);
+  color: var(--verdict-internal);
+}
+
+.operator-list__chip--natural_external {
+  border-color: rgba(143, 227, 181, 0.5);
+  color: var(--verdict-natural);
+}
+
+.operator-list__chip--hostile_external {
+  border-color: rgba(255, 123, 109, 0.5);
+  color: var(--verdict-hostile);
+}
+
+.operator-list__chip--unknown {
+  border-color: rgba(179, 175, 240, 0.5);
+  color: var(--verdict-unknown);
 }

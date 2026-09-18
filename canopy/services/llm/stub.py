@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from canopy.services.kb import KB
@@ -14,11 +14,15 @@ from canopy.services.schemas.events import (
     AttributionChallenge,
     Authority,
     Decision,
+    RecoveryBlock,
+    Verdict,
 )
 
 log = logging.getLogger(__name__)
 
 UNCERTAINTY_ENTRY = "kb-attribution-uncertainty-001"
+
+__all__ = ["StubLLMClient", "StubVerdictOverride"]
 
 
 # ---- Attribution templates -------------------------------------------------
@@ -581,6 +585,43 @@ _DEFAULT_ATTRIBUTION = _AttribTemplate(
 )
 
 
+def _dominant_kind(anomalies: list[Anomaly]) -> str:
+    """The kind whose template drives the stub's answer for this batch.
+
+    Most common kind wins, ties by first appearance. Kinds whose template
+    carries no actor (bus health, space weather) yield to actor-bearing kinds
+    when the batch mixes them: a bus symptom clustered with an RF cue is
+    attributed through the RF template, and the verdict lane (wave 2A)
+    decides whether the cause is hostile. Batches made only of actor-less
+    kinds are unchanged, as are the pre-existing scenarios, which contain no
+    actor-less kinds.
+    """
+    counts = Counter(a.kind for a in anomalies)
+    actor_bearing = {
+        kind: n
+        for kind, n in counts.items()
+        if _KIND_TO_ATTRIBUTION.get(kind, _DEFAULT_ATTRIBUTION).actor != "None"
+    }
+    pool = actor_bearing or dict(counts)
+    return Counter(pool).most_common(1)[0][0]
+
+
+@dataclass(frozen=True)
+class StubVerdictOverride:
+    """Test knob: make ``reconcile`` propose a verdict for a dominant kind.
+
+    Keyed by the batch's dominant kind in ``StubLLMClient(verdict_overrides=)``.
+    With ``verdict_evidence`` the attribution service treats the change as a
+    cited reasoning-lane departure; without it the change is repaired back to
+    the rule verdict. Not used by any default template, so existing scenarios
+    leave the verdict to the rule lane.
+    """
+
+    verdict: Verdict
+    verdict_evidence: tuple[str, ...] = ()
+    confidence: float | None = None
+
+
 # ---- Decision templates ----------------------------------------------------
 
 
@@ -590,6 +631,8 @@ class _DecisionTemplate:
     target: str
     rationale: str
     authority: Authority
+    # Set only on recovery_recommendation (docs/INTERFACE-SPEC.md §6).
+    recovery: RecoveryBlock | None = None
 
 
 _DECISIONS: dict[str, _DecisionTemplate] = {
@@ -653,8 +696,34 @@ _DECISIONS: dict[str, _DecisionTemplate] = {
 }
 
 
-def _select_decision(citations: list[str], actor: str) -> _DecisionTemplate:
-    cset = set(citations)
+def _select_decision(
+    attribution: Attribution, anomalies: Iterable[Anomaly] = ()
+) -> _DecisionTemplate:
+    """Pick the decision template for an attribution.
+
+    Recovery routing comes first (docs/INTERFACE-SPEC.md §6): an internal or
+    natural verdict whose cluster carries an internal-diagnosis
+    ``recommended_recovery`` yields a local ``recovery_recommendation``
+    carrying that block. ``anomalies`` is the cluster when the caller has it;
+    otherwise the block is read from the context DecideService attaches to the
+    attribution. Everything else is keyed on the KB citations.
+    """
+    # Imported here, as the live clients import their prompts: the decide
+    # package pulls in the orbit service, which the stub's import graph
+    # otherwise stays clear of.
+    from canopy.services.decide.prompts import recovery_context, recovery_rationale
+
+    recovery = recovery_context(attribution, anomalies)
+    if recovery is not None:
+        return _DecisionTemplate(
+            action="recovery_recommendation",
+            target=recovery.target,
+            rationale=recovery_rationale(recovery, attribution),
+            authority="local",
+            recovery=recovery.block,
+        )
+    cset = set(attribution.kb_citations)
+    actor = attribution.actor
     if "kb-rpo-ambiguity-001" in cset:
         return _DECISIONS["rpo_escort"]
     if "kb-satcom-jamming-001" in cset:
@@ -947,8 +1016,14 @@ class StubLLMClient:
     decision logic stays grounded in the same KB the attribution cites.
     """
 
-    def __init__(self, kb: KB) -> None:
+    def __init__(
+        self,
+        kb: KB,
+        *,
+        verdict_overrides: Mapping[str, StubVerdictOverride] | None = None,
+    ) -> None:
         self._kb = kb
+        self._verdict_overrides: dict[str, StubVerdictOverride] = dict(verdict_overrides or {})
 
     async def attribute(
         self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
@@ -956,12 +1031,19 @@ class StubLLMClient:
         return await self.attribute_primary(anomalies, kb_context)
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: object | None = None,
     ) -> Attribution:
+        # ``rule_verdict`` is the provisional verdict the attribution service
+        # passes to every client; the stub leaves ``verdict`` unset so the
+        # service fills it from the rule lane.
         if not anomalies:
             raise ValueError("attribute() requires at least one anomaly")
 
-        dominant_kind, _ = Counter(a.kind for a in anomalies).most_common(1)[0]
+        dominant_kind = _dominant_kind(anomalies)
         template = _KIND_TO_ATTRIBUTION.get(dominant_kind, _DEFAULT_ATTRIBUTION)
 
         source_ids = list(
@@ -1006,8 +1088,7 @@ class StubLLMClient:
         if not anomalies:
             template = _DEFAULT_REDTEAM
         else:
-            dominant_kind, _ = Counter(a.kind for a in anomalies).most_common(1)[0]
-            template = _KIND_TO_REDTEAM.get(dominant_kind, _DEFAULT_REDTEAM)
+            template = _KIND_TO_REDTEAM.get(_dominant_kind(anomalies), _DEFAULT_REDTEAM)
 
         # If primary already landed on Unknown, soften the challenge — the
         # red-team's job there is to defend the uncertainty floor, not invent
@@ -1039,6 +1120,8 @@ class StubLLMClient:
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: object | None = None,
     ) -> Attribution:
         # Apply the red-team's confidence delta against the existing 0.49
         # uncertainty floor used by the rest of the engine.
@@ -1049,6 +1132,21 @@ class StubLLMClient:
         for objection in challenge.objections:
             evidence.append(f"Red-team objection: {objection}")
 
+        # Default templates leave the verdict to the rule lane. A registered
+        # override (tests only) makes the stub propose one, with or without
+        # cited evidence, so the §5.2 repair path can be exercised.
+        override = (
+            self._verdict_overrides.get(_dominant_kind(anomalies)) if anomalies else None
+        )
+        verdict_fields: dict[str, object] = {}
+        if override is not None:
+            verdict_fields = {
+                "verdict": override.verdict,
+                "verdict_evidence": list(override.verdict_evidence),
+            }
+            if override.confidence is not None:
+                new_confidence = override.confidence
+
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
             actor=primary.actor,
@@ -1058,10 +1156,13 @@ class StubLLMClient:
             predicted_next=primary.predicted_next,
             kb_citations=list(primary.kb_citations),
             source_signal_ids=list(primary.source_signal_ids),
+            **verdict_fields,
         )
 
-    async def decide(self, attribution: Attribution) -> Decision:
-        template = _select_decision(attribution.kb_citations, attribution.actor)
+    async def decide(
+        self, attribution: Attribution, anomalies: Iterable[Anomaly] = ()
+    ) -> Decision:
+        template = _select_decision(attribution, anomalies)
         request_packet = (
             {
                 "to": "CJFSCC",
@@ -1082,4 +1183,5 @@ class StubLLMClient:
             authority=template.authority,
             request_packet=request_packet,
             source_signal_ids=list(attribution.source_signal_ids),
+            recovery=template.recovery,
         )

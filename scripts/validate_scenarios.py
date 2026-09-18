@@ -153,7 +153,7 @@ def discover_scenarios(paths: list[str]) -> list[Path]:
     if paths:
         return [Path(path).resolve() for path in paths]
     discovered = []
-    for directory in (DEFAULT_SCENARIOS, DEFAULT_BENCHMARK_SCENARIOS):
+    for directory in (DEFAULT_SCENARIOS, DEFAULT_SCENARIOS / "heldout", DEFAULT_BENCHMARK_SCENARIOS):
         if directory.exists():
             discovered.extend(directory.glob("*.jsonl"))
     return sorted(discovered)

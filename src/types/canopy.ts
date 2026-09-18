@@ -133,6 +133,18 @@ export type Attribution = {
   satellite_id?: string | null
 }
 
+// Recovery recommendation carried by a `recovery_recommendation` decision
+// (docs/INTERFACE-SPEC.md §6). Mirrors the Python `RecoveryBlock`; the
+// engine always sets `source` to "internal-diagnosis".
+export type RecoveryBlock = {
+  action_id: string
+  target_subsystem: string
+  requires_approval: boolean
+  rationale: string
+  source?: 'internal-diagnosis'
+  satellite_id?: string | null
+}
+
 export type Decision = {
   id: string
   ts: string
@@ -143,6 +155,11 @@ export type Decision = {
   authority: Authority
   request_packet: Record<string, unknown> | null
   source_signal_ids: string[]
+  // Present only when `action === "recovery_recommendation"`; the engine
+  // serializes it as null for every other action. A decision the
+  // threat-context gate blocked is republished as `threat_warning` with
+  // `recovery: null` and a `[gate:<reason_code>] ` rationale prefix (§7).
+  recovery?: RecoveryBlock | null
 }
 
 export type TraceStage =

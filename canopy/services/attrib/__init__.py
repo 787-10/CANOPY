@@ -1,23 +1,42 @@
 from __future__ import annotations
 
 import asyncio
+import inspect
 import logging
 
-from collections.abc import Callable
-from typing import Literal
+from collections import OrderedDict, deque
+from collections.abc import Callable, Sequence
+from datetime import UTC, datetime, timedelta
+from typing import Any, Literal
 
 from canopy.services.bus import Bus
 from canopy.services.kb import KB
 from canopy.services.llm import LLMClient
-from canopy.services.schemas.events import Anomaly, Domain
+from canopy.services.llm.validation import (
+    RuleVerdictLike,
+    VerdictResolution,
+    resolve_verdict,
+)
+from canopy.services.schemas.events import Anomaly, Attribution, Domain
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
-__all__ = ["AttribService"]
+__all__ = ["AttribService", "DEFAULT_RULE_VERDICT"]
 
 DEFAULT_WINDOW_S = 2.0
 STRESS_HAIRCUT = 0.15
+
+# Verdict-lane context (docs/INTERFACE-SPEC.md §5.1, §5.2). The two window
+# constants mirror LOOKBACK_S / LOOKAHEAD_S in megalith/verdict/config.py.
+VERDICT_LOOKBACK_S = 600
+VERDICT_LOOKAHEAD_S = 120
+# Bounds on the recent-anomaly memory the rule lane reads: per satellite,
+# across satellites (oldest satellite evicted first), and in scenario time
+# relative to the newest anomaly seen.
+CONTEXT_MAX_PER_SATELLITE = 64
+CONTEXT_MAX_SATELLITES = 128
+CONTEXT_HORIZON_S = 2 * VERDICT_LOOKBACK_S
 
 # Map anomaly kinds to the input domains they implicitly rely on. When an
 # input domain is blocked, attributions backed primarily by that domain
@@ -87,6 +106,31 @@ _KIND_DOMAINS: dict[str, set[Domain]] = {
     "space_weather_density": {"space_weather"},
 }
 
+# ``rule_verdict(batch, context, *, kind_domains=...) -> RuleVerdictLike``.
+RuleVerdictFn = Callable[..., RuleVerdictLike]
+
+
+class _DefaultRule:
+    """Sentinel: resolve the rule lane from ``megalith.verdict`` if installed."""
+
+    def __repr__(self) -> str:  # pragma: no cover - debugging aid
+        return "DEFAULT_RULE_VERDICT"
+
+
+DEFAULT_RULE_VERDICT = _DefaultRule()
+
+
+def _resolve_default_rule() -> RuleVerdictFn | None:
+    # The rule lives in the MEGALITH package, which depends on CANOPY and not
+    # the other way round; CANOPY's own environment may not contain it. When
+    # it is absent the verdict fields simply stay unset.
+    try:
+        from megalith.verdict.rule import rule_verdict
+    except ImportError:
+        log.info("attrib: megalith.verdict not importable; verdict lane is off")
+        return None
+    return rule_verdict
+
 
 def _country_topic(actor: str) -> str:
     head = actor.split("/", 1)[0].strip().lower()
@@ -100,6 +144,89 @@ def _critical_domains_for(anomalies: list[Anomaly]) -> set[Domain]:
     return domains
 
 
+def _utc(value: datetime) -> datetime:
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
+def _satellite_of(anomaly: Anomaly) -> str | None:
+    value = anomaly.payload.get("satellite_id")
+    return value if isinstance(value, str) and value else None
+
+
+def _context_end(anomaly: Anomaly) -> datetime:
+    """When an anomaly stops being recent context.
+
+    Space-weather anomalies are stamped at ``valid_from`` and stay relevant
+    until ``valid_to`` (spec §4, §5.1), so a storm is kept while its
+    validity window is open; everything else ages from its ``ts``.
+    """
+    end = _utc(anomaly.ts)
+    raw = anomaly.payload.get("valid_to")
+    if isinstance(raw, str) and raw.strip():
+        text = raw.strip()
+        if text.endswith(("Z", "z")):
+            text = text[:-1] + "+00:00"
+        try:
+            end = max(end, _utc(datetime.fromisoformat(text)))
+        except ValueError:
+            pass
+    elif isinstance(raw, datetime):
+        end = max(end, _utc(raw))
+    return end
+
+
+def _is_bus_kind(kind: str) -> bool:
+    return "bus_health" in _KIND_DOMAINS.get(kind, set())
+
+
+def _batch_satellite_id(anomalies: Sequence[Anomaly]) -> str | None:
+    """The cluster's identity: a bus anomaly's ``satellite_id`` first."""
+    for a in anomalies:
+        if _is_bus_kind(a.kind) and _satellite_of(a) is not None:
+            return _satellite_of(a)
+    for a in anomalies:
+        if _satellite_of(a) is not None:
+            return _satellite_of(a)
+    return None
+
+
+def _max_physics_consistency(anomalies: Sequence[Anomaly]) -> float | None:
+    """Spec §5 (1.2): the most recent bus anomaly's physics consistency, else None.
+
+    Later records are scored over longer windows, so the latest is the most
+    informed; a max would let an early short-window 0.5 mask a later 0.25.
+    Ties on time take the larger value. The name is kept for the callers.
+    """
+    best: float | None = None
+    best_ts = None
+    for a in anomalies:
+        if not _is_bus_kind(a.kind):
+            continue
+        value = a.payload.get("physics_consistency")
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            continue
+        if best_ts is None or a.ts > best_ts or (a.ts == best_ts and float(value) > best):
+            best, best_ts = float(value), a.ts
+    return best
+
+
+def _fmt_pc(pc: float | None) -> str:
+    return "None" if pc is None else f"{pc:.2f}"
+
+
+def _verdict_evidence_line(resolution: VerdictResolution, rule: RuleVerdictLike) -> str:
+    """One evidence-chain line saying who set the verdict and on what."""
+    if resolution.basis == "reasoning":
+        cited = "; ".join(resolution.verdict_evidence)
+        return (
+            f"Verdict (reasoning): {resolution.verdict}, departing from the rule "
+            f"verdict {rule.verdict} on cited evidence: {cited}"
+        )
+    head, *rest = tuple(rule.basis) or (f"rule verdict {rule.verdict}",)
+    detail = f" Basis: {'; '.join(rest)}" if rest else ""
+    return f"Verdict (rule): {resolution.verdict}. {head}.{detail}"
+
+
 class AttribService:
     """Attribution-stage service.
 
@@ -108,6 +235,22 @@ class AttribService:
     coordinated cross-domain cluster (RF + cyber + PNT, for example) attribute
     as a single campaign rather than each leg in isolation. Set
     ``window_s=0`` to attribute each anomaly immediately (used in tests).
+
+    Verdict lane (docs/INTERFACE-SPEC.md §5): every anomaly the service
+    consumes is remembered in a bounded per-satellite context. Before the
+    primary call the ``rule_verdict`` function classifies the batch against
+    that context; the result goes into the LLM prompt as the provisional
+    verdict and, after reconcile and the stress haircut, is enforced by
+    ``_apply_verdict_prior`` as the floor the reasoning lane may only leave
+    by citing evidence. ``rule_verdict`` defaults to ``megalith.verdict``
+    when that package is importable and to "lane off" otherwise; pass
+    ``None`` to disable it explicitly.
+
+    ``bus_health_registry`` names the satellites that have internal-diagnosis
+    telemetry. A batch on one of them with no bus anomaly in the batch or in
+    recent context is treated as if ``bus_health`` were a blocked domain
+    (§5.2): the stress haircut applies and the evidence says the telemetry
+    is missing.
     """
 
     def __init__(
@@ -121,6 +264,8 @@ class AttribService:
         blocked_domains: Callable[[], set[Domain]] | None = None,
         multi_agent: bool = True,
         kb_context_mode: Literal["scenario", "full"] = "scenario",
+        rule_verdict: RuleVerdictFn | None | _DefaultRule = DEFAULT_RULE_VERDICT,
+        bus_health_registry: Callable[[], set[str]] | None = None,
     ) -> None:
         self._bus = bus
         self._llm = llm
@@ -130,9 +275,22 @@ class AttribService:
         self._blocked_domains = blocked_domains
         self._multi_agent = multi_agent
         self._kb_context_mode = kb_context_mode
+        self._rule_verdict: RuleVerdictFn | None = (
+            _resolve_default_rule()
+            if isinstance(rule_verdict, _DefaultRule)
+            else rule_verdict
+        )
+        self._bus_health_registry = bus_health_registry
         self._buffer: list[Anomaly] = []
         self._flush_task: asyncio.Task | None = None
+        self._recent: OrderedDict[str | None, deque[Anomaly]] = OrderedDict()
+        self._latest_ts: datetime | None = None
+        self._llm_accepts_rule: dict[str, bool] = {}
         self.errors: list[dict[str, str]] = []
+
+    @property
+    def verdict_lane_enabled(self) -> bool:
+        return self._rule_verdict is not None
 
     def _record_error(self, stage: str, exc: Exception) -> None:
         self.errors.append(
@@ -151,6 +309,7 @@ class AttribService:
                         "attrib received non-Anomaly on %s: %r", topic, type(event)
                     )
                     continue
+                self._remember(event)
                 if self._window_s <= 0:
                     await self._process([event])
                     continue
@@ -185,7 +344,134 @@ class AttribService:
         self._buffer.clear()
         await self._process(batch)
 
+    # ---- Recent-anomaly context -------------------------------------------
+
+    def _remember(self, anomaly: Anomaly) -> None:
+        sat = _satellite_of(anomaly)
+        bucket = self._recent.get(sat)
+        if bucket is None:
+            bucket = deque(maxlen=CONTEXT_MAX_PER_SATELLITE)
+            self._recent[sat] = bucket
+        else:
+            self._recent.move_to_end(sat)
+        if any(a.id == anomaly.id for a in bucket):
+            return
+        bucket.append(anomaly)
+        while len(self._recent) > CONTEXT_MAX_SATELLITES:
+            self._recent.popitem(last=False)
+        ts = _utc(anomaly.ts)
+        if self._latest_ts is None or ts > self._latest_ts:
+            self._latest_ts = ts
+        self._prune()
+
+    def _prune(self) -> None:
+        if self._latest_ts is None:
+            return
+        horizon = self._latest_ts - timedelta(seconds=CONTEXT_HORIZON_S)
+        for sat in list(self._recent):
+            bucket = self._recent[sat]
+            kept = [a for a in bucket if _context_end(a) >= horizon]
+            if len(kept) != len(bucket):
+                bucket.clear()
+                bucket.extend(kept)
+            if not bucket:
+                del self._recent[sat]
+
+    def recent_context(self, satellite_id: str | None) -> list[Anomaly]:
+        """Recent anomalies on ``satellite_id`` plus the identity-less ones.
+
+        The identity-less bucket carries space weather (global, no
+        ``satellite_id``) and legacy signals without identity; the rule
+        lane decides which of those may bear on a given satellite.
+        """
+        out = list(self._recent.get(satellite_id, ()))
+        if satellite_id is not None:
+            out.extend(self._recent.get(None, ()))
+        return out
+
+    # ---- Verdict lane helpers ---------------------------------------------
+
+    def _compute_rule_verdict(
+        self, anomalies: list[Anomaly], recent: list[Anomaly]
+    ) -> RuleVerdictLike | None:
+        if self._rule_verdict is None:
+            return None
+        try:
+            return self._rule_verdict(anomalies, recent, kind_domains=_KIND_DOMAINS)
+        except Exception as exc:  # noqa: BLE001 - the lane must not stall attribution
+            self._record_error("rule_verdict", exc)
+            log.exception("attrib: rule_verdict failed for batch of %d", len(anomalies))
+            return None
+
+    def _rule_kwargs(self, method: str, rule: RuleVerdictLike | None) -> dict[str, Any]:
+        """``{"rule_verdict": rule}`` when the client's method accepts it.
+
+        The ``LLMClient`` protocol predates the verdict lane; clients that
+        take the keyword get the provisional verdict, others are called as
+        before.
+        """
+        if rule is None:
+            return {}
+        accepts = self._llm_accepts_rule.get(method)
+        if accepts is None:
+            fn = getattr(self._llm, method, None)
+            try:
+                params = inspect.signature(fn).parameters if fn is not None else {}
+            except (TypeError, ValueError):
+                params = {}
+            accepts = "rule_verdict" in params or any(
+                p.kind is inspect.Parameter.VAR_KEYWORD for p in params.values()
+            )
+            self._llm_accepts_rule[method] = accepts
+        return {"rule_verdict": rule} if accepts else {}
+
+    def _missing_bus_telemetry(
+        self, anomalies: list[Anomaly], recent: list[Anomaly], satellite_id: str | None
+    ) -> str | None:
+        """The satellite whose internal-diagnosis telemetry is missing, if any.
+
+        Spec §5.2: a satellite in the bus-health registry with no ``bus_*``
+        anomaly in the batch or in recent context inside the look-back is
+        treated as ``bus_health`` being blocked for this batch.
+        """
+        if self._bus_health_registry is None or satellite_id is None:
+            return None
+        try:
+            registry = self._bus_health_registry()
+        except Exception as exc:  # noqa: BLE001 - a broken registry must not stall
+            self._record_error("bus_health_registry", exc)
+            return None
+        if satellite_id not in registry:
+            return None
+        if any(_is_bus_kind(a.kind) for a in anomalies):
+            return None
+        onset = min(_utc(a.ts) for a in anomalies)
+        start = onset - timedelta(seconds=VERDICT_LOOKBACK_S)
+        end = onset + timedelta(seconds=VERDICT_LOOKAHEAD_S)
+        for a in recent:
+            if (
+                _is_bus_kind(a.kind)
+                and _satellite_of(a) == satellite_id
+                and start <= _utc(a.ts) <= end
+            ):
+                return None
+        return satellite_id
+
+    # ---- Pipeline -------------------------------------------------------------
+
     async def _process(self, anomalies: list[Anomaly]) -> None:
+        # Direct callers (tests, benchmark seams) may bypass run(); make sure
+        # the batch is part of its own context either way.
+        for a in anomalies:
+            self._remember(a)
+        satellite_id = _batch_satellite_id(anomalies)
+        recent = self.recent_context(satellite_id)
+        rule = self._compute_rule_verdict(anomalies, recent)
+        if rule is not None and rule.satellite_id:
+            satellite_id = rule.satellite_id
+        physics_consistency = _max_physics_consistency(anomalies)
+        missing_bus_for = self._missing_bus_telemetry(anomalies, recent, satellite_id)
+
         # KB context: union of entries indexed by the source signal ids of
         # this batch. Falls back to all entries if no scenario hits.
         seen: set[str] = set()
@@ -208,7 +494,9 @@ class AttribService:
         # directly so the comparison isolates whether the red-team loop
         # is pulling its weight against single-pass attribution.
         try:
-            primary = await self._llm.attribute_primary(anomalies, context)
+            primary = await self._llm.attribute_primary(
+                anomalies, context, **self._rule_kwargs("attribute_primary", rule)
+            )
         except Exception as exc:
             self._record_error("attribute_primary", exc)
             log.exception(
@@ -216,13 +504,22 @@ class AttribService:
             )
             return
         if self._tracer is not None:
+            provisional = rule.verdict if rule is not None else None
             await self._tracer.emit(
                 "attrib_primary",
                 "info",
-                f"actor={primary.actor} confidence={primary.confidence:.2f}",
+                f"actor={primary.actor} confidence={primary.confidence:.2f} "
+                f"verdict={provisional} basis={'rule' if rule is not None else None} "
+                f"pc={_fmt_pc(physics_consistency)}",
                 ref_id=primary.id,
                 actor=primary.actor,
                 confidence=primary.confidence,
+                verdict=provisional,
+                verdict_basis="rule" if rule is not None else None,
+                physics_consistency=physics_consistency,
+                rule_confidence=rule.confidence if rule is not None else None,
+                basis=list(rule.basis) if rule is not None else [],
+                satellite_id=satellite_id,
             )
 
         if not self._multi_agent:
@@ -252,7 +549,11 @@ class AttribService:
                     )
                 try:
                     attribution = await self._llm.reconcile(
-                        primary, challenge, anomalies, context
+                        primary,
+                        challenge,
+                        anomalies,
+                        context,
+                        **self._rule_kwargs("reconcile", rule),
                     )
                 except Exception as exc:
                     self._record_error("reconcile", exc)
@@ -264,36 +565,64 @@ class AttribService:
         # Stress-mode confidence haircut: if any critical input domain for
         # this anomaly cluster is blocked, lower confidence and surface the
         # degradation in the trace stream.
-        attribution = await self._apply_stress_haircut(attribution, anomalies)
+        attribution = await self._apply_stress_haircut(
+            attribution, anomalies, missing_bus_for=missing_bus_for
+        )
+        # Verdict prior: the rule verdict is the floor; the reasoning lane
+        # may leave it only with cited evidence, inside bounded confidence.
+        attribution = await self._apply_verdict_prior(
+            attribution,
+            anomalies,
+            rule,
+            physics_consistency=physics_consistency,
+            satellite_id=satellite_id,
+        )
 
         country = _country_topic(attribution.actor)
         await self._bus.publish(f"attributions.{country}", attribution)
         log.info(
-            "attrib published id=%s actor=%s confidence=%.2f signals=%d",
+            "attrib published id=%s actor=%s confidence=%.2f verdict=%s signals=%d",
             attribution.id,
             attribution.actor,
             attribution.confidence,
+            attribution.verdict,
             len(attribution.source_signal_ids),
         )
         if self._tracer is not None:
             await self._tracer.emit(
                 "attrib_reconcile",
                 "info",
-                f"final actor={attribution.actor} confidence={attribution.confidence:.2f}",
+                f"final actor={attribution.actor} confidence={attribution.confidence:.2f} "
+                f"verdict={attribution.verdict} basis={attribution.verdict_basis} "
+                f"pc={_fmt_pc(attribution.physics_consistency)}",
                 ref_id=attribution.id,
                 actor=attribution.actor,
                 confidence=attribution.confidence,
+                verdict=attribution.verdict,
+                verdict_basis=attribution.verdict_basis,
+                physics_consistency=attribution.physics_consistency,
+                basis=list(rule.basis) if rule is not None else [],
+                verdict_evidence=list(attribution.verdict_evidence),
+                satellite_id=attribution.satellite_id,
             )
 
     async def _apply_stress_haircut(
-        self, attribution, anomalies: list[Anomaly]
-    ):
-        if self._blocked_domains is None:
-            return attribution
-        blocked = self._blocked_domains()
-        if not blocked:
-            return attribution
+        self,
+        attribution: Attribution,
+        anomalies: list[Anomaly],
+        *,
+        missing_bus_for: str | None = None,
+    ) -> Attribution:
+        blocked: set[Domain] = set()
+        if self._blocked_domains is not None:
+            blocked = set(self._blocked_domains())
         critical = _critical_domains_for(anomalies)
+        if missing_bus_for is not None:
+            # Spec §5.2: missing internal-diagnosis telemetry for a satellite
+            # that has it is bus_health being blocked, for a cluster that
+            # would have used it.
+            blocked.add("bus_health")
+            critical.add("bus_health")
         intersection = critical & blocked
         if not intersection:
             return attribution
@@ -304,6 +633,8 @@ class AttribService:
             "Stress: input domains "
             f"{sorted(intersection)} unavailable — confidence lowered."
         )
+        if missing_bus_for is not None:
+            evidence.append(f"internal diagnosis telemetry missing for {missing_bus_for}")
         if self._tracer is not None:
             await self._tracer.emit(
                 "stress",
@@ -314,7 +645,76 @@ class AttribService:
                 blocked=sorted(intersection),
                 before=attribution.confidence,
                 after=new_confidence,
+                missing_bus_telemetry=missing_bus_for,
             )
         return attribution.model_copy(
             update={"confidence": round(new_confidence, 3), "evidence": evidence}
+        )
+
+    async def _apply_verdict_prior(
+        self,
+        attribution: Attribution,
+        anomalies: list[Anomaly],
+        rule: RuleVerdictLike | None,
+        *,
+        physics_consistency: float | None,
+        satellite_id: str | None,
+    ) -> Attribution:
+        """Enforce spec §5.2 on the reconciled attribution.
+
+        The rule verdict is the floor: a verdict that differs from it
+        without ``verdict_evidence`` is reset (basis ``rule``) with a repair
+        note; a cited change keeps basis ``reasoning``. Confidence is clamped
+        to ``rule ± 0.15`` when the verdict stands and to ``[0.30, 0.85]``
+        when it changed. The actor follows the §5 convention and an
+        ``Unknown`` actor is capped at 0.49. Runs after the stress haircut,
+        so the clamp bounds the total departure from the rule confidence,
+        haircut included. With the lane off (``rule is None``) only
+        ``physics_consistency`` and ``satellite_id`` are filled in.
+        """
+        resolution = resolve_verdict(
+            proposed=attribution.verdict,
+            cited_evidence=attribution.verdict_evidence,
+            confidence=attribution.confidence,
+            actor=attribution.actor,
+            rule=rule,
+        )
+        evidence = list(attribution.evidence)
+        if resolution.repair_note is not None and resolution.repair_note not in evidence:
+            evidence.append(resolution.repair_note)
+            if self._tracer is not None:
+                await self._tracer.emit(
+                    "attrib_reconcile",
+                    "warn",
+                    f"verdict repair: {attribution.verdict} proposed without "
+                    f"verdict_evidence; rule verdict {resolution.verdict} stands",
+                    ref_id=attribution.id,
+                    proposed=attribution.verdict,
+                    verdict=resolution.verdict,
+                    verdict_basis=resolution.basis,
+                    physics_consistency=physics_consistency,
+                    basis=list(rule.basis) if rule is not None else [],
+                )
+        if rule is not None and resolution.verdict is not None:
+            if not any(line.startswith("Verdict (") for line in evidence):
+                evidence.append(_verdict_evidence_line(resolution, rule))
+
+        confidence = resolution.confidence
+        if abs(confidence - attribution.confidence) > 1e-12:
+            confidence = round(confidence, 3)
+        return attribution.model_copy(
+            update={
+                "verdict": resolution.verdict,
+                "verdict_basis": resolution.basis,
+                "verdict_evidence": resolution.verdict_evidence,
+                "actor": resolution.actor,
+                "confidence": confidence,
+                "evidence": evidence,
+                "physics_consistency": (
+                    physics_consistency
+                    if physics_consistency is not None
+                    else attribution.physics_consistency
+                ),
+                "satellite_id": satellite_id or attribution.satellite_id,
+            }
         )

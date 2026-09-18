@@ -250,6 +250,22 @@ class Attribution(_Event):
     satellite_id: str | None = None
 
 
+class RecoveryBlock(BaseModel):
+    """The internal-diagnosis recovery a ``recovery_recommendation`` carries.
+
+    Copied from the ``recommended_recovery`` observable of the bus-health
+    anomaly that triggered it (docs/INTERFACE-SPEC.md §3, §6). ``source`` is
+    fixed: only the internal-diagnosis lane proposes recoveries.
+    """
+
+    action_id: str
+    target_subsystem: str
+    requires_approval: bool
+    rationale: str
+    source: Literal["internal-diagnosis"] = "internal-diagnosis"
+    satellite_id: str | None = None
+
+
 class Decision(_Event):
     """Recommended action for an attribution."""
 
@@ -260,6 +276,9 @@ class Decision(_Event):
     authority: Authority
     request_packet: dict[str, Any] | None = None
     source_signal_ids: list[str] = Field(default_factory=list)
+    # Set iff ``action == "recovery_recommendation"`` (docs/INTERFACE-SPEC.md
+    # §6); such a decision is local authority with no request packet.
+    recovery: RecoveryBlock | None = None
 
 
 class Recommendation(BaseModel):

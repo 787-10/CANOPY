@@ -4,6 +4,7 @@ import {
   commanderSignalSummary,
   plainEventName,
   signalKindLabel,
+  spacecraftEnvironmentFacts,
 } from '../lib/commanderLanguage'
 import type { Signal } from '../types/canopy'
 
@@ -744,6 +745,9 @@ export function EventFeed({
                 const isNewest = index === 0
                 const isSelected = signal.id === selectedSignalId
                 const summary = commanderSignalSummary(signal)
+                // Subsystem / symptom / physics for bus health, event type /
+                // Kp for space weather; empty for every other domain.
+                const facts = spacecraftEnvironmentFacts(signal)
 
                 return (
                   <article
@@ -771,6 +775,21 @@ export function EventFeed({
                       </span>
                       <span className="event-feed__raw-payload">
                         {summary.oneLine}
+                        {facts.length ? (
+                          <span
+                            className="event-feed__raw-facts"
+                            data-testid="raw-facts"
+                          >
+                            {facts.map((fact) => (
+                              <span
+                                className={`event-feed__raw-fact event-feed__raw-fact--${fact.key}`}
+                                key={fact.key}
+                              >
+                                <em>{fact.label}</em> {fact.value}
+                              </span>
+                            ))}
+                          </span>
+                        ) : null}
                       </span>
                       <span className="event-feed__raw-confidence">
                         {Math.round(signal.confidence * 100)}%

@@ -1,0 +1,1847 @@
+{
+  "epoch_utc": "2026-09-17T14:00:00Z",
+  "generator": "megalith.scenarios.generate",
+  "satellite_id_note": "satellite_id is the flight identity published on every record; sim_identity is the simulated asset that produced the series",
+  "scenarios": {
+    "heldout-attitude-disturbance-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-attitude-disturbance-hostile-005",
+        "heldout-attitude-disturbance-hostile-006",
+        "heldout-attitude-disturbance-hostile-007",
+        "heldout-attitude-disturbance-hostile-008"
+      ],
+      "cause": "proximity operations (avoidance slew and plume impingement)",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "attitude_disturbance",
+      "external_signals": [
+        "orbit/rpo_close_approach",
+        "sda/custody_quality_change"
+      ],
+      "family": "attitude_disturbance",
+      "file": "heldout/attitude_disturbance_hostile.jsonl",
+      "measurement": "motor_current_a",
+      "model": "mechanisms",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 484.0,
+      "onset_ts": "2026-09-17T14:08:04Z",
+      "physics_basis": [
+        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.38;row=attitude_disturbance;rate=linear_fit",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.55;row=attitude_disturbance;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.25,
+        0.25,
+        0.5,
+        0.5
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "step",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "adcs",
+      "symptom": "reaction_wheel_motor_current_high",
+      "unit": "A",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 150.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 480.0,
+          "role": "hostile",
+          "severity": 0.8
+        }
+      ]
+    },
+    "heldout-attitude-disturbance-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-attitude-disturbance-internal-003",
+        "heldout-attitude-disturbance-internal-004",
+        "heldout-attitude-disturbance-internal-005",
+        "heldout-attitude-disturbance-internal-006"
+      ],
+      "cause": "reaction wheel bearing wear",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "attitude_disturbance",
+      "external_signals": [],
+      "family": "attitude_disturbance",
+      "file": "heldout/attitude_disturbance_internal.jsonl",
+      "measurement": "motor_current_a",
+      "model": "mechanisms",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 335.0,
+      "onset_ts": "2026-09-17T14:05:35Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=attitude_disturbance;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.97;row=attitude_disturbance;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.5,
+        0.85,
+        0.85
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "adcs",
+      "symptom": "reaction_wheel_motor_current_high",
+      "unit": "A",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 240.0,
+          "role": "fault",
+          "severity": 0.031818
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 270.04545454545456,
+          "role": "fault",
+          "severity": 0.063636
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 300.0909090909091,
+          "role": "fault",
+          "severity": 0.095455
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 330.1363636363636,
+          "role": "fault",
+          "severity": 0.127273
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 360.1818181818182,
+          "role": "fault",
+          "severity": 0.159091
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 390.22727272727275,
+          "role": "fault",
+          "severity": 0.190909
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 420.27272727272725,
+          "role": "fault",
+          "severity": 0.222727
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 450.3181818181818,
+          "role": "fault",
+          "severity": 0.254545
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 480.3636363636364,
+          "role": "fault",
+          "severity": 0.286364
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 510.40909090909093,
+          "role": "fault",
+          "severity": 0.318182
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 540.4545454545455,
+          "role": "fault",
+          "severity": 0.35
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 570.5,
+          "role": "fault",
+          "severity": 0.381818
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 600.5454545454545,
+          "role": "fault",
+          "severity": 0.413636
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 630.5909090909091,
+          "role": "fault",
+          "severity": 0.445455
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 660.6363636363636,
+          "role": "fault",
+          "severity": 0.477273
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 690.6818181818182,
+          "role": "fault",
+          "severity": 0.509091
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 720.7272727272727,
+          "role": "fault",
+          "severity": 0.540909
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 750.7727272727273,
+          "role": "fault",
+          "severity": 0.572727
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 780.8181818181819,
+          "role": "fault",
+          "severity": 0.604545
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 810.8636363636364,
+          "role": "fault",
+          "severity": 0.636364
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 840.909090909091,
+          "role": "fault",
+          "severity": 0.668182
+        },
+        {
+          "duration_s": 30.045454545454547,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 870.9545454545455,
+          "role": "fault",
+          "severity": 0.7
+        }
+      ]
+    },
+    "heldout-attitude-disturbance-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-attitude-disturbance-natural-005",
+        "heldout-attitude-disturbance-natural-006",
+        "heldout-attitude-disturbance-natural-007",
+        "heldout-attitude-disturbance-natural-008"
+      ],
+      "cause": "storm-driven density enhancement raising aerodynamic torque",
+      "environment_input": "excess-friction load channel = storm-driven drag torque",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "attitude_disturbance",
+      "external_signals": [
+        "space_weather/density_enhancement",
+        "space_weather/geomagnetic_storm"
+      ],
+      "family": "attitude_disturbance",
+      "file": "heldout/attitude_disturbance_natural.jsonl",
+      "measurement": "motor_current_a",
+      "model": "mechanisms",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 374.0,
+      "onset_ts": "2026-09-17T14:06:14Z",
+      "physics_basis": [
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.88;row=attitude_disturbance;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.96;row=attitude_disturbance;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.98;row=attitude_disturbance;rate=slope",
+        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.25,
+        0.8,
+        0.8,
+        0.8
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "ramp",
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:55:14Z",
+        "2026-09-17T14:13:14Z"
+      ],
+      "subsystem": "adcs",
+      "symptom": "reaction_wheel_motor_current_high",
+      "unit": "A",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 330.0,
+          "role": "environment",
+          "severity": 0.058737
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 370.0,
+          "role": "environment",
+          "severity": 0.172208
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 410.0,
+          "role": "environment",
+          "severity": 0.273943
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 450.0,
+          "role": "environment",
+          "severity": 0.357009
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 490.0,
+          "role": "environment",
+          "severity": 0.415746
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 530.0,
+          "role": "environment",
+          "severity": 0.44615
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 570.0,
+          "role": "environment",
+          "severity": 0.44615
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 610.0,
+          "role": "environment",
+          "severity": 0.415746
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 650.0,
+          "role": "environment",
+          "severity": 0.357009
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 690.0,
+          "role": "environment",
+          "severity": 0.273943
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 730.0,
+          "role": "environment",
+          "severity": 0.172208
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "mechanism_excess_friction",
+          "onset_s": 770.0,
+          "role": "environment",
+          "severity": 0.058737
+        }
+      ]
+    },
+    "heldout-link-margin-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-link-margin-hostile-005",
+        "heldout-link-margin-hostile-006",
+        "heldout-link-margin-hostile-007",
+        "heldout-link-margin-hostile-008"
+      ],
+      "cause": "uplink jamming",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [
+        "rf_ew/rf_interference",
+        "rf_ew/telemetry_degradation"
+      ],
+      "family": "link_margin",
+      "file": "heldout/link_margin_hostile.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 454.0,
+      "onset_ts": "2026-09-17T14:07:34Z",
+      "physics_basis": [
+        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.25,
+        0.25,
+        0.25,
+        0.25
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "unit": "dB",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 400.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 450.0,
+          "role": "hostile",
+          "severity": 0.5
+        }
+      ]
+    },
+    "heldout-link-margin-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-link-margin-internal-003",
+        "heldout-link-margin-internal-004",
+        "heldout-link-margin-internal-005"
+      ],
+      "cause": "amplifier degradation",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [],
+      "family": "link_margin",
+      "file": "heldout/link_margin_internal.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 545.0,
+      "onset_ts": "2026-09-17T14:09:05Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.97;row=link_margin_drop;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.91;row=link_margin_drop;rate=slope"
+      ],
+      "physics_consistency": [
+        0.8,
+        0.85,
+        0.85
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "unit": "dB",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 300.0,
+          "role": "fault",
+          "severity": 0.03
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 330.05,
+          "role": "fault",
+          "severity": 0.06
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 360.1,
+          "role": "fault",
+          "severity": 0.09
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 390.15,
+          "role": "fault",
+          "severity": 0.12
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 420.2,
+          "role": "fault",
+          "severity": 0.15
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 450.25,
+          "role": "fault",
+          "severity": 0.18
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 480.3,
+          "role": "fault",
+          "severity": 0.21
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 510.35,
+          "role": "fault",
+          "severity": 0.24
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 540.4,
+          "role": "fault",
+          "severity": 0.27
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 570.45,
+          "role": "fault",
+          "severity": 0.3
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 600.5,
+          "role": "fault",
+          "severity": 0.33
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 630.55,
+          "role": "fault",
+          "severity": 0.36
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 660.6,
+          "role": "fault",
+          "severity": 0.39
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 690.6500000000001,
+          "role": "fault",
+          "severity": 0.42
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 720.7,
+          "role": "fault",
+          "severity": 0.45
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 750.75,
+          "role": "fault",
+          "severity": 0.48
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 780.8,
+          "role": "fault",
+          "severity": 0.51
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 810.85,
+          "role": "fault",
+          "severity": 0.54
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 840.9,
+          "role": "fault",
+          "severity": 0.57
+        },
+        {
+          "duration_s": 30.05,
+          "kind": "rf_pa_degradation",
+          "onset_s": 870.95,
+          "role": "fault",
+          "severity": 0.6
+        }
+      ]
+    },
+    "heldout-link-margin-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-link-margin-natural-005",
+        "heldout-link-margin-natural-006",
+        "heldout-link-margin-natural-007",
+        "heldout-link-margin-natural-008"
+      ],
+      "cause": "solar radio burst raising the noise floor",
+      "environment_input": "rf_interference_proxy severity = radio-burst noise-floor rise",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [
+        "space_weather/geomagnetic_storm",
+        "space_weather/solar_radio_burst"
+      ],
+      "family": "link_margin",
+      "file": "heldout/link_margin_natural.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 454.0,
+      "onset_ts": "2026-09-17T14:07:34Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.85;row=link_margin_drop;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.43;row=link_margin_drop;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.8,
+        0.8,
+        0.5
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:56:34Z",
+        "2026-09-17T14:14:34Z"
+      ],
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "unit": "dB",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 420.0,
+          "role": "environment",
+          "severity": 0.054752
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 450.0,
+          "role": "environment",
+          "severity": 0.158897
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 480.0,
+          "role": "environment",
+          "severity": 0.247487
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 510.0,
+          "role": "environment",
+          "severity": 0.311852
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 540.0,
+          "role": "environment",
+          "severity": 0.345691
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 570.0,
+          "role": "environment",
+          "severity": 0.345691
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 600.0,
+          "role": "environment",
+          "severity": 0.311852
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 630.0,
+          "role": "environment",
+          "severity": 0.247487
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 660.0,
+          "role": "environment",
+          "severity": 0.158897
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 690.0,
+          "role": "environment",
+          "severity": 0.054752
+        }
+      ]
+    },
+    "heldout-orbit-decay-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-orbit-decay-hostile-005",
+        "heldout-orbit-decay-hostile-006",
+        "heldout-orbit-decay-hostile-007",
+        "heldout-orbit-decay-hostile-008"
+      ],
+      "cause": "maneuver executed on spoofed navigation (GNSS spoofing and jamming)",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "orbit_decay",
+      "external_signals": [
+        "pnt/pnt_spoofing",
+        "rf_ew/gnss_jamming_signature"
+      ],
+      "family": "orbit_decay",
+      "file": "heldout/orbit_decay_hostile.jsonl",
+      "measurement": "uncommanded_thrust_n",
+      "model": "propulsion",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 502.0,
+      "onset_ts": "2026-09-17T14:08:22Z",
+      "physics_basis": [
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=0.75;row=unexpected_reset;rate=step_per_interval",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.57;row=orbit_decay;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.375,
+        0.375,
+        0.5
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "step",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "propulsion",
+      "symptom": "uncommanded_delta_v_accumulating",
+      "unit": "N",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 240.0,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 500.0,
+          "role": "hostile",
+          "severity": 0.6
+        }
+      ]
+    },
+    "heldout-orbit-decay-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-orbit-decay-internal-003",
+        "heldout-orbit-decay-internal-004",
+        "heldout-orbit-decay-internal-005",
+        "heldout-orbit-decay-internal-006"
+      ],
+      "cause": "thruster valve stuck open after the planned burn",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "orbit_decay",
+      "external_signals": [],
+      "family": "orbit_decay",
+      "file": "heldout/orbit_decay_internal.jsonl",
+      "measurement": "uncommanded_thrust_n",
+      "model": "propulsion",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 362.0,
+      "onset_ts": "2026-09-17T14:06:02Z",
+      "physics_basis": [
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.375,
+        0.375,
+        0.375
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "propulsion",
+      "symptom": "uncommanded_delta_v_accumulating",
+      "unit": "N",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 551.0,
+          "kind": "propulsion_valve_stuck_open",
+          "onset_s": 350.0,
+          "role": "fault",
+          "severity": 1.0
+        }
+      ]
+    },
+    "heldout-orbit-decay-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-orbit-decay-natural-006",
+        "heldout-orbit-decay-natural-007",
+        "heldout-orbit-decay-natural-008",
+        "heldout-orbit-decay-natural-009",
+        "heldout-orbit-decay-natural-010",
+        "heldout-orbit-decay-natural-011"
+      ],
+      "cause": "storm-driven density enhancement (drag)",
+      "environment_input": "uncommanded-thrust channel = storm-driven drag (magnitude)",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "orbit_decay",
+      "external_signals": [
+        "space_weather/density_enhancement",
+        "space_weather/geomagnetic_storm"
+      ],
+      "family": "orbit_decay",
+      "file": "heldout/orbit_decay_natural.jsonl",
+      "measurement": "uncommanded_thrust_n",
+      "model": "propulsion",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 439.0,
+      "onset_ts": "2026-09-17T14:07:19Z",
+      "physics_basis": [
+        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.68;row=orbit_decay;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=0.83;row=unexpected_reset;rate=step_per_interval",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.96;row=unexpected_reset;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.5,
+        0.65,
+        0.65
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "ramp",
+        "step",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:56:19Z",
+        "2026-09-17T14:14:19Z"
+      ],
+      "subsystem": "propulsion",
+      "symptom": "uncommanded_delta_v_accumulating",
+      "unit": "N",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 400.0,
+          "role": "environment",
+          "severity": 0.045684
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 436.6666666666667,
+          "role": "environment",
+          "severity": 0.133939
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 473.3333333333333,
+          "role": "environment",
+          "severity": 0.213067
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 510.0,
+          "role": "environment",
+          "severity": 0.277674
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 546.6666666666666,
+          "role": "environment",
+          "severity": 0.323358
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 583.3333333333333,
+          "role": "environment",
+          "severity": 0.347006
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 620.0,
+          "role": "environment",
+          "severity": 0.347006
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 656.6666666666666,
+          "role": "environment",
+          "severity": 0.323358
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 693.3333333333333,
+          "role": "environment",
+          "severity": 0.277674
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 730.0,
+          "role": "environment",
+          "severity": 0.213067
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 766.6666666666666,
+          "role": "environment",
+          "severity": 0.133939
+        },
+        {
+          "duration_s": 36.666666666666664,
+          "kind": "propulsion_unintended_thrust",
+          "onset_s": 803.3333333333333,
+          "role": "environment",
+          "severity": 0.045684
+        }
+      ]
+    },
+    "heldout-power-thermal-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-power-thermal-hostile-005",
+        "heldout-power-thermal-hostile-006",
+        "heldout-power-thermal-hostile-007"
+      ],
+      "cause": "RF heating from a high-power emitter during the pass",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "power_thermal_excursion",
+      "external_signals": [
+        "rf_ew/emission_cluster_detected",
+        "rf_ew/rf_interference"
+      ],
+      "family": "power_thermal",
+      "file": "heldout/power_thermal_hostile.jsonl",
+      "measurement": "primary_sensor_k",
+      "model": "thermal",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 503.0,
+      "onset_ts": "2026-09-17T14:08:23Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.85,
+        0.8
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "thermal",
+      "symptom": "panel_temperature_above_band",
+      "unit": "K",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 300.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 480.0,
+          "role": "hostile",
+          "severity": 0.5
+        }
+      ]
+    },
+    "heldout-power-thermal-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-power-thermal-internal-003",
+        "heldout-power-thermal-internal-004",
+        "heldout-power-thermal-internal-005",
+        "heldout-power-thermal-internal-006"
+      ],
+      "cause": "radiator degradation (aging)",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "power_thermal_excursion",
+      "external_signals": [],
+      "family": "power_thermal",
+      "file": "heldout/power_thermal_internal.jsonl",
+      "measurement": "primary_sensor_k",
+      "model": "thermal",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 488.0,
+      "onset_ts": "2026-09-17T14:08:08Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.85,
+        0.85,
+        0.85
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "thermal",
+      "symptom": "panel_temperature_above_band",
+      "unit": "K",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 150.0,
+          "role": "fault",
+          "severity": 0.024
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 180.04,
+          "role": "fault",
+          "severity": 0.048
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 210.07999999999998,
+          "role": "fault",
+          "severity": 0.072
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 240.12,
+          "role": "fault",
+          "severity": 0.096
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 270.15999999999997,
+          "role": "fault",
+          "severity": 0.12
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 300.2,
+          "role": "fault",
+          "severity": 0.144
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 330.24,
+          "role": "fault",
+          "severity": 0.168
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 360.28,
+          "role": "fault",
+          "severity": 0.192
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 390.32,
+          "role": "fault",
+          "severity": 0.216
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 420.36,
+          "role": "fault",
+          "severity": 0.24
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 450.4,
+          "role": "fault",
+          "severity": 0.264
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 480.44,
+          "role": "fault",
+          "severity": 0.288
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 510.48,
+          "role": "fault",
+          "severity": 0.312
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 540.52,
+          "role": "fault",
+          "severity": 0.336
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 570.56,
+          "role": "fault",
+          "severity": 0.36
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 600.5999999999999,
+          "role": "fault",
+          "severity": 0.384
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 630.64,
+          "role": "fault",
+          "severity": 0.408
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 660.6800000000001,
+          "role": "fault",
+          "severity": 0.432
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 690.72,
+          "role": "fault",
+          "severity": 0.456
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 720.76,
+          "role": "fault",
+          "severity": 0.48
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 750.8,
+          "role": "fault",
+          "severity": 0.504
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 780.84,
+          "role": "fault",
+          "severity": 0.528
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 810.88,
+          "role": "fault",
+          "severity": 0.552
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 840.92,
+          "role": "fault",
+          "severity": 0.576
+        },
+        {
+          "duration_s": 30.04,
+          "kind": "radiator_degradation",
+          "onset_s": 870.96,
+          "role": "fault",
+          "severity": 0.6
+        }
+      ]
+    },
+    "heldout-power-thermal-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-power-thermal-natural-004",
+        "heldout-power-thermal-natural-005",
+        "heldout-power-thermal-natural-006",
+        "heldout-power-thermal-natural-007"
+      ],
+      "cause": "storm-driven environmental heating",
+      "environment_input": "absorbed-heat term (runaway-load channel) = storm-driven heating",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "power_thermal_excursion",
+      "external_signals": [
+        "space_weather/geomagnetic_storm"
+      ],
+      "family": "power_thermal",
+      "file": "heldout/power_thermal_natural.jsonl",
+      "measurement": "primary_sensor_k",
+      "model": "thermal",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 433.0,
+      "onset_ts": "2026-09-17T14:07:13Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.85,
+        0.8,
+        0.8
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:56:13Z",
+        "2026-09-17T14:14:13Z"
+      ],
+      "subsystem": "thermal",
+      "symptom": "panel_temperature_above_band",
+      "unit": "K",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 330.0,
+          "role": "environment",
+          "severity": 0.039158
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 370.0,
+          "role": "environment",
+          "severity": 0.114805
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 410.0,
+          "role": "environment",
+          "severity": 0.182628
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 450.0,
+          "role": "environment",
+          "severity": 0.238006
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 490.0,
+          "role": "environment",
+          "severity": 0.277164
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 530.0,
+          "role": "environment",
+          "severity": 0.297433
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 570.0,
+          "role": "environment",
+          "severity": 0.297433
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 610.0,
+          "role": "environment",
+          "severity": 0.277164
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 650.0,
+          "role": "environment",
+          "severity": 0.238006
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 690.0,
+          "role": "environment",
+          "severity": 0.182628
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 730.0,
+          "role": "environment",
+          "severity": 0.114805
+        },
+        {
+          "duration_s": 40.0,
+          "kind": "thermal_runaway_load",
+          "onset_s": 770.0,
+          "role": "environment",
+          "severity": 0.039158
+        }
+      ]
+    },
+    "heldout-sensor-saturation-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-sensor-saturation-hostile-004",
+        "heldout-sensor-saturation-hostile-005",
+        "heldout-sensor-saturation-hostile-006",
+        "heldout-sensor-saturation-hostile-007"
+      ],
+      "cause": "laser dazzling during overflight of a known site",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "sensor_saturation",
+      "external_signals": [
+        "sda/counterspace_capability_context"
+      ],
+      "family": "sensor_saturation",
+      "file": "heldout/sensor_saturation_hostile.jsonl",
+      "measurement": "saturated_pixel_fraction",
+      "model": "fault_profile",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 472.0,
+      "onset_ts": "2026-09-17T14:07:52Z",
+      "physics_basis": [
+        "shape:step;w_belief=0.00;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.44;row=sensor_saturation;rate=linear_fit",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.61;row=sensor_saturation;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.25,
+        0.25,
+        0.5,
+        0.5
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "step",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "payload",
+      "symptom": "saturated_pixel_fraction_high",
+      "unit": "fraction",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 220.0,
+          "kind": "profile:step",
+          "onset_s": 470.0,
+          "role": "hostile",
+          "severity": 0.9
+        }
+      ]
+    },
+    "heldout-sensor-saturation-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-sensor-saturation-internal-003",
+        "heldout-sensor-saturation-internal-004",
+        "heldout-sensor-saturation-internal-005",
+        "heldout-sensor-saturation-internal-006"
+      ],
+      "cause": "detector aging",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "sensor_saturation",
+      "external_signals": [],
+      "family": "sensor_saturation",
+      "file": "heldout/sensor_saturation_internal.jsonl",
+      "measurement": "saturated_pixel_fraction",
+      "model": "fault_profile",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 328.0,
+      "onset_ts": "2026-09-17T14:05:28Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.85,
+        0.85,
+        0.85
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "payload",
+      "symptom": "saturated_pixel_fraction_high",
+      "unit": "fraction",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 600.0,
+          "kind": "profile:ramp",
+          "onset_s": 240.0,
+          "role": "fault",
+          "severity": 0.35
+        }
+      ]
+    },
+    "heldout-sensor-saturation-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-sensor-saturation-natural-004",
+        "heldout-sensor-saturation-natural-005",
+        "heldout-sensor-saturation-natural-006",
+        "heldout-sensor-saturation-natural-007"
+      ],
+      "cause": "sun in the field of regard (low sun angle, warm detector)",
+      "environment_input": "sun-elevation lobe on the saturated fraction and detector temperature",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "sensor_saturation",
+      "external_signals": [
+        "space_weather/geomagnetic_storm"
+      ],
+      "family": "sensor_saturation",
+      "file": "heldout/sensor_saturation_natural.jsonl",
+      "measurement": "saturated_pixel_fraction",
+      "model": "fault_profile",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 416.0,
+      "onset_ts": "2026-09-17T14:06:56Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.85;fit_quality=0.99;row=sensor_saturation;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=0.86;row=sensor_saturation;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope",
+        "shape:unknown;w_belief=0.00;shape_support=0.50;fit_quality=0.39;row=sensor_saturation;rate=linear_fit"
+      ],
+      "physics_consistency": [
+        0.85,
+        0.8,
+        0.8,
+        0.5
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp",
+        "unknown"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:55:56Z",
+        "2026-09-17T14:13:56Z"
+      ],
+      "subsystem": "payload",
+      "symptom": "saturated_pixel_fraction_high",
+      "unit": "fraction",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 360.0,
+          "kind": "profile:sun_angle_bump",
+          "onset_s": 380.0,
+          "role": "environment",
+          "severity": 0.6
+        }
+      ]
+    },
+    "heldout-unexpected-reset-hostile": {
+      "arm": "hostile",
+      "bus_record_ids": [
+        "heldout-unexpected-reset-hostile-005",
+        "heldout-unexpected-reset-hostile-006",
+        "heldout-unexpected-reset-hostile-007"
+      ],
+      "cause": "cyber intrusion on the ground segment injecting commands",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "unexpected_reset",
+      "external_signals": [
+        "cyber/credential_probe",
+        "cyber/process_anomaly"
+      ],
+      "family": "unexpected_reset",
+      "file": "heldout/unexpected_reset_hostile.jsonl",
+      "measurement": "reset_count",
+      "model": "compute_storage+payload_cyber",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 480.0,
+      "onset_ts": "2026-09-17T14:08:00Z",
+      "physics_basis": [
+        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.91;row=unexpected_reset;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.98;row=unexpected_reset;rate=slope",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.65,
+        0.65
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "ramp",
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "cdh",
+      "symptom": "unexpected_reset_count_rising",
+      "unit": "count",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 20.0,
+          "kind": "unauthorized_command",
+          "onset_s": 470.0,
+          "role": "hostile",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 12.0,
+          "kind": "replayed_command",
+          "onset_s": 500.0,
+          "role": "hostile",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 18.0,
+          "kind": "unauthorized_command",
+          "onset_s": 688.0,
+          "role": "hostile",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 61.0,
+          "kind": "reset_loop",
+          "onset_s": 480.0,
+          "role": "hostile",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 91.0,
+          "kind": "reset_loop",
+          "onset_s": 610.0,
+          "role": "hostile",
+          "severity": 0.8
+        }
+      ]
+    },
+    "heldout-unexpected-reset-internal": {
+      "arm": "internal",
+      "bus_record_ids": [
+        "heldout-unexpected-reset-internal-003",
+        "heldout-unexpected-reset-internal-004",
+        "heldout-unexpected-reset-internal-005",
+        "heldout-unexpected-reset-internal-006"
+      ],
+      "cause": "flight software fault (reproducible reset loop)",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "unexpected_reset",
+      "external_signals": [],
+      "family": "unexpected_reset",
+      "file": "heldout/unexpected_reset_internal.jsonl",
+      "measurement": "reset_count",
+      "model": "compute_storage",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 300.0,
+      "onset_ts": "2026-09-17T14:05:00Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.97;row=unexpected_reset;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.675,
+        0.675,
+        0.675
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "cdh",
+      "symptom": "unexpected_reset_count_rising",
+      "unit": "count",
+      "verdict": "internal_fault",
+      "windows": [
+        {
+          "duration_s": 480.0,
+          "kind": "reset_loop",
+          "onset_s": 300.0,
+          "role": "fault",
+          "severity": 0.8
+        }
+      ]
+    },
+    "heldout-unexpected-reset-natural": {
+      "arm": "natural",
+      "bus_record_ids": [
+        "heldout-unexpected-reset-natural-005",
+        "heldout-unexpected-reset-natural-006",
+        "heldout-unexpected-reset-natural-007",
+        "heldout-unexpected-reset-natural-008"
+      ],
+      "cause": "radiation enhancement (single-event upsets)",
+      "environment_input": "reset-loop window placement = radiation-driven upsets; ECC counts",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "unexpected_reset",
+      "external_signals": [
+        "space_weather/geomagnetic_storm",
+        "space_weather/radiation_enhancement"
+      ],
+      "family": "unexpected_reset",
+      "file": "heldout/unexpected_reset_natural.jsonl",
+      "measurement": "reset_count",
+      "model": "compute_storage",
+      "norad_cat_id": "99901",
+      "onset_sim_time_s": 373.0,
+      "onset_ts": "2026-09-17T14:06:13Z",
+      "physics_basis": [
+        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.94;row=unexpected_reset;rate=slope",
+        "shape:drift;w_belief=0.00;shape_support=0.68;fit_quality=0.98;row=unexpected_reset;rate=slope",
+        "shape:ramp;w_belief=0.00;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
+        "shape:step;w_belief=0.00;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.375,
+        0.675,
+        0.65,
+        0.675
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp",
+        "step"
+      ],
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:55:13Z",
+        "2026-09-17T14:13:13Z"
+      ],
+      "subsystem": "cdh",
+      "symptom": "unexpected_reset_count_rising",
+      "unit": "count",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 1.0,
+          "kind": "reset_loop",
+          "onset_s": 373.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 31.0,
+          "kind": "reset_loop",
+          "onset_s": 382.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 61.0,
+          "kind": "reset_loop",
+          "onset_s": 420.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 91.0,
+          "kind": "reset_loop",
+          "onset_s": 416.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 121.0,
+          "kind": "reset_loop",
+          "onset_s": 458.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 151.0,
+          "kind": "reset_loop",
+          "onset_s": 482.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 181.0,
+          "kind": "reset_loop",
+          "onset_s": 528.0,
+          "role": "environment",
+          "severity": 0.8
+        },
+        {
+          "duration_s": 420.0,
+          "kind": "memory_table_corruption",
+          "onset_s": 340.0,
+          "role": "environment",
+          "severity": 0.3
+        }
+      ]
+    }
+  },
+  "schema_version": 1,
+  "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+  "seed": 20260917
+}

@@ -8,7 +8,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from canopy.services.schemas.events import Action, Authority, Domain, Signal
+from canopy.services.schemas.events import Action, Authority, Domain, Signal, Verdict
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SCENARIO_REGISTRY = ROOT / "scenarios" / "manifest.json"
@@ -47,6 +47,9 @@ class ExpectedOutcome(BaseModel):
     forbidden_actions: list[Action] = Field(default_factory=list)
     required_citations: list[str] = Field(default_factory=list)
     required_tools: list[str] = Field(default_factory=list)
+    # MEGALITH three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so the
+    # pre-existing cases stay valid; the held-out paired suite sets it.
+    verdict: Verdict | None = None
 
 
 class ScenarioSpec(BaseModel):
@@ -70,10 +73,12 @@ class ScenarioSpec(BaseModel):
 
     @property
     def scenario_path(self) -> Path:
-        path = (ROOT / "scenarios" / self.file).resolve()
         scenarios_root = (ROOT / "scenarios").resolve()
-        if path.parent != scenarios_root:
-            raise ValueError(f"scenario file must be directly under {scenarios_root}")
+        path = (scenarios_root / self.file).resolve()
+        # Files may live in a subdirectory of ``scenarios/`` (the held-out
+        # suite is under ``scenarios/heldout/``) but never outside it.
+        if scenarios_root not in path.parents:
+            raise ValueError(f"scenario file must lie under {scenarios_root}")
         return path
 
     def role_for(self, signal: Signal) -> RecordRole:

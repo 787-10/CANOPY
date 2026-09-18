@@ -9,6 +9,7 @@ from typing import Any
 from canopy.services.kb import KB
 from canopy.services.kb.models import KBEntry
 from canopy.services.llm.validation import (
+    RuleVerdictLike,
     validate_and_repair_attribution,
     validate_and_repair_decision,
 )
@@ -22,6 +23,15 @@ from canopy.services.schemas.events import (
 log = logging.getLogger(__name__)
 
 DEFAULT_MODEL = "claude-sonnet-4-6"
+
+
+def _verdict_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Verdict lane fields from a validated attribution payload (spec §5)."""
+    return {
+        "verdict": payload.get("verdict"),
+        "verdict_basis": payload.get("verdict_basis"),
+        "verdict_evidence": list(payload.get("verdict_evidence") or []),
+    }
 
 
 class AnthropicLLMClient:
@@ -73,34 +83,39 @@ class AnthropicLLMClient:
         return await self.attribute_primary(anomalies, kb_context)
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
             attribution_system_prompt,
+            attribution_tool,
             attribution_user_prompt,
         )
 
         relevant = self._resolve_kb_context(anomalies, kb_context)
+        tool = attribution_tool(rule_verdict)
 
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
             temperature=self._temperature,
             system=attribution_system_prompt(),
-            tools=[ATTRIBUTION_TOOL],
-            tool_choice={"type": "tool", "name": ATTRIBUTION_TOOL["name"]},
+            tools=[tool],
+            tool_choice={"type": "tool", "name": tool["name"]},
             messages=[
                 {
                     "role": "user",
-                    "content": attribution_user_prompt(anomalies, relevant),
+                    "content": attribution_user_prompt(anomalies, relevant, rule_verdict),
                 }
             ],
         )
         self._record_usage(response)
-        payload = _extract_tool_input(response, ATTRIBUTION_TOOL["name"])
+        payload = _extract_tool_input(response, tool["name"])
         raw = dict(payload)
-        validation = validate_and_repair_attribution(payload)
+        validation = validate_and_repair_attribution(payload, rule_verdict)
         self.validation_events.append(
             {
                 "stage": "attribution",
@@ -121,6 +136,7 @@ class AnthropicLLMClient:
             source_signal_ids=list(
                 dict.fromkeys(sid for a in anomalies for sid in a.source_signal_ids)
             ),
+            **_verdict_fields(payload),
         )
 
     async def attribute_redteam(
@@ -167,35 +183,38 @@ class AnthropicLLMClient:
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
+            attribution_tool,
             reconcile_system_prompt,
             reconcile_user_prompt,
         )
 
         relevant = self._resolve_kb_context(anomalies, kb_context)
+        tool = attribution_tool(rule_verdict)
 
         response = await self._client.messages.create(
             model=self._model,
             max_tokens=1024,
             temperature=self._temperature,
             system=reconcile_system_prompt(),
-            tools=[ATTRIBUTION_TOOL],
-            tool_choice={"type": "tool", "name": ATTRIBUTION_TOOL["name"]},
+            tools=[tool],
+            tool_choice={"type": "tool", "name": tool["name"]},
             messages=[
                 {
                     "role": "user",
                     "content": reconcile_user_prompt(
-                        primary, challenge, anomalies, relevant
+                        primary, challenge, anomalies, relevant, rule_verdict
                     ),
                 }
             ],
         )
         self._record_usage(response)
-        payload = _extract_tool_input(response, ATTRIBUTION_TOOL["name"])
+        payload = _extract_tool_input(response, tool["name"])
         raw = dict(payload)
-        validation = validate_and_repair_attribution(payload)
+        validation = validate_and_repair_attribution(payload, rule_verdict)
         self.validation_events.append(
             {
                 "stage": "attribution",
@@ -214,6 +233,7 @@ class AnthropicLLMClient:
             predicted_next=payload.get("predicted_next"),
             kb_citations=list(payload.get("kb_citations", [])),
             source_signal_ids=list(primary.source_signal_ids),
+            **_verdict_fields(payload),
         )
 
     def _resolve_kb_context(
@@ -272,6 +292,10 @@ class AnthropicLLMClient:
             rationale=payload["rationale"],
             authority=payload["authority"],
             request_packet=payload.get("request_packet"),
+            # The validator has already normalised an echoed recovery block
+            # to a well-formed dict or None (spec §6 invariants); keep it so
+            # the round trip is not lossy.
+            recovery=payload.get("recovery"),
             source_signal_ids=list(attribution.source_signal_ids),
         )
 

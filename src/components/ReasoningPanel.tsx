@@ -1,5 +1,10 @@
 import { useEffect, useRef } from 'react'
 import { useEventStore } from '../store/eventStore'
+import {
+  gateReasonLabel,
+  traceAnnotations,
+  verdictLabel,
+} from '../lib/commanderLanguage'
 import type { ReasoningTrace, TraceStage } from '../types/canopy'
 
 const STAGE_COLORS: Record<TraceStage, string> = {
@@ -109,13 +114,48 @@ export function ReasoningPanel({ compact = false }: Props) {
 
 function TraceLine({ trace }: { trace: ReasoningTrace }) {
   const color = STAGE_COLORS[trace.stage] ?? 'var(--text-muted)'
+  const { verdict, physicsConsistency, gateReasonCode } = traceAnnotations(trace)
+  const blocked = gateReasonCode !== null
+  const hasChips = blocked || verdict !== null || physicsConsistency !== null
+
   return (
-    <div className={`reasoning-line reasoning-line--${trace.level}`}>
+    <div
+      className={`reasoning-line reasoning-line--${trace.level}${
+        blocked ? ' reasoning-line--blocked' : ''
+      }`}
+      data-trace-id={trace.id}
+      data-blocked={blocked ? 'true' : undefined}
+    >
       <span className="reasoning-line__time">{formatTime(trace.ts)}</span>
       <span className="reasoning-line__stage" style={{ color }}>
         [{STAGE_LABEL[trace.stage] ?? trace.stage}]
       </span>
       <span className="reasoning-line__msg">{trace.message}</span>
+      {hasChips ? (
+        <span className="reasoning-line__chips">
+          {blocked ? (
+            <span
+              className="reasoning-line__chip reasoning-line__chip--blocked"
+              title={gateReasonLabel(gateReasonCode)}
+            >
+              blocked · {gateReasonCode}
+            </span>
+          ) : null}
+          {verdict ? (
+            <span
+              className={`reasoning-line__chip reasoning-line__chip--verdict reasoning-line__chip--${verdict}`}
+              data-verdict={verdict}
+            >
+              verdict · {verdictLabel(verdict).toLowerCase()}
+            </span>
+          ) : null}
+          {physicsConsistency !== null ? (
+            <span className="reasoning-line__chip reasoning-line__chip--physics">
+              physics · {physicsConsistency.toFixed(2)}
+            </span>
+          ) : null}
+        </span>
+      ) : null}
     </div>
   )
 }
