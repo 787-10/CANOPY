@@ -357,6 +357,10 @@ export function CesiumGlobe({
       timeline: false,
       useBrowserRecommendedResolution: false,
       creditContainer: creditRef.current,
+      // Keep the WebGL drawing buffer between frames so a screen-recording
+      // or capture tool that reads the canvas between on-demand renders gets
+      // the last frame rather than an empty buffer.
+      contextOptions: { webgl: { preserveDrawingBuffer: true } },
     })
     viewerRef.current = viewer
     if (import.meta.env.DEV) {
