@@ -15,6 +15,10 @@ dependencies = [
     "uvicorn[standard]>=0.32.0",
     "sentence-transformers>=3.0.0",
     "numpy>=1.26",
+    # Declared directly (it is already pulled in by sentence-transformers) so
+    # the [tool.uv.sources] pin to the CPU-only index applies on Linux; uv
+    # only honours a source for a package the project names itself.
+    "torch>=2.2",
 ]
 
 [dependency-groups]
@@ -35,3 +39,16 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["canopy"]
+
+# Added for MEGALITH: on Linux, take torch (pulled in by sentence-transformers)
+# from the CPU-only PyTorch index instead of the PyPI build, which drags the
+# full CUDA library set (several GB) into every Linux install and exhausted
+# the CI runner's disk. macOS is untouched: the CPU index has no macOS wheels
+# and the PyPI macOS build is CPU/MPS anyway. Same pattern as the engine.
+[tool.uv.sources]
+torch = [{ index = "pytorch-cpu", marker = "sys_platform == 'linux'" }]
+
+[[tool.uv.index]]
+name = "pytorch-cpu"
+url = "https://download.pytorch.org/whl/cpu"
+explicit = true
