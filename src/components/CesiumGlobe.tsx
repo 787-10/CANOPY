@@ -10,7 +10,6 @@ import {
   Color,
   ConstantProperty,
   createWorldImageryAsync,
-  CzmlDataSource,
   HeadingPitchRange,
   Ion,
   ImageryLayer,
@@ -18,13 +17,11 @@ import {
   LabelStyle,
   NearFarScalar,
   PolylineDashMaterialProperty,
-  Rectangle,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   TileMapServiceImageryProvider,
   Viewer,
 } from 'cesium'
-import { forward as toMgrs, toPoint as mgrsToPoint } from 'mgrs'
 import 'cesium/Build/Cesium/Widgets/widgets.css'
 import {
   addN2YOSatellite,
@@ -49,6 +46,7 @@ import {
   type N2YODisplayPoint,
   type N2YOSatelliteFamily,
 } from '../lib/n2yoSatelliteLayer'
+import { toPoint as mgrsToPoint } from 'mgrs'
 import { commanderSignalSummary } from '../lib/commanderLanguage'
 import {
   groundStationFromPositionCache,
@@ -209,54 +207,6 @@ const isFamilyVisible = (
   family: N2YOSatelliteFamily,
 ) => selection === 'all' || selection.includes(family)
 
-const localAorBounds = {
-  west: -116.61,
-  south: 34.98,
-  east: -116.43,
-  north: 35.08,
-}
-const LOCAL_AOR_CAMERA_DESTINATION = Rectangle.fromDegrees(
-  localAorBounds.west - 0.28,
-  localAorBounds.south - 0.18,
-  localAorBounds.east + 0.28,
-  localAorBounds.north + 0.18,
-)
-const LOCAL_AOR_CAMERA_ORIENTATION = {
-  heading: 0,
-  pitch: -1.5,
-  roll: 0,
-}
-
-const localContacts = [
-  {
-    name: 'RELAY TEAM 2',
-    lon: -116.52,
-    lat: 35.02,
-    height: 1210,
-    color: MAP_AMBER,
-  },
-  {
-    name: 'BLOS RELAY WEST',
-    lon: -116.547,
-    lat: 35.039,
-    height: 1225,
-    color: MAP_CYAN,
-  },
-  {
-    name: 'RF HIT 11',
-    lon: -116.485,
-    lat: 35.012,
-    height: 1230,
-    color: MAP_RED,
-  },
-]
-
-const formatMgrs = (lon: number, lat: number) =>
-  toMgrs([lon, lat], 4).replace(
-    /^(\d{1,2}[A-Z])([A-Z]{2})(\d{4})(\d{4})$/,
-    '$1 $2 $3 $4',
-  )
-
 const colorForSignal = (signal: Signal) => {
   if (signal.confidence >= 0.86) {
     return MAP_RED
@@ -321,60 +271,6 @@ const signalPolygon = (signal: Signal) => {
     })
 
   return coords.length >= 6 ? coords : null
-}
-
-const addMinutes = (date: Date, minutes: number) =>
-  new Date(date.getTime() + minutes * 60000).toISOString()
-
-const createVehicleCzml = () => {
-  const start = new Date()
-  const stop = addMinutes(start, 8)
-  const epoch = start.toISOString()
-  const interval = `${epoch}/${stop}`
-
-  return [
-    {
-      id: 'document',
-      name: 'MEGALITH Vehicle Track',
-      version: '1.0',
-      clock: {
-        interval,
-        currentTime: epoch,
-        multiplier: 4,
-        range: 'LOOP_STOP',
-        step: 'SYSTEM_CLOCK_MULTIPLIER',
-      },
-    },
-    {
-      id: 'Vehicle/Relay-Team-2',
-      availability: interval,
-      name: 'Relay-Team-2',
-      position: {
-        epoch,
-        interpolationAlgorithm: 'LINEAR',
-        cartographicDegrees: [
-          0, -116.57, 35.0, 1200, 90, -116.55, 35.015, 1225, 180,
-          -116.52, 35.02, 1210, 270, -116.49, 35.035, 1235, 380,
-          -116.46, 35.05, 1240,
-        ],
-      },
-      billboard: {
-        height: 20,
-        image: markerSvg('drone', '#c9a457'),
-        scale: 1,
-        width: 20,
-      },
-      label: {
-        text: 'RELAY TEAM 2',
-        font: MAP_FONT,
-        fillColor: { rgba: [255, 255, 255, 255] },
-        show: false,
-        showBackground: true,
-        backgroundColor: { rgba: [9, 17, 18, 220] },
-        pixelOffset: { cartesian2: [0, -26] },
-      },
-    },
-  ]
 }
 
 export function CesiumGlobe({
@@ -463,6 +359,11 @@ export function CesiumGlobe({
       creditContainer: creditRef.current,
     })
     viewerRef.current = viewer
+    if (import.meta.env.DEV) {
+      // Development aid: lets a browser probe ask the scene what is drawn
+      // under a pixel (scene.drillPick) without shipping a debug UI.
+      ;(window as unknown as { __megalithViewer?: Viewer }).__megalithViewer = viewer
+    }
 
     viewer.resolutionScale = Math.min(window.devicePixelRatio || 1, 2)
     viewer.scene.backgroundColor = Color.fromCssColorString('#07100f')
@@ -611,61 +512,6 @@ export function CesiumGlobe({
       addEsriImagery()
     }
 
-    viewer.entities.add({
-      name: 'North Axis AOR',
-      rectangle: {
-        coordinates: Rectangle.fromDegrees(47, 25, 77, 43),
-        fill: true,
-        height: 0,
-        material: MAP_RED.withAlpha(0.08),
-        outline: true,
-        outlineColor: MAP_RED.withAlpha(0.65),
-      },
-    })
-
-    viewer.entities.add({
-      id: 'local-aor-boundary',
-      name: 'Local AOR Boundary',
-      rectangle: {
-        coordinates: Rectangle.fromDegrees(
-          localAorBounds.west,
-          localAorBounds.south,
-          localAorBounds.east,
-          localAorBounds.north,
-        ),
-        fill: true,
-        height: 0,
-        material: MAP_RED.withAlpha(0.06),
-        outline: true,
-        outlineColor: MAP_RED.withAlpha(0.65),
-      },
-    })
-
-    localContacts.forEach((contact) => {
-      viewer.entities.add({
-        id: `local-${contact.name.toLowerCase().replaceAll(' ', '-')}`,
-        name: contact.name,
-        position: Cartesian3.fromDegrees(contact.lon, contact.lat, contact.height),
-        billboard: {
-          color: Color.WHITE,
-          height: 20,
-          image: markerSvg('drone', markerColorHex(contact.color)),
-          scaleByDistance: new NearFarScalar(50000, 0.82, 900000, 0.42),
-          width: 20,
-        },
-        label: {
-          backgroundColor: MAP_PANEL.withAlpha(0.82),
-          fillColor: Color.WHITE,
-          font: MAP_FONT,
-          pixelOffset: new Cartesian2(0, -28),
-          show: false,
-          showBackground: true,
-          style: LabelStyle.FILL,
-          text: `${contact.name}\n${formatMgrs(contact.lon, contact.lat)}`,
-        },
-      })
-    })
-
     viewer.camera.setView({
       destination: RESET_CAMERA_DESTINATION,
     })
@@ -804,42 +650,6 @@ export function CesiumGlobe({
     viewer.camera.flyTo({
       destination: RESET_CAMERA_DESTINATION,
       duration: 0.6,
-    })
-  }
-
-  const loadVehicle = () => {
-    const viewer = viewerRef.current
-    if (!viewer || viewer.isDestroyed()) {
-      return
-    }
-
-    viewer.dataSources.removeAll()
-    if (selectedN2yoLayerRef.current) {
-      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-    }
-    clearN2YOSatelliteLayers(viewer, n2yoLayersRef.current)
-    n2yoLayersRef.current = []
-    loadedN2yoSatelliteIdsRef.current.clear()
-    setN2yoLayerCount(0)
-    setOrbitCapableLayerCount(0)
-    selectedN2yoLayerRef.current = null
-    setSelectedSatellite(null)
-    satelliteFamilySelectionRef.current = []
-    setSatelliteFamilySelection([])
-    showAllOrbitsRef.current = false
-    setShowAllOrbits(false)
-    void viewer.dataSources.add(CzmlDataSource.load(createVehicleCzml())).then(() => {
-      if (viewer.isDestroyed()) {
-        return
-      }
-
-      viewer.clock.shouldAnimate = true
-      setActiveLayer('local-aor')
-      viewer.camera.flyTo({
-        destination: LOCAL_AOR_CAMERA_DESTINATION,
-        duration: 0.8,
-        orientation: LOCAL_AOR_CAMERA_ORIENTATION,
-      })
     })
   }
 
@@ -1075,12 +885,7 @@ export function CesiumGlobe({
   }, [displayMode, syntheticInStream, ensureN2YOSatellitesLoaded, signals])
 
   useEffect(() => {
-    if (displayMode === 'globe') {
-      resetDynamicSources()
-      return
-    }
-
-    loadVehicle()
+    resetDynamicSources()
   }, [displayMode])
 
   // Maneuver demo: when the operator accepts a decide-stage decision, run an
