@@ -246,10 +246,81 @@ async def test_decide_reset_forgets_the_anomaly_cache_and_decision_ids() -> None
         assert not decide._anomaly_cache and not decide._decision_ids and not decide._arrivals
         assert decide._timing is None
 
-        # The same attribution id after a reset is a new decision, not a revision.
-        await bus.publish("attributions.unknown", attribution)
+        # The same attribution id after a reset is a new decision, not a revision
+        # (stamped after the reset: an older stamp would be dropped as stale).
+        await bus.publish(
+            "attributions.unknown", attribution.model_copy(update={"ts": datetime.now(UTC)})
+        )
         await bus.drain()
         assert decisions[-1].id != first_decision_id
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        bus.close()
+
+
+async def test_decide_drops_an_attribution_queued_before_the_reset() -> None:
+    """An attribution stamped before POST /reset belongs to the previous take."""
+    bus = InProcessBus()
+    decide = DecideService(bus, StubLLMClient(KB(entries=[])), gate=policy_gate)
+    decisions: list[Decision] = []
+
+    async def sniff() -> None:
+        async for _, event in bus.subscribe("decisions.*"):
+            if isinstance(event, Decision):
+                decisions.append(event)
+
+    tasks = [asyncio.create_task(decide.run()), asyncio.create_task(sniff())]
+    try:
+        await _spin()
+        rf = _anomaly("rf_anomaly", "sig-rf-2")
+        await bus.publish("anomalies.rf_anomaly", rf)
+        await bus.drain()
+        stale = Attribution(
+            id="attr-stale", anomaly_ids=[rf.id], actor="Unknown", confidence=0.4,
+            kb_citations=["kb-attribution-uncertainty-001"], verdict="unknown", satellite_id=SAT,
+            ts=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        decide.reset()
+        await bus.publish("attributions.unknown", stale)
+        await bus.drain()
+        assert decisions == []
+        fresh = stale.model_copy(update={"id": "attr-fresh", "ts": datetime.now(UTC)})
+        await bus.publish("attributions.unknown", fresh)
+        await bus.drain()
+        assert [d.attribution_id for d in decisions] == ["attr-fresh"]
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        bus.close()
+
+
+async def test_ui_events_drops_a_decision_queued_before_the_reset() -> None:
+    bus = InProcessBus()
+    ui = UIEventService(bus)
+    published: list[Any] = []
+
+    async def sniff() -> None:
+        async for _, event in bus.subscribe("ui_events.*"):
+            published.append(event)
+
+    tasks = [asyncio.create_task(ui.run()), asyncio.create_task(sniff())]
+    try:
+        await _spin()
+        ui.reset()
+        stale = Decision(
+            id="dec-stale", attribution_id="attr-x", action="threat_warning", target="SIM-01",
+            rationale="stale", authority="local", ts=datetime.now(UTC) - timedelta(seconds=1),
+        )
+        await bus.publish("decisions.threat_warning", stale)
+        await bus.drain()
+        assert published == []
+        fresh = stale.model_copy(update={"id": "dec-fresh", "ts": datetime.now(UTC)})
+        await bus.publish("decisions.threat_warning", fresh)
+        await bus.drain()
+        assert len(published) == 1
     finally:
         for task in tasks:
             task.cancel()
@@ -327,7 +398,7 @@ def test_reset_reports_what_it_cleared_and_empties_the_caches(client: TestClient
     body = response.json()
     assert body["status"] == "reset"
     assert body["replay_cancelled"] is False  # the replay had already finished
-    assert set(body["cleared"]) == {"attrib", "fusion", "decide", "ui_events", "tracer"}
+    assert set(body["cleared"]) == {"attrib", "fusion", "decide", "ui_events", "tracer", "attrib_late"}
     assert body["cleared"]["tracer"]["marks"] >= 1  # the replayed anomalies were marked
     assert client.app.state.engine.tracer.t0_for("anything") is None
     assert body["cleared"]["decide"]["anomaly_cache"] > 0

@@ -778,7 +778,7 @@
   min-height: 0;
   overflow: hidden;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
 }
 
 .event-feed::after {
@@ -1196,7 +1196,7 @@
 .event-feed__raw-view {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: #070a0c;
 }
 
@@ -1505,7 +1505,7 @@
 .event-feed__raw-view {
   min-height: 0;
   display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   background: #070a0c;
 }
 
@@ -2289,7 +2289,7 @@
 
 .stress-mode__grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 6px;
   padding: 10px 12px;
 }
@@ -2689,7 +2689,7 @@
    overlaid. */
 @media (min-width: 1081px) {
   .satellite-detail {
-    right: calc(var(--right-rail, 352px) + 14px);
+    right: calc(var(--right-rail, 380px) + 14px);
   }
 }
 

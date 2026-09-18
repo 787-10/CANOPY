@@ -218,10 +218,18 @@ export const useEventStore = create<EventState>()(
     }),
 
   ingestDecision: (decision) =>
-    set((state) => ({
-      decisions: pushBounded(state.decisions, decision),
-      decisionsById: { ...state.decisionsById, [decision.id]: decision },
-    })),
+    set((state) => {
+      // Decision ids are stable across revisions; a redelivered lower revision
+      // must not overwrite the one already held (mirrors ingestAttribution).
+      const held = state.decisionsById[decision.id]
+      if (held && (decision.revision ?? 0) < (held.revision ?? 0)) {
+        return {}
+      }
+      return {
+        decisions: pushBounded(state.decisions, decision),
+        decisionsById: { ...state.decisionsById, [decision.id]: decision },
+      }
+    }),
 
   ingestTrace: (trace) =>
     set((state) =>

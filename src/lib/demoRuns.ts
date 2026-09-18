@@ -48,18 +48,23 @@ export const DEMO_RUNS: Record<DemoRun, DemoRunSpec> = {
 // gateway caps every inter-record sleep at `max_delay_s`; its default cap of
 // 0.5 s would drain a run in a few seconds regardless of speed, so the
 // launcher asks for a 6 s cap: with the link-margin scenario's 90 to 140 s
-// gaps at 20x that is 4.5 to 7 s per record, about 50 s for the run. The
-// current gateway ignores the extra query parameter (request to the backend
-// lane in the hand-back); the replay then drains quickly and the pace of the
-// recording is the engine's reasoning time.
+// gaps at 20x that is 4.5 to 7 s per record, about 50 s for the run; the
+// engine's reasoning time (tens of seconds per pass) sets the rest of the
+// pace.
 export const REPLAY_SPEED = 20
 export const REPLAY_MAX_DELAY_S = 6
 
 export const LAST_RUN_KEY = 'megalith-last-run'
+/** Set by the launcher, consumed by the console once its socket is open: the
+ *  replay must not start before the page that shows it is listening, or the
+ *  first record (the space-weather context) is published to nobody. */
+export const PENDING_REPLAY_KEY = 'megalith-pending-replay'
 
 /** The reset must never hold the Start button: a decide call in flight on a
  *  local model can take a minute, and the gateway drops its result anyway. */
-export const RESET_TIMEOUT_MS = 5000
+// Longer than the gateway's worst case (two bounded 3 s drains): the abort is
+// for a gateway that hangs, not for a reset that is merely slow.
+export const RESET_TIMEOUT_MS = 8000
 
 export function resetUrl(apiUrl: string = DEMO_API_URL): string {
   return `${apiUrl}/reset`
@@ -117,20 +122,54 @@ export async function startDemoRun(
   } catch {
     // unreachable or slow gateway: the replay call below reports it
   }
-  const response = await fetchImpl(replayUrl(spec, apiUrl), { method: 'POST' })
-  if (!response.ok) {
-    throw new Error(`gateway refused replay of ${spec.stem}: HTTP ${response.status}`)
-  }
-  const body: unknown = await response.json().catch(() => ({}))
   try {
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run, stem: spec.stem }))
     sessionStorage.setItem(
       LAST_RUN_KEY,
       JSON.stringify({ run, stem: spec.stem, startedAt: new Date().toISOString() }),
     )
   } catch {
-    // storage unavailable
+    // storage unavailable: the console cannot pick the replay up; start it by hand
   }
   useCaptureStore.getState().setEnabled(true)
   navigate(withCapture(`/brigade?run=${run}`, true))
-  return body
+  return { status: 'pending', run, stem: spec.stem }
+}
+
+type PendingReplay = { run: DemoRun; stem: string }
+
+export function readPendingReplay(): PendingReplay | null {
+  try {
+    const raw = sessionStorage.getItem(PENDING_REPLAY_KEY)
+    if (!raw) return null
+    const parsed = JSON.parse(raw) as Partial<PendingReplay>
+    const run = parseRun(parsed.run ?? null)
+    return run ? { run, stem: DEMO_RUNS[run].stem } : null
+  } catch {
+    return null
+  }
+}
+
+/** Start the replay the launcher left pending, once. Called by the console
+ *  when its socket connects; the flag is cleared before the request so a
+ *  second effect run (development-mode double invoke, a reconnect) cannot
+ *  start the run twice. Resolves to the gateway body, or null when nothing
+ *  was pending. */
+export async function startPendingReplay({
+  fetchImpl = fetch,
+  apiUrl = DEMO_API_URL,
+}: { fetchImpl?: typeof fetch; apiUrl?: string } = {}): Promise<unknown> {
+  const pending = readPendingReplay()
+  if (!pending) return null
+  try {
+    sessionStorage.removeItem(PENDING_REPLAY_KEY)
+  } catch {
+    // storage unavailable
+  }
+  const spec = DEMO_RUNS[pending.run]
+  const response = await fetchImpl(replayUrl(spec, apiUrl), { method: 'POST' })
+  if (!response.ok) {
+    throw new Error(`gateway refused replay of ${spec.stem}: HTTP ${response.status}`)
+  }
+  return response.json().catch(() => ({}))
 }

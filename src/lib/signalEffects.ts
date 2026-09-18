@@ -85,3 +85,17 @@ export const signalEffectLabel = (signal: Signal | null) => {
 
   return byDomain[signal.domain]
 }
+
+/** Event types that report "nothing to see": a healthy bus record or a quiet
+ *  space-weather window. They stay in the stream but do not deserve the
+ *  alert card over the globe. */
+const QUIET_EVENT_TYPES = new Set(['nominal', 'quiet'])
+
+/** The newest signal worth alerting on: the latest report whose event type
+ *  is not a nominal/quiet placeholder, else the newest signal of all. Run C
+ *  ends on a quiet space-weather record; the card should still show the
+ *  storm or the margin drop that the verdict is about. */
+export const latestReport = (signals: Signal[]): Signal | null =>
+  signals.find((signal) => !QUIET_EVENT_TYPES.has(signal.payload.event_type)) ??
+  signals[0] ??
+  null

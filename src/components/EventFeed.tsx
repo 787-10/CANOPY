@@ -7,12 +7,15 @@ import {
 } from '../lib/commanderLanguage'
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
-import type { Signal } from '../types/canopy'
+import type { Decision, Signal } from '../types/canopy'
 import { BusHealthCard } from './BusHealthCard'
 
 type EventFeedProps = {
   /** Signals newest first, as the store keeps them. */
   signals: Signal[]
+  /** The episode's decision, for the recovery chips on an opened bus-health
+   *  card; left out, the newest decision in the store. */
+  decision?: Decision | null
 }
 
 const SIGNAL_LIMIT = 30
@@ -32,9 +35,10 @@ const formatTime = (ts: string) =>
  *  newest first, with the subsystem, symptom and physics-consistency facts of
  *  a bus-health record inline. A bus-health row opens its card in place, and
  *  the card links to the zoomed view for capture S2. */
-export function EventFeed({ signals }: EventFeedProps) {
+export function EventFeed({ signals, decision }: EventFeedProps) {
   const capture = useCaptureStore((s) => s.enabled)
-  const latestDecision = useEventStore((s) => s.decisions[0] ?? null)
+  const newestDecision = useEventStore((s) => s.decisions[0] ?? null)
+  const latestDecision = decision === undefined ? newestDecision : decision
   const [selectedSignalId, setSelectedSignalId] = useState<string | null>(null)
   const streamRef = useRef<HTMLDivElement>(null)
   const latestSignalId = signals[0]?.id

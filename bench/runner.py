@@ -6,7 +6,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from canopy._engine import build_engine, start_engine_tasks
+from canopy._engine import DEFAULT_KB_PATH, build_engine, start_engine_tasks
 from canopy.services.scenario_replay import ScenarioReplayService
 from canopy.services.schemas.events import (
     Anomaly,
@@ -18,6 +18,17 @@ from canopy.services.schemas.events import (
 )
 from bench.specs import ScenarioSpec
 from bench.specs import ModelSpec
+
+def kb_path_from_env() -> Path:
+    """The knowledge base the trial engine loads: ``CANOPY_KB_PATH`` or the default.
+
+    The MEGALITH demo sets it to the demo-only file so bundle outputs never
+    cite an entry that names a real actor (demo plan section 6).
+    """
+    import os
+
+    return Path(os.environ.get("CANOPY_KB_PATH") or DEFAULT_KB_PATH)
+
 
 BENCHMARK_ATTRIBUTION_WINDOW_S = 3600.0
 DEFAULT_TRIAL_TIMEOUT_S = 600.0
@@ -102,6 +113,7 @@ async def run_trial(
     artifact = TrialArtifact(scenario=path)
     engine = build_engine(
         provider=provider,
+        kb_path=kb_path_from_env(),
         attrib_window_s=BENCHMARK_ATTRIBUTION_WINDOW_S,
         multi_agent=multi_agent,
         enable_osint=False,

@@ -575,3 +575,14 @@ describe('eventStore — persist partialize', () => {
     expect(parsed.version).toBe(2)
   })
 })
+
+describe('eventStore — decision revisions', () => {
+  it('ignores a redelivered lower revision of a decision id', () => {
+    store().ingestDecision(makeDecision('dec-rev', { revision: 1, action: 'threat_warning' }))
+    store().ingestDecision(makeDecision('dec-rev', { revision: 0, action: 'passive_defense' }))
+    expect(store().decisionsById['dec-rev'].action).toBe('threat_warning')
+    expect(store().decisions.filter((d) => d.id === 'dec-rev')).toHaveLength(1)
+    store().ingestDecision(makeDecision('dec-rev', { revision: 2, action: 'sda_tasking' }))
+    expect(store().decisionsById['dec-rev'].action).toBe('sda_tasking')
+  })
+})

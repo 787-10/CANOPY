@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { useCaptureStore, withCapture } from '../store/captureStore'
+import { selectEpisodeAttribution } from '../lib/episode'
 import { useEventStore } from '../store/eventStore'
 
 export type ConsolePage = 'brigade' | 'spacecraft' | 'run' | 'signal' | 'demo'
@@ -68,7 +69,11 @@ export function SubsystemStrip() {
       (signal) => signal.domain !== 'bus_health' && signal.domain !== 'space_weather',
     ),
   )
-  const latest = useEventStore((s) => s.attributions[0] ?? null)
+  // The episode's verdict (the satellite cluster's final revision), not the
+  // newest attribution: Run C's space-weather cluster publishes its own.
+  const attributions = useEventStore((s) => s.attributions)
+  const anomalies = useEventStore((s) => s.anomalies)
+  const latest = selectEpisodeAttribution(attributions, anomalies)
   const lane = latest
     ? latest.provisional
       ? 'provisional'

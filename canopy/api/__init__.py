@@ -49,6 +49,7 @@ from fastapi.responses import JSONResponse
 
 from canopy._engine import (
     Engine,
+    DEFAULT_KB_PATH,
     build_engine,
     resolve_bus_backend,
     resolve_provider,
@@ -182,9 +183,15 @@ async def reset_engine(engine: Engine) -> dict[str, dict[str, int]]:
     # Attrib first: it is the source of new attributions (window timer and
     # fast-lane reasoning tasks). Then a bounded settle, then the rest. Decide
     # drops any LLM result that started before the reset (generation counter).
+    # attrib first: it cancels the in-flight reasoning tasks, which is what a
+    # slow local model would otherwise make the whole reset wait for. Fusion
+    # next, so nothing new reaches attrib during the drain. attrib once more
+    # at the end: anomalies fusion had already emitted before its reset are
+    # consumed during the drain and would otherwise refill attrib's arrival
+    # marks and context with the previous take's deterministic ids.
     cleared: dict[str, dict[str, int]] = {"attrib": await engine.attrib.reset()}
-    await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
     cleared["fusion"] = engine.fusion.reset()
+    await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
     cleared["decide"] = engine.decide.reset()
     cleared["ui_events"] = engine.ui_events.reset()
     # The shared tracer's first-wins arrival marks are keyed by anomaly id,
@@ -192,6 +199,8 @@ async def reset_engine(engine: Engine) -> dict[str, dict[str, int]]:
     # measures latency_ms from the previous take.
     cleared["tracer"] = engine.tracer.clear_marks()
     await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
+    late = await engine.attrib.reset()
+    cleared["attrib_late"] = late
     return cleared
 
 
@@ -216,8 +225,12 @@ async def _lifespan(app: FastAPI):
     log.info("CORS allow-list: %s", ", ".join(app.state.cors_origins))
 
     app.state.blocked_domains: set[str] = set()
+    # CANOPY_KB_PATH selects the knowledge base; the MEGALITH demo points it at
+    # the demo-only file so no entry naming a real actor can reach the model.
+    kb_path = os.environ.get("CANOPY_KB_PATH") or DEFAULT_KB_PATH
     engine = build_engine(
         provider=provider,
+        kb_path=kb_path,
         blocked_domains_provider=lambda: app.state.blocked_domains,
         enable_osint=not bool(os.environ.get("CANOPY_DISABLE_OSINT")),
         bus_backend=bus_backend,

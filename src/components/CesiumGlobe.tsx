@@ -696,7 +696,10 @@ export function CesiumGlobe({
       const entityId = `signal-${signal.id}`
       const color = colorForSignal(signal)
       const point = signalPoint(signal)
-      const polygon = signalPolygon(signal)
+      // A space-weather record's area is the whole geospace region; drawn as a
+      // polygon it is a saturated band across the top of the globe that says
+      // nothing. The record still shows in the stream and the alert card.
+      const polygon = signal.domain === 'space_weather' ? null : signalPolygon(signal)
       const isFocus = signal.id === focusSignalId
       const isCorrelated = correlatedIds.has(signal.id)
       // The RF interference report (the emitter estimate) is always

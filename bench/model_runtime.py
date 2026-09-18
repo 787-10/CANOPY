@@ -13,6 +13,14 @@ from bench.specs import ModelSpec, ScenarioSpec
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _kb_path() -> Path:
+    """``CANOPY_KB_PATH`` when set (the demo's demo-only file), else the seed file."""
+    import os
+
+    configured = os.environ.get("CANOPY_KB_PATH")
+    return Path(configured).resolve() if configured else ROOT / "data" / "kb_seed_entries.json"
+
+
 def _file_hash(path: Path) -> str:
     return sha256(path.read_bytes()).hexdigest()
 
@@ -37,7 +45,7 @@ def benchmark_provenance(cases: Sequence[ScenarioSpec] | None = None) -> dict[st
         "scenario_registry": ROOT / "scenarios" / "manifest.json",
         "variant_labels": ROOT / "bench" / "scenarios" / "labels.json",
         "model_specs": ROOT / "bench" / "models.yaml",
-        "knowledge_base": ROOT / "data" / "kb_seed_entries.json",
+        "knowledge_base": _kb_path(),
     }
     file_hashes = {name: _file_hash(path) for name, path in files.items()}
     from bench.specs import load_scenario_registry

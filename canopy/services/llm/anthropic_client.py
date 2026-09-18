@@ -31,6 +31,9 @@ DEFAULT_MODEL = "claude-sonnet-4-6"
 # citations and downgraded a correctly named actor to Unknown.
 DEFAULT_MAX_TOKENS = 4096
 TRUNCATION_RETRY_FACTOR = 2
+# Highest cap the retry may ask for: below the SDK's threshold for insisting on
+# streaming and well above any attribution payload.
+MAX_RETRY_OUTPUT_TOKENS = 16384
 
 
 class TruncatedOutputError(ValueError):
@@ -120,10 +123,10 @@ class AnthropicLLMClient:
                 max_tokens,
                 attempt,
             )
-            max_tokens *= TRUNCATION_RETRY_FACTOR
+            max_tokens = min(max_tokens * TRUNCATION_RETRY_FACTOR, MAX_RETRY_OUTPUT_TOKENS)
         raise TruncatedOutputError(
             f"Anthropic {stage} output stopped on max_tokens twice "
-            f"(last cap {max_tokens // TRUNCATION_RETRY_FACTOR}); "
+            f"(last cap {max_tokens}); "
             "refusing to use a partial tool input"
         )
 

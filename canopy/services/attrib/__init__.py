@@ -849,6 +849,19 @@ class AttribService:
             log.exception(
                 "attrib: attribute_primary failed for batch of %d", len(anomalies)
             )
+            if self._tracer is not None:
+                # Otherwise the console keeps a provisional card forever with
+                # nothing in the trace saying why the final never came.
+                await self._tracer.emit(
+                    "attrib_primary",
+                    "warn",
+                    f"reasoning lane failed; the provisional verdict stands: {exc}",
+                    ref_id=cluster.attribution_id if cluster is not None else None,
+                    t0=t0,
+                    stage_t0=stage_t0,
+                    revision=revision,
+                    error=exc.__class__.__name__,
+                )
             return
         if cluster is not None:
             # Every trace and revision of a fast-lane cluster shares its id.

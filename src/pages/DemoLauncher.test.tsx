@@ -4,11 +4,14 @@ import { DemoLauncher } from './DemoLauncher'
 import {
   DEMO_RUNS,
   LAST_RUN_KEY,
+  PENDING_REPLAY_KEY,
   REPLAY_MAX_DELAY_S,
   REPLAY_SPEED,
   parseRun,
+  readPendingReplay,
   replayUrl,
   startDemoRun,
+  startPendingReplay,
 } from '../lib/demoRuns'
 import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
@@ -45,19 +48,17 @@ describe('demo runs', () => {
     expect(REPLAY_MAX_DELAY_S).toBe(6)
   })
 
-  it('startDemoRun clears the store, POSTs the replay, records the run and navigates in capture mode', async () => {
+  it('startDemoRun clears the store, resets the engine, leaves the replay pending and navigates in capture mode', async () => {
     useEventStore.getState().ingestSignal(makeSignal('old'))
-    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ status: 'replaying', scenario: 'x' }))
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ status: 'reset' }))
     const navigate = vi.fn()
     const body = await startDemoRun('B', { fetchImpl, navigate, apiUrl: 'http://gw:8000' })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0][0]).toBe('http://gw:8000/reset')
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: 'POST' })
-    expect(fetchImpl).toHaveBeenCalledWith(
-      'http://gw:8000/scenarios/megalith_link_margin_b.jsonl/replay?speed=20&max_delay_s=6',
-      { method: 'POST' },
-    )
-    expect(body).toEqual({ status: 'replaying', scenario: 'x' })
+    expect(body).toEqual({ status: 'pending', run: 'B', stem: 'megalith_link_margin_b.jsonl' })
     expect(useEventStore.getState().signals).toEqual([])
+    expect(readPendingReplay()).toEqual({ run: 'B', stem: 'megalith_link_margin_b.jsonl' })
     expect(JSON.parse(sessionStorage.getItem(LAST_RUN_KEY)!)).toMatchObject({
       run: 'B',
       stem: 'megalith_link_margin_b.jsonl',
@@ -66,11 +67,26 @@ describe('demo runs', () => {
     expect(navigate).toHaveBeenCalledWith('/brigade?run=B&capture=1')
   })
 
-  it('startDemoRun throws on a non-2xx gateway response and does not navigate', async () => {
+  it('startPendingReplay POSTs the pending replay once and clears the flag first', async () => {
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'B' }))
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ status: 'replaying', scenario: 'x' }))
+    const body = await startPendingReplay({ fetchImpl, apiUrl: 'http://gw:8000' })
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'http://gw:8000/scenarios/megalith_link_margin_b.jsonl/replay?speed=20&max_delay_s=6',
+      { method: 'POST' },
+    )
+    expect(body).toEqual({ status: 'replaying', scenario: 'x' })
+    expect(sessionStorage.getItem(PENDING_REPLAY_KEY)).toBeNull()
+    // A second effect run finds nothing pending and does not start the run twice.
+    expect(await startPendingReplay({ fetchImpl, apiUrl: 'http://gw:8000' })).toBeNull()
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('startPendingReplay throws on a non-2xx gateway response', async () => {
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'C' }))
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 404, json: () => Promise.resolve({}) })
-    const navigate = vi.fn()
-    await expect(startDemoRun('C', { fetchImpl, navigate })).rejects.toThrow(/HTTP 404/)
-    expect(navigate).not.toHaveBeenCalled()
+    await expect(startPendingReplay({ fetchImpl })).rejects.toThrow(/HTTP 404/)
+    expect(readPendingReplay()).toBeNull()
   })
 })
 
@@ -82,16 +98,15 @@ describe('DemoLauncher route', () => {
     expect(screen.getByRole('radio', { name: /Run B/ })).toHaveAttribute('aria-checked', 'true')
   })
 
-  it('starts the replay on click and navigates to the Brigade view in capture mode', async () => {
+  it('resets the engine on click, leaves the replay pending and navigates to the console in capture mode', async () => {
     const fetchImpl = vi.fn().mockResolvedValue(okResponse())
     const navigate = vi.fn()
     render(<DemoLauncher run="A" fetchImpl={fetchImpl} navigate={navigate} />)
     fireEvent.click(screen.getByTestId('demo-start'))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/brigade?run=A&capture=1'))
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0][0]).toMatch(/\/reset$/)
-    expect(fetchImpl.mock.calls[1][0]).toMatch(
-      /\/scenarios\/megalith_link_margin_a\.jsonl\/replay\?speed=20&max_delay_s=6$/,
-    )
+    expect(readPendingReplay()).toEqual({ run: 'A', stem: 'megalith_link_margin_a.jsonl' })
     expect(screen.getByTestId('demo-start')).toHaveTextContent('Started')
   })
 
@@ -103,15 +118,6 @@ describe('DemoLauncher route', () => {
     expect(screen.getByTestId('demo-stem')).toHaveTextContent('megalith_link_margin_c.jsonl')
     fireEvent.click(screen.getByTestId('demo-start'))
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/brigade?run=C&capture=1'))
-  })
-
-  it('shows the gateway error and stays on the page when the replay is refused', async () => {
-    const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 404, json: () => Promise.resolve({}) })
-    const navigate = vi.fn()
-    render(<DemoLauncher run="A" fetchImpl={fetchImpl} navigate={navigate} />)
-    fireEvent.click(screen.getByTestId('demo-start'))
-    await waitFor(() => expect(screen.getByTestId('demo-error')).toHaveTextContent('HTTP 404'))
-    expect(navigate).not.toHaveBeenCalled()
   })
 
   it('autostarts when asked', async () => {

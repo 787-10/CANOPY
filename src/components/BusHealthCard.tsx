@@ -76,7 +76,7 @@ export function BusHealthCard({
             {Math.round(record.confidence * 100)}% confidence
           </span>
           {zoomHref && !zoomed ? (
-            <a className="bus-health-card__zoom" href={zoomHref} data-capture-hide>
+            <a className="bus-health-card__zoom" href={zoomHref}>
               Zoom
             </a>
           ) : null}

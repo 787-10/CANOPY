@@ -238,6 +238,8 @@ class DecideService:
         # Bumped by reset(): a decide result that started under an older
         # generation belongs to a run that has been cleared and is dropped.
         self._generation = 0
+        # Wall-clock moment of the last reset; events stamped before it are stale.
+        self._reset_at: datetime | None = None
         self._arrivals: OrderedDict[str, float] = OrderedDict()
         self._decision_ids: OrderedDict[str, str] = OrderedDict()
         # Timing of the attribution being handled (the consumer loop handles
@@ -252,6 +254,15 @@ class DecideService:
     @property
     def withheld_reason(self) -> WithheldReason:
         return self._withheld_reason
+
+    def _predates_reset(self, ts: datetime) -> bool:
+        """True when ``ts`` (an event's wall-clock stamp) is older than the last reset."""
+        if self._reset_at is None:
+            return False
+        try:
+            return ts < self._reset_at
+        except TypeError:  # naive timestamp from a fixture: treat as fresh
+            return False
 
     def reset(self) -> dict[str, int]:
         """Forget cached anomalies, arrival marks, decision ids and errors.
@@ -269,6 +280,7 @@ class DecideService:
         }
         self._anomaly_cache.clear()
         self._generation += 1
+        self._reset_at = datetime.now(UTC)
         self._arrivals.clear()
         self._decision_ids.clear()
         self._timing = None
@@ -325,6 +337,14 @@ class DecideService:
             if not isinstance(event, Attribution):
                 log.warning(
                     "decide received non-Attribution on %s: %r", topic, type(event)
+                )
+                continue
+            if self._predates_reset(event.ts):
+                # Queued behind a slow decide call when POST /reset ran: the
+                # generation guard below only covers the call in flight.
+                log.info(
+                    "decide: dropping attribution=%s queued before the engine reset",
+                    event.id,
                 )
                 continue
             stage_t0 = self._clock()

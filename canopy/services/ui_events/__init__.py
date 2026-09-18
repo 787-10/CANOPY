@@ -6,6 +6,7 @@ import re
 import time
 from collections import OrderedDict
 from collections.abc import Callable
+from datetime import UTC, datetime
 
 from canopy.services.bus import Bus
 from canopy.services.schemas.events import (
@@ -223,6 +224,7 @@ class UIEventService:
         self._bus = bus
         self._cache: OrderedDict[str, Attribution] = OrderedDict()
         self._decisions: OrderedDict[str, Decision] = OrderedDict()
+        self._reset_at: datetime | None = None
         self._cache_size = cache_size
         self._tracer = tracer
         self._clock = clock
@@ -237,7 +239,17 @@ class UIEventService:
         cleared = {"attributions": len(self._cache), "decisions": len(self._decisions)}
         self._cache.clear()
         self._decisions.clear()
+        self._reset_at = datetime.now(UTC)
         return cleared
+
+    def _predates_reset(self, ts: datetime) -> bool:
+        """True when an event stamped ``ts`` was produced before the last reset."""
+        if self._reset_at is None:
+            return False
+        try:
+            return ts < self._reset_at
+        except TypeError:
+            return False
 
     async def run(self) -> None:
         async with asyncio.TaskGroup() as tg:
@@ -246,7 +258,7 @@ class UIEventService:
 
     async def _consume_attributions(self) -> None:
         async for topic, event in self._bus.subscribe("attributions.*"):
-            if not isinstance(event, Attribution):
+            if not isinstance(event, Attribution) or self._predates_reset(event.ts):
                 continue
             self._cache[event.id] = event
             self._cache.move_to_end(event.id)
@@ -256,6 +268,11 @@ class UIEventService:
     async def _consume_decisions(self) -> None:
         async for topic, event in self._bus.subscribe("decisions.*"):
             if not isinstance(event, Decision):
+                continue
+            if self._predates_reset(event.ts):
+                # A decision queued behind the reset belongs to the previous
+                # take; publishing it would put its card into the new one.
+                log.info("ui_events: dropping decision=%s queued before the engine reset", event.id)
                 continue
             stage_t0 = self._clock()
             attribution = self._cache.get(event.attribution_id)

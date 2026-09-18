@@ -1,3 +1,4 @@
+import { useEffect } from 'react'
 import { CollapsibleStackSection } from '../components/CollapsibleStackSection'
 import { EventFeed } from '../components/EventFeed'
 import { MapStage } from '../components/MapStage'
@@ -8,6 +9,8 @@ import { TopBar } from '../components/TopBar'
 import { VerdictPanel } from '../components/VerdictPanel'
 import { useCanopyMissionState } from '../hooks/useCanopyMissionState'
 import { useCanopySocket } from '../hooks/useCanopySocket'
+import { useKnowledgeBase } from '../hooks/useKnowledgeBase'
+import { startPendingReplay } from '../lib/demoRuns'
 import { selectEpisodeAttribution } from '../lib/episode'
 import { useEventStore } from '../store/eventStore'
 
@@ -18,7 +21,16 @@ import { useEventStore } from '../store/eventStore'
  *  output received over the socket; the store de-duplicates by id and
  *  survives a reload. */
 export function Brigade() {
-  useCanopySocket()
+  const socket = useCanopySocket()
+  useKnowledgeBase()
+  // The launcher leaves the replay pending and navigates here; it starts once
+  // this page's socket is open so the first record is not published to nobody.
+  useEffect(() => {
+    if (!socket.isConnected) return
+    void startPendingReplay().catch(() => {
+      // the gateway refused: the console stays up with whatever arrives
+    })
+  }, [socket.isConnected])
   const signals = useEventStore((state) => state.signals)
   const anomalies = useEventStore((state) => state.anomalies)
   const attributions = useEventStore((state) => state.attributions)
@@ -51,7 +63,7 @@ export function Brigade() {
             focusSignalId={missionState.mapFocusSignalId}
             signals={signals}
           />
-          <EventFeed signals={signals} />
+          <EventFeed signals={signals} decision={decision} />
         </section>
 
         <aside className="decision-stack" aria-label="Verdict and decision">

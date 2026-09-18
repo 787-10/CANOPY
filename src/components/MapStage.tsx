@@ -1,6 +1,6 @@
 import { lazy, Suspense } from 'react'
 import { MissionAlert } from './MissionAlert'
-import { signalEffectState } from '../lib/signalEffects'
+import { latestReport, signalEffectState } from '../lib/signalEffects'
 import type { Signal } from '../types/canopy'
 
 const CesiumGlobe = lazy(() =>
@@ -17,7 +17,7 @@ type MapStageProps = {
  *  spacecraft, the station and any RF marker, and the latest report as one
  *  alert card over it. */
 export function MapStage({ correlatedSignalIds, focusSignalId, signals }: MapStageProps) {
-  const latestSignal = signals[0] ?? null
+  const latestSignal = latestReport(signals)
   const effectState = signalEffectState(latestSignal)
 
   return (

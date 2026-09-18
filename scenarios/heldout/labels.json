@@ -18,7 +18,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.27683946502837375,
+            "physics_consistency": 0.276839465,
             "sim_time_s": 194.0,
             "window_start_s": 74.0
           },
@@ -28,7 +28,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
-            "physics_consistency": 0.1977973568873685,
+            "physics_consistency": 0.197797357,
             "sim_time_s": 496.0,
             "window_start_s": 424.0
           },
@@ -38,7 +38,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.02;external=0.92;unknown=0.06;top=proximity_torque:0.87;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval",
-            "physics_consistency": 0.11206897013114778,
+            "physics_consistency": 0.11206897,
             "sim_time_s": 587.0,
             "window_start_s": 424.0
           },
@@ -48,7 +48,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.01;external=0.97;unknown=0.02;top=proximity_torque:0.91;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.38;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.08270989762067524,
+            "physics_consistency": 0.0827098976,
             "sim_time_s": 682.0,
             "window_start_s": 424.0
           },
@@ -58,7 +58,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=proximity_torque:0.93;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.55;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.0791484411245819,
+            "physics_consistency": 0.0791484411,
             "sim_time_s": 799.0,
             "window_start_s": 424.0
           }
@@ -96,10 +96,10 @@
         "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=attitude_disturbance;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.1977973568873685,
-        0.11206897013114778,
-        0.08270989762067524,
-        0.0791484411245819
+        0.197797357,
+        0.11206897,
+        0.0827098976,
+        0.0791484411
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -138,7 +138,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.27683946502837375,
+            "physics_consistency": 0.276839465,
             "sim_time_s": 38.0,
             "window_start_s": 0.0
           },
@@ -148,7 +148,7 @@
               "wheel_bearing_temperature_delta_k": 3.893
             },
             "physics_basis": "belief:internal=0.52;external=0.39;unknown=0.10;top=reaction_wheel_friction:0.44;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.88;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.6494310986668737,
+            "physics_consistency": 0.649431099,
             "sim_time_s": 345.0,
             "window_start_s": 275.0
           },
@@ -158,7 +158,7 @@
               "wheel_bearing_temperature_delta_k": 8.064
             },
             "physics_basis": "belief:internal=0.70;external=0.24;unknown=0.06;top=reaction_wheel_friction:0.69;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.97;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.6696044478924192,
+            "physics_consistency": 0.669604448,
             "sim_time_s": 446.0,
             "window_start_s": 275.0
           },
@@ -168,7 +168,7 @@
               "wheel_bearing_temperature_delta_k": 14.052
             },
             "physics_basis": "belief:internal=0.86;external=0.12;unknown=0.02;top=reaction_wheel_friction:0.86;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.8565080082245144,
+            "physics_consistency": 0.856508008,
             "sim_time_s": 585.0,
             "window_start_s": 275.0
           },
@@ -178,7 +178,7 @@
               "wheel_bearing_temperature_delta_k": 20.094
             },
             "physics_basis": "belief:internal=0.93;external=0.06;unknown=0.00;top=reaction_wheel_friction:0.93;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.8999525318161425,
+            "physics_consistency": 0.899952532,
             "sim_time_s": 728.0,
             "window_start_s": 275.0
           }
@@ -213,10 +213,10 @@
         "belief:internal=0.93;external=0.06;unknown=0.00;top=reaction_wheel_friction:0.93;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=attitude_disturbance;rate=slope"
       ],
       "physics_consistency": [
-        0.6494310986668737,
-        0.6696044478924192,
-        0.8565080082245144,
-        0.8999525318161425
+        0.649431099,
+        0.669604448,
+        0.856508008,
+        0.899952532
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -233,156 +233,156 @@
       "verdict": "internal_fault",
       "windows": [
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
           "onset_s": 240.0,
           "role": "fault",
           "severity": 0.031818
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 270.04545454545456,
+          "onset_s": 270.045455,
           "role": "fault",
           "severity": 0.063636
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 300.0909090909091,
+          "onset_s": 300.090909,
           "role": "fault",
           "severity": 0.095455
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 330.1363636363636,
+          "onset_s": 330.136364,
           "role": "fault",
           "severity": 0.127273
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 360.1818181818182,
+          "onset_s": 360.181818,
           "role": "fault",
           "severity": 0.159091
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 390.22727272727275,
+          "onset_s": 390.227273,
           "role": "fault",
           "severity": 0.190909
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 420.27272727272725,
+          "onset_s": 420.272727,
           "role": "fault",
           "severity": 0.222727
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 450.3181818181818,
+          "onset_s": 450.318182,
           "role": "fault",
           "severity": 0.254545
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 480.3636363636364,
+          "onset_s": 480.363636,
           "role": "fault",
           "severity": 0.286364
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 510.40909090909093,
+          "onset_s": 510.409091,
           "role": "fault",
           "severity": 0.318182
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 540.4545454545455,
+          "onset_s": 540.454545,
           "role": "fault",
           "severity": 0.35
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
           "onset_s": 570.5,
           "role": "fault",
           "severity": 0.381818
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 600.5454545454545,
+          "onset_s": 600.545455,
           "role": "fault",
           "severity": 0.413636
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 630.5909090909091,
+          "onset_s": 630.590909,
           "role": "fault",
           "severity": 0.445455
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 660.6363636363636,
+          "onset_s": 660.636364,
           "role": "fault",
           "severity": 0.477273
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 690.6818181818182,
+          "onset_s": 690.681818,
           "role": "fault",
           "severity": 0.509091
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 720.7272727272727,
+          "onset_s": 720.727273,
           "role": "fault",
           "severity": 0.540909
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 750.7727272727273,
+          "onset_s": 750.772727,
           "role": "fault",
           "severity": 0.572727
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 780.8181818181819,
+          "onset_s": 780.818182,
           "role": "fault",
           "severity": 0.604545
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 810.8636363636364,
+          "onset_s": 810.863636,
           "role": "fault",
           "severity": 0.636364
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 840.909090909091,
+          "onset_s": 840.909091,
           "role": "fault",
           "severity": 0.668182
         },
         {
-          "duration_s": 30.045454545454547,
+          "duration_s": 30.0454545,
           "kind": "mechanism_excess_friction",
-          "onset_s": 870.9545454545455,
+          "onset_s": 870.954545,
           "role": "fault",
           "severity": 0.7
         }
@@ -402,7 +402,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.24;external=0.65;unknown=0.11;top=aerodynamic_torque:0.28;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=attitude_disturbance;rate=linear_fit",
-            "physics_consistency": 0.27683946502837375,
+            "physics_consistency": 0.276839465,
             "sim_time_s": 115.0,
             "window_start_s": 0.0
           },
@@ -412,7 +412,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval",
-            "physics_consistency": 0.1977973568873685,
+            "physics_consistency": 0.197797357,
             "sim_time_s": 386.0,
             "window_start_s": 314.0
           },
@@ -422,7 +422,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.11;external=0.80;unknown=0.09;top=proximity_torque:0.43;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.96;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.3875055938247392,
+            "physics_consistency": 0.387505594,
             "sim_time_s": 491.0,
             "window_start_s": 314.0
           },
@@ -432,7 +432,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.10;external=0.86;unknown=0.04;top=aerodynamic_torque:0.64;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.98;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.3802033326517006,
+            "physics_consistency": 0.380203333,
             "sim_time_s": 608.0,
             "window_start_s": 314.0
           },
@@ -442,7 +442,7 @@
               "wheel_bearing_temperature_delta_k": 0.0
             },
             "physics_basis": "belief:internal=0.07;external=0.92;unknown=0.01;top=aerodynamic_torque:0.83;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.88;row=attitude_disturbance;rate=slope",
-            "physics_consistency": 0.36205475060977743,
+            "physics_consistency": 0.362054751,
             "sim_time_s": 721.0,
             "window_start_s": 314.0
           }
@@ -480,10 +480,10 @@
         "belief:internal=0.16;external=0.71;unknown=0.12;top=proximity_torque:0.48;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.85;row=attitude_disturbance;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.1977973568873685,
-        0.3875055938247392,
-        0.3802033326517006,
-        0.36205475060977743
+        0.197797357,
+        0.387505594,
+        0.380203333,
+        0.362054751
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -602,7 +602,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
-            "physics_consistency": 0.577153845570062,
+            "physics_consistency": 0.577153846,
             "sim_time_s": 143.0,
             "window_start_s": 23.0
           },
@@ -612,7 +612,7 @@
               "noise_floor_delta_db": 8.0
             },
             "physics_basis": "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
-            "physics_consistency": 0.1672897196261682,
+            "physics_consistency": 0.16728972,
             "sim_time_s": 466.0,
             "window_start_s": 394.0
           },
@@ -622,7 +622,7 @@
               "noise_floor_delta_db": 8.0
             },
             "physics_basis": "belief:internal=0.01;external=0.96;unknown=0.03;top=uplink_interference:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
-            "physics_consistency": 0.10312757432560228,
+            "physics_consistency": 0.103127574,
             "sim_time_s": 558.0,
             "window_start_s": 394.0
           },
@@ -632,7 +632,7 @@
               "noise_floor_delta_db": 8.0
             },
             "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=uplink_interference:0.98;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
-            "physics_consistency": 0.1001293305742977,
+            "physics_consistency": 0.100129331,
             "sim_time_s": 652.0,
             "window_start_s": 394.0
           },
@@ -642,7 +642,7 @@
               "noise_floor_delta_db": 8.0
             },
             "physics_basis": "belief:internal=0.00;external=1.00;unknown=0.00;top=uplink_interference:0.99;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
-            "physics_consistency": 0.10000621966188286,
+            "physics_consistency": 0.10000622,
             "sim_time_s": 756.0,
             "window_start_s": 394.0
           }
@@ -680,10 +680,10 @@
         "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.1672897196261682,
-        0.10312757432560228,
-        0.1001293305742977,
-        0.10000621966188286
+        0.16728972,
+        0.103127574,
+        0.100129331,
+        0.10000622
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -721,7 +721,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.43;external=0.36;unknown=0.21;top=amplifier_degradation:0.26;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
-            "physics_consistency": 0.35868263433301917,
+            "physics_consistency": 0.358682634,
             "sim_time_s": 304.0,
             "window_start_s": 184.0
           },
@@ -731,7 +731,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.69;external=0.20;unknown=0.11;top=amplifier_degradation:0.59;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.91;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.7313970584287981,
+            "physics_consistency": 0.731397058,
             "sim_time_s": 563.0,
             "window_start_s": 485.0
           },
@@ -741,7 +741,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.95;external=0.02;unknown=0.04;top=amplifier_degradation:0.94;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.97;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.907313942809086,
+            "physics_consistency": 0.907313943,
             "sim_time_s": 654.0,
             "window_start_s": 485.0
           },
@@ -751,7 +751,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=amplifier_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.9344641219891732,
+            "physics_consistency": 0.934464122,
             "sim_time_s": 792.0,
             "window_start_s": 485.0
           }
@@ -784,9 +784,9 @@
         "belief:internal=0.99;external=0.00;unknown=0.01;top=amplifier_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=link_margin_drop;rate=slope"
       ],
       "physics_consistency": [
-        0.7313970584287981,
-        0.907313942809086,
-        0.9344641219891732
+        0.731397058,
+        0.907313943,
+        0.934464122
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -896,7 +896,7 @@
         {
           "duration_s": 30.05,
           "kind": "rf_pa_degradation",
-          "onset_s": 690.6500000000001,
+          "onset_s": 690.65,
           "role": "fault",
           "severity": 0.42
         },
@@ -958,7 +958,7 @@
               "noise_floor_delta_db": 0.0
             },
             "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
-            "physics_consistency": 0.577153845570062,
+            "physics_consistency": 0.577153846,
             "sim_time_s": 169.0,
             "window_start_s": 49.0
           },
@@ -968,7 +968,7 @@
               "noise_floor_delta_db": 2.5423
             },
             "physics_basis": "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.6833406313118826,
+            "physics_consistency": 0.683340631,
             "sim_time_s": 466.0,
             "window_start_s": 394.0
           },
@@ -978,7 +978,7 @@
               "noise_floor_delta_db": 5.5311
             },
             "physics_basis": "belief:internal=0.35;external=0.59;unknown=0.06;top=solar_radio_burst_noise:0.54;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.5278650447996005,
+            "physics_consistency": 0.527865045,
             "sim_time_s": 573.0,
             "window_start_s": 394.0
           },
@@ -988,7 +988,7 @@
               "noise_floor_delta_db": 5.5311
             },
             "physics_basis": "belief:internal=0.12;external=0.87;unknown=0.02;top=solar_radio_burst_noise:0.84;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.85;row=link_margin_drop;rate=slope",
-            "physics_consistency": 0.3910161885365676,
+            "physics_consistency": 0.391016189,
             "sim_time_s": 673.0,
             "window_start_s": 394.0
           },
@@ -998,7 +998,7 @@
               "noise_floor_delta_db": 5.5311
             },
             "physics_basis": "belief:internal=0.03;external=0.97;unknown=0.01;top=solar_radio_burst_noise:0.94;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.43;row=link_margin_drop;rate=linear_fit",
-            "physics_consistency": 0.0999129825617937,
+            "physics_consistency": 0.0999129826,
             "sim_time_s": 772.0,
             "window_start_s": 394.0
           }
@@ -1036,10 +1036,10 @@
         "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope"
       ],
       "physics_consistency": [
-        0.6833406313118826,
-        0.5278650447996005,
-        0.3910161885365676,
-        0.0999129825617937
+        0.683340631,
+        0.527865045,
+        0.391016189,
+        0.0999129826
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1144,7 +1144,7 @@
             "event_type": "nominal",
             "onboard_context": {},
             "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
-            "physics_consistency": 0.5303571428571429,
+            "physics_consistency": 0.530357143,
             "sim_time_s": 182.0,
             "window_start_s": 62.0
           },
@@ -1155,7 +1155,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.2590279765290702,
+            "physics_consistency": 0.259027977,
             "sim_time_s": 511.0,
             "window_start_s": 442.0
           },
@@ -1166,7 +1166,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.09198551290978131,
+            "physics_consistency": 0.0919855129,
             "sim_time_s": 642.0,
             "window_start_s": 442.0
           },
@@ -1177,7 +1177,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.75;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.0612246280300906,
+            "physics_consistency": 0.061224628,
             "sim_time_s": 754.0,
             "window_start_s": 442.0
           },
@@ -1188,7 +1188,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.57;row=orbit_decay;rate=linear_fit",
-            "physics_consistency": 0.07570523205531055,
+            "physics_consistency": 0.0757052321,
             "sim_time_s": 880.0,
             "window_start_s": 442.0
           }
@@ -1227,10 +1227,10 @@
         "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.2590279765290702,
-        0.09198551290978131,
-        0.0612246280300906,
-        0.07570523205531055
+        0.259027977,
+        0.0919855129,
+        0.061224628,
+        0.0757052321
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1268,7 +1268,7 @@
             "event_type": "nominal",
             "onboard_context": {},
             "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
-            "physics_consistency": 0.5303571428571429,
+            "physics_consistency": 0.530357143,
             "sim_time_s": 82.0,
             "window_start_s": 0.0
           },
@@ -1279,7 +1279,7 @@
               "burn_performance_ratio": 1.2833
             },
             "physics_basis": "belief:internal=0.59;external=0.28;unknown=0.13;top=propulsion_valve_stuck_open:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.55690445026178,
+            "physics_consistency": 0.55690445,
             "sim_time_s": 376.0,
             "window_start_s": 302.0
           },
@@ -1290,7 +1290,7 @@
               "burn_performance_ratio": 2.8333
             },
             "physics_basis": "belief:internal=0.83;external=0.10;unknown=0.07;top=propulsion_valve_stuck_open:0.82;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.7637200916815744,
+            "physics_consistency": 0.763720092,
             "sim_time_s": 469.0,
             "window_start_s": 302.0
           },
@@ -1301,7 +1301,7 @@
               "burn_performance_ratio": 5.1167
             },
             "physics_basis": "belief:internal=0.94;external=0.04;unknown=0.02;top=propulsion_valve_stuck_open:0.94;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.8564836452990455,
+            "physics_consistency": 0.856483645,
             "sim_time_s": 606.0,
             "window_start_s": 302.0
           },
@@ -1312,7 +1312,7 @@
               "burn_performance_ratio": 7.05
             },
             "physics_basis": "belief:internal=0.98;external=0.01;unknown=0.01;top=propulsion_valve_stuck_open:0.98;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.8898615923233312,
+            "physics_consistency": 0.889861592,
             "sim_time_s": 722.0,
             "window_start_s": 302.0
           }
@@ -1348,10 +1348,10 @@
         "belief:internal=0.98;external=0.01;unknown=0.01;top=propulsion_valve_stuck_open:0.98;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.55690445026178,
-        0.7637200916815744,
-        0.8564836452990455,
-        0.8898615923233312
+        0.55690445,
+        0.763720092,
+        0.856483645,
+        0.889861592
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1388,7 +1388,7 @@
             "event_type": "nominal",
             "onboard_context": {},
             "physics_basis": "belief:internal=0.54;external=0.35;unknown=0.12;top=propulsion_under_thrust:0.23;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=orbit_decay;rate=linear_fit",
-            "physics_consistency": 0.5303571428571429,
+            "physics_consistency": 0.530357143,
             "sim_time_s": 172.0,
             "window_start_s": 52.0
           },
@@ -1399,7 +1399,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.83;row=orbit_decay;rate=step_per_interval",
-            "physics_consistency": 0.2590279765290702,
+            "physics_consistency": 0.259027977,
             "sim_time_s": 452.0,
             "window_start_s": 379.0
           },
@@ -1410,7 +1410,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.04;external=0.84;unknown=0.12;top=storm_drag:0.83;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.96;row=orbit_decay;rate=linear_fit",
-            "physics_consistency": 0.11073551290978131,
+            "physics_consistency": 0.110735513,
             "sim_time_s": 565.0,
             "window_start_s": 379.0
           },
@@ -1421,7 +1421,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=storm_drag:0.94;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=orbit_decay;rate=slope",
-            "physics_consistency": 0.10247462803009061,
+            "physics_consistency": 0.102474628,
             "sim_time_s": 711.0,
             "window_start_s": 379.0
           },
@@ -1432,7 +1432,7 @@
               "burn_performance_ratio": 1.0
             },
             "physics_basis": "belief:internal=0.00;external=0.98;unknown=0.02;top=storm_drag:0.98;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.68;row=orbit_decay;rate=slope",
-            "physics_consistency": 0.09820523205531055,
+            "physics_consistency": 0.0982052321,
             "sim_time_s": 805.0,
             "window_start_s": 379.0
           }
@@ -1473,10 +1473,10 @@
         "belief:internal=0.24;external=0.60;unknown=0.16;top=storm_drag:0.43;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=0.83;row=orbit_decay;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.2590279765290702,
-        0.11073551290978131,
-        0.10247462803009061,
-        0.09820523205531055
+        0.259027977,
+        0.110735513,
+        0.102474628,
+        0.0982052321
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1497,86 +1497,86 @@
       "verdict": "natural_external",
       "windows": [
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
           "onset_s": 400.0,
           "role": "environment",
           "severity": 0.045684
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 436.6666666666667,
+          "onset_s": 436.666667,
           "role": "environment",
           "severity": 0.133939
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 473.3333333333333,
+          "onset_s": 473.333333,
           "role": "environment",
           "severity": 0.213067
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
           "onset_s": 510.0,
           "role": "environment",
           "severity": 0.277674
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 546.6666666666666,
+          "onset_s": 546.666667,
           "role": "environment",
           "severity": 0.323358
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 583.3333333333333,
+          "onset_s": 583.333333,
           "role": "environment",
           "severity": 0.347006
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
           "onset_s": 620.0,
           "role": "environment",
           "severity": 0.347006
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 656.6666666666666,
+          "onset_s": 656.666667,
           "role": "environment",
           "severity": 0.323358
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 693.3333333333333,
+          "onset_s": 693.333333,
           "role": "environment",
           "severity": 0.277674
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
           "onset_s": 730.0,
           "role": "environment",
           "severity": 0.213067
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 766.6666666666666,
+          "onset_s": 766.666667,
           "role": "environment",
           "severity": 0.133939
         },
         {
-          "duration_s": 36.666666666666664,
+          "duration_s": 36.6666667,
           "kind": "propulsion_unintended_thrust",
-          "onset_s": 803.3333333333333,
+          "onset_s": 803.333333,
           "role": "environment",
           "severity": 0.045684
         }
@@ -1604,7 +1604,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.59;external=0.27;unknown=0.14;top=radiator_degradation:0.18;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=power_thermal_excursion;rate=linear_fit",
-            "physics_consistency": 0.5724462862908668,
+            "physics_consistency": 0.572446286,
             "sim_time_s": 252.0,
             "window_start_s": 132.0
           },
@@ -1618,7 +1618,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.5507677674809212,
+            "physics_consistency": 0.550767767,
             "sim_time_s": 517.0,
             "window_start_s": 443.0
           },
@@ -1632,7 +1632,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.42341659843856505,
+            "physics_consistency": 0.423416598,
             "sim_time_s": 623.0,
             "window_start_s": 443.0
           },
@@ -1646,7 +1646,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.3443662697303224,
+            "physics_consistency": 0.34436627,
             "sim_time_s": 755.0,
             "window_start_s": 443.0
           }
@@ -1686,9 +1686,9 @@
         "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.5507677674809212,
-        0.42341659843856505,
-        0.3443662697303224
+        0.550767767,
+        0.423416598,
+        0.34436627
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1735,7 +1735,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.75;external=0.14;unknown=0.10;top=radiator_degradation:0.30;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.7926749169322236,
+            "physics_consistency": 0.792674917,
             "sim_time_s": 179.0,
             "window_start_s": 59.0
           },
@@ -1749,7 +1749,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.89;external=0.06;unknown=0.05;top=radiator_degradation:0.65;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.8712932090312011,
+            "physics_consistency": 0.871293209,
             "sim_time_s": 505.0,
             "window_start_s": 428.0
           },
@@ -1763,7 +1763,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=radiator_degradation:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.9357648941113905,
+            "physics_consistency": 0.935764894,
             "sim_time_s": 619.0,
             "window_start_s": 428.0
           },
@@ -1777,7 +1777,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.9396753988495397,
+            "physics_consistency": 0.939675399,
             "sim_time_s": 734.0,
             "window_start_s": 428.0
           },
@@ -1791,7 +1791,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:1.00;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.9399737685100991,
+            "physics_consistency": 0.939973769,
             "sim_time_s": 867.0,
             "window_start_s": 428.0
           }
@@ -1830,10 +1830,10 @@
         "belief:internal=1.00;external=0.00;unknown=0.00;top=radiator_degradation:1.00;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.8712932090312011,
-        0.9357648941113905,
-        0.9396753988495397,
-        0.9399737685100991
+        0.871293209,
+        0.935764894,
+        0.939675399,
+        0.939973769
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -1865,7 +1865,7 @@
         {
           "duration_s": 30.04,
           "kind": "radiator_degradation",
-          "onset_s": 210.07999999999998,
+          "onset_s": 210.08,
           "role": "fault",
           "severity": 0.072
         },
@@ -1879,7 +1879,7 @@
         {
           "duration_s": 30.04,
           "kind": "radiator_degradation",
-          "onset_s": 270.15999999999997,
+          "onset_s": 270.16,
           "role": "fault",
           "severity": 0.12
         },
@@ -1956,7 +1956,7 @@
         {
           "duration_s": 30.04,
           "kind": "radiator_degradation",
-          "onset_s": 600.5999999999999,
+          "onset_s": 600.6,
           "role": "fault",
           "severity": 0.384
         },
@@ -1970,7 +1970,7 @@
         {
           "duration_s": 30.04,
           "kind": "radiator_degradation",
-          "onset_s": 660.6800000000001,
+          "onset_s": 660.68,
           "role": "fault",
           "severity": 0.432
         },
@@ -2047,7 +2047,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.59;external=0.27;unknown=0.14;top=radiator_degradation:0.18;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=power_thermal_excursion;rate=linear_fit",
-            "physics_consistency": 0.5724462862908668,
+            "physics_consistency": 0.572446286,
             "sim_time_s": 136.0,
             "window_start_s": 16.0
           },
@@ -2061,7 +2061,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.550772188216061,
+            "physics_consistency": 0.550772188,
             "sim_time_s": 450.0,
             "window_start_s": 373.0
           },
@@ -2075,7 +2075,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.14;external=0.78;unknown=0.08;top=rf_heating:0.77;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.4234194930138047,
+            "physics_consistency": 0.423419493,
             "sim_time_s": 585.0,
             "window_start_s": 373.0
           },
@@ -2089,7 +2089,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.04;external=0.93;unknown=0.03;top=rf_heating:0.93;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.34436722233404227,
+            "physics_consistency": 0.344367222,
             "sim_time_s": 702.0,
             "window_start_s": 373.0
           },
@@ -2103,7 +2103,7 @@
               "shadow_geometry_predicted": false
             },
             "physics_basis": "belief:internal=0.01;external=0.98;unknown=0.01;top=rf_heating:0.98;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=power_thermal_excursion;rate=slope",
-            "physics_consistency": 0.32652132682504914,
+            "physics_consistency": 0.326521327,
             "sim_time_s": 821.0,
             "window_start_s": 373.0
           }
@@ -2144,10 +2144,10 @@
         "belief:internal=0.35;external=0.52;unknown=0.13;top=rf_heating:0.39;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=power_thermal_excursion;rate=slope"
       ],
       "physics_consistency": [
-        0.550772188216061,
-        0.4234194930138047,
-        0.34436722233404227,
-        0.32652132682504914
+        0.550772188,
+        0.423419493,
+        0.344367222,
+        0.326521327
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2268,7 +2268,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.41737183757722235,
+            "physics_consistency": 0.417371838,
             "sim_time_s": 219.0,
             "window_start_s": 99.0
           },
@@ -2279,7 +2279,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.21;external=0.67;unknown=0.11;top=laser_dazzling:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
-            "physics_consistency": 0.2284916561454129,
+            "physics_consistency": 0.228491656,
             "sim_time_s": 481.0,
             "window_start_s": 412.0
           },
@@ -2290,7 +2290,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.05;external=0.91;unknown=0.04;top=laser_dazzling:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval",
-            "physics_consistency": 0.12800688447728384,
+            "physics_consistency": 0.128006884,
             "sim_time_s": 623.0,
             "window_start_s": 412.0
           },
@@ -2301,7 +2301,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.04;external=0.95;unknown=0.01;top=laser_dazzling:0.95;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.44;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.10878944482289526,
+            "physics_consistency": 0.108789445,
             "sim_time_s": 760.0,
             "window_start_s": 412.0
           },
@@ -2312,7 +2312,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.04;external=0.96;unknown=0.00;top=laser_dazzling:0.96;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.61;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.10490928308269025,
+            "physics_consistency": 0.104909283,
             "sim_time_s": 887.0,
             "window_start_s": 412.0
           }
@@ -2350,10 +2350,10 @@
         "belief:internal=0.21;external=0.67;unknown=0.11;top=laser_dazzling:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=sensor_saturation;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.2284916561454129,
-        0.12800688447728384,
-        0.10878944482289526,
-        0.10490928308269025
+        0.228491656,
+        0.128006884,
+        0.108789445,
+        0.104909283
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2394,7 +2394,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.41737183757722235,
+            "physics_consistency": 0.417371838,
             "sim_time_s": 30.0,
             "window_start_s": 0.0
           },
@@ -2405,7 +2405,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.59;external=0.30;unknown=0.11;top=detector_aging:0.50;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.6922530977948229,
+            "physics_consistency": 0.692253098,
             "sim_time_s": 345.0,
             "window_start_s": 268.0
           },
@@ -2416,7 +2416,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.85;external=0.10;unknown=0.04;top=detector_aging:0.85;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.8525001922026507,
+            "physics_consistency": 0.852500192,
             "sim_time_s": 465.0,
             "window_start_s": 268.0
           },
@@ -2427,7 +2427,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.95;external=0.04;unknown=0.01;top=detector_aging:0.95;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.9118353499564116,
+            "physics_consistency": 0.91183535,
             "sim_time_s": 604.0,
             "window_start_s": 268.0
           },
@@ -2438,7 +2438,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.99;external=0.01;unknown=0.00;top=detector_aging:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.931024358909091,
+            "physics_consistency": 0.931024359,
             "sim_time_s": 718.0,
             "window_start_s": 268.0
           }
@@ -2474,10 +2474,10 @@
         "belief:internal=0.99;external=0.01;unknown=0.00;top=detector_aging:0.99;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=1.00;row=sensor_saturation;rate=slope"
       ],
       "physics_consistency": [
-        0.6922530977948229,
-        0.8525001922026507,
-        0.9118353499564116,
-        0.931024358909091
+        0.692253098,
+        0.852500192,
+        0.91183535,
+        0.931024359
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2517,7 +2517,7 @@
               "sun_angle_deg": 128.0
             },
             "physics_basis": "belief:internal=0.40;external=0.48;unknown=0.12;top=laser_dazzling:0.35;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=1.00;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.41737183757722235,
+            "physics_consistency": 0.417371838,
             "sim_time_s": 157.0,
             "window_start_s": 37.0
           },
@@ -2528,7 +2528,7 @@
               "sun_angle_deg": 85.5
             },
             "physics_basis": "belief:internal=0.52;external=0.36;unknown=0.12;top=detector_aging:0.43;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.99;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.6533347910234673,
+            "physics_consistency": 0.653334791,
             "sim_time_s": 423.0,
             "window_start_s": 356.0
           },
@@ -2539,7 +2539,7 @@
               "sun_angle_deg": 12.0
             },
             "physics_basis": "belief:internal=0.52;external=0.42;unknown=0.06;top=detector_aging:0.51;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.6312205987463094,
+            "physics_consistency": 0.631220599,
             "sim_time_s": 568.0,
             "window_start_s": 356.0
           },
@@ -2550,7 +2550,7 @@
               "sun_angle_deg": 12.0
             },
             "physics_basis": "belief:internal=0.25;external=0.73;unknown=0.01;top=sun_in_field_of_regard:0.73;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.86;row=sensor_saturation;rate=slope",
-            "physics_consistency": 0.47197356781455313,
+            "physics_consistency": 0.471973568,
             "sim_time_s": 666.0,
             "window_start_s": 356.0
           },
@@ -2561,7 +2561,7 @@
               "sun_angle_deg": 12.0
             },
             "physics_basis": "belief:internal=0.08;external=0.92;unknown=0.00;top=sun_in_field_of_regard:0.92;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.39;row=sensor_saturation;rate=linear_fit",
-            "physics_consistency": 0.14108418052256816,
+            "physics_consistency": 0.141084181,
             "sim_time_s": 810.0,
             "window_start_s": 356.0
           }
@@ -2599,10 +2599,10 @@
         "belief:internal=0.52;external=0.42;unknown=0.06;top=detector_aging:0.51;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=1.00;row=sensor_saturation;rate=slope"
       ],
       "physics_consistency": [
-        0.6533347910234673,
-        0.6312205987463094,
-        0.47197356781455313,
-        0.14108418052256816
+        0.653334791,
+        0.631220599,
+        0.471973568,
+        0.141084181
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2648,7 +2648,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
-            "physics_consistency": 0.5522971720041685,
+            "physics_consistency": 0.552297172,
             "sim_time_s": 220.0,
             "window_start_s": 100.0
           },
@@ -2659,7 +2659,7 @@
               "unexpected_command_count": 20.0
             },
             "physics_basis": "belief:internal=0.40;external=0.49;unknown=0.11;top=cyber_intrusion:0.35;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
-            "physics_consistency": 0.39494395440241953,
+            "physics_consistency": 0.394943954,
             "sim_time_s": 491.0,
             "window_start_s": 420.0
           },
@@ -2671,7 +2671,7 @@
               "unexpected_command_count": 32.0
             },
             "physics_basis": "belief:internal=0.11;external=0.83;unknown=0.06;top=cyber_intrusion:0.81;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.98;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.19069783257055892,
+            "physics_consistency": 0.190697833,
             "sim_time_s": 637.0,
             "window_start_s": 420.0
           },
@@ -2683,7 +2683,7 @@
               "unexpected_command_count": 50.0
             },
             "physics_basis": "belief:internal=0.02;external=0.96;unknown=0.02;top=cyber_intrusion:0.96;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.91;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.11318536334861129,
+            "physics_consistency": 0.113185363,
             "sim_time_s": 783.0,
             "window_start_s": 420.0
           }
@@ -2721,9 +2721,9 @@
         "belief:internal=0.40;external=0.49;unknown=0.11;top=cyber_intrusion:0.35;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.39494395440241953,
-        0.19069783257055892,
-        0.11318536334861129
+        0.394943954,
+        0.190697833,
+        0.113185363
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2793,7 +2793,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
-            "physics_consistency": 0.5522971720041685,
+            "physics_consistency": 0.552297172,
             "sim_time_s": 30.0,
             "window_start_s": 0.0
           },
@@ -2804,7 +2804,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
-            "physics_consistency": 0.5335471720041685,
+            "physics_consistency": 0.533547172,
             "sim_time_s": 309.0,
             "window_start_s": 240.0
           },
@@ -2816,7 +2816,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.91;external=0.03;unknown=0.06;top=software_fault:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.97;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.876964973973645,
+            "physics_consistency": 0.876964974,
             "sim_time_s": 427.0,
             "window_start_s": 240.0
           },
@@ -2828,7 +2828,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.99;external=0.00;unknown=0.01;top=software_fault:0.98;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.9385650944963329,
+            "physics_consistency": 0.938565094,
             "sim_time_s": 523.0,
             "window_start_s": 240.0
           },
@@ -2840,7 +2840,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=1.00;external=0.00;unknown=0.00;top=software_fault:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.9489227280055104,
+            "physics_consistency": 0.948922728,
             "sim_time_s": 641.0,
             "window_start_s": 240.0
           }
@@ -2877,10 +2877,10 @@
         "belief:internal=1.00;external=0.00;unknown=0.00;top=software_fault:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.99;row=unexpected_reset;rate=slope"
       ],
       "physics_consistency": [
-        0.5335471720041685,
-        0.876964973973645,
-        0.9385650944963329,
-        0.9489227280055104
+        0.533547172,
+        0.876964974,
+        0.938565094,
+        0.948922728
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
@@ -2922,7 +2922,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.56;external=0.28;unknown=0.15;top=software_fault:0.44;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=unexpected_reset;rate=linear_fit",
-            "physics_consistency": 0.5522971720041685,
+            "physics_consistency": 0.552297172,
             "sim_time_s": 63.0,
             "window_start_s": 0.0
           },
@@ -2933,7 +2933,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.23;external=0.64;unknown=0.13;top=radiation_upset:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval",
-            "physics_consistency": 0.2509489528795811,
+            "physics_consistency": 0.250948953,
             "sim_time_s": 385.0,
             "window_start_s": 313.0
           },
@@ -2945,7 +2945,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.01;external=0.94;unknown=0.05;top=radiation_upset:0.91;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.94;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.11207518277044504,
+            "physics_consistency": 0.112075183,
             "sim_time_s": 534.0,
             "window_start_s": 313.0
           },
@@ -2957,7 +2957,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=radiation_upset:0.99;w_belief=0.85;shape=ramp;shape_support=0.65;fit_quality=0.97;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.0978466058119644,
+            "physics_consistency": 0.0978466058,
             "sim_time_s": 626.0,
             "window_start_s": 313.0
           },
@@ -2969,7 +2969,7 @@
               "unexpected_command_count": 0.0
             },
             "physics_basis": "belief:internal=0.00;external=1.00;unknown=0.00;top=radiation_upset:1.00;w_belief=0.85;shape=drift;shape_support=0.68;fit_quality=0.98;row=unexpected_reset;rate=slope",
-            "physics_consistency": 0.1012610741250993,
+            "physics_consistency": 0.101261074,
             "sim_time_s": 745.0,
             "window_start_s": 313.0
           }
@@ -3009,10 +3009,10 @@
         "belief:internal=0.23;external=0.64;unknown=0.13;top=radiation_upset:0.45;w_belief=0.85;shape=step;shape_support=0.38;fit_quality=1.00;row=unexpected_reset;rate=step_per_interval"
       ],
       "physics_consistency": [
-        0.2509489528795811,
-        0.11207518277044504,
-        0.0978466058119644,
-        0.1012610741250993
+        0.250948953,
+        0.112075183,
+        0.0978466058,
+        0.101261074
       ],
       "satellite_id": "ctb://centralblue.dev/leo-science-1",
       "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
