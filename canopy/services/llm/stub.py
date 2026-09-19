@@ -283,7 +283,13 @@ _KIND_TO_ATTRIBUTION: dict[str, _AttribTemplate] = {
             "Treat as background prior; not direct attribution.",
         ],
         predicted_next=None,
-        capability_lookups=["co_orbital_rpo", "attribution_uncertainty"],
+        # Background context only: no RPO lookup, or the citation would route
+        # ``_select_decision`` to the escort template with no RPO anomaly in
+        # the cluster (the held-out sensor-saturation hostile case). Escorts
+        # are keyed on ``orbital_rpo_risk``, whose own template cites the RPO
+        # entry. Scenarios whose signal ids index a KB entry never reach this
+        # fallback.
+        capability_lookups=["attribution_uncertainty"],
     ),
     # ---- Drone (protective autonomous actions and tracks) -----------------
     "drone_relay_handoff": _AttribTemplate(

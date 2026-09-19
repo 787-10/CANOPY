@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from collections.abc import Callable, Collection
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -96,8 +97,22 @@ async def run_trial(
     multi_agent: bool = True,
     timeout_s: float = DEFAULT_TRIAL_TIMEOUT_S,
     model_spec: ModelSpec | None = None,
+    blocked_domains: Collection[str] | None = None,
+    bus_health_registry: Callable[[], set[str]] | None = None,
 ) -> TrialArtifact:
-    """Replay and fully drain one scenario through a fresh production engine."""
+    """Replay and fully drain one scenario through a fresh production engine.
+
+    ``blocked_domains`` names input domains the engine must not see: fusion
+    drops their signals before any anomaly forms and the attribution stage
+    applies the stress haircut to clusters that would have used them (the
+    gateway's stress mode, ``canopy._engine.build_engine``'s
+    ``blocked_domains_provider``). ``None`` or an empty set is the default,
+    unrestricted engine. ``bus_health_registry`` is forwarded unchanged: the
+    callable returns the flight identities that should be reporting
+    internal-diagnosis telemetry, so a cluster on one of them with no bus
+    anomaly is treated as ``bus_health`` blocked (INTERFACE-SPEC section 5.2).
+    Both exist for the single-view baselines (external-only, internal-only).
+    """
     if isinstance(scenario, ScenarioSpec):
         path = scenario.scenario_path
         signal_filter = scenario.includes_as_input
@@ -111,10 +126,13 @@ async def run_trial(
         )
         signal_transform = None
     artifact = TrialArtifact(scenario=path)
+    denied = frozenset(blocked_domains or ())
     engine = build_engine(
         provider=provider,
         kb_path=kb_path_from_env(),
         attrib_window_s=BENCHMARK_ATTRIBUTION_WINDOW_S,
+        blocked_domains_provider=(lambda: denied) if denied else None,
+        bus_health_registry=bus_health_registry,
         multi_agent=multi_agent,
         enable_osint=False,
         attrib_kb_context="full",
