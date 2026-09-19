@@ -1,8 +1,11 @@
 import { Brigade } from './pages/Brigade'
 import { DemoLauncher } from './pages/DemoLauncher'
+import { ReasoningPage } from './pages/ReasoningPage'
 import { RunSummary } from './pages/RunSummary'
+import { SignalsPage } from './pages/SignalsPage'
 import { SignalZoom } from './pages/SignalZoom'
 import { Spacecraft } from './pages/Spacecraft'
+import { VerdictPage } from './pages/VerdictPage'
 import { resolveRoute } from './lib/routes'
 import { initialiseCaptureMode } from './store/captureStore'
 import './App.css'
@@ -15,6 +18,12 @@ function App() {
   const route = resolveRoute(window.location.pathname, window.location.search)
 
   switch (route.page) {
+    case 'verdict':
+      return <VerdictPage />
+    case 'reasoning':
+      return <ReasoningPage />
+    case 'signals':
+      return <SignalsPage />
     case 'spacecraft':
       return <Spacecraft requestedSatellite={route.sat} />
     case 'signal':

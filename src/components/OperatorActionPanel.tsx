@@ -5,29 +5,9 @@ import {
   recoveryActionLabel,
   subsystemLabel,
 } from '../lib/commanderLanguage'
-import type { Action, Decision } from '../types/canopy'
+import { actionLabel } from '../lib/actionLabels'
+import type { Decision } from '../types/canopy'
 import { WithheldRecoveryChip } from './WithheldRecoveryChip'
-
-// Exhaustive over the Action vocabulary (types/canopy.ts) so adding an action
-// without a label is a typecheck error, not a title-cased fallback.
-const ACTION_LABELS: Record<Action, string> = {
-  active_defense_escort: 'Active defense escort',
-  active_defense_counterattack: 'Active defense counterattack',
-  orbital_strike_request: 'Orbital strike request',
-  terrestrial_strike_request: 'Terrestrial strike request',
-  space_link_interdiction_request: 'Space-link interdiction',
-  sda_tasking: 'SDA tasking',
-  threat_warning: 'Threat warning',
-  passive_defense: 'Passive defense',
-  recovery_recommendation: 'Recovery recommendation',
-}
-
-const formatAction = (action: string) =>
-  (ACTION_LABELS as Record<string, string | undefined>)[action] ??
-  action
-    .split(/[_\s]+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
 
 type OperatorActionPanelProps = {
   /** The decision to review. The console passes the episode's decision
@@ -100,7 +80,7 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
     >
       <header className="operator-action__head">
         <span className="operator-action__eyebrow">{eyebrow}</span>
-        <h2 id="operator-action-title">{formatAction(decision.action)}</h2>
+        <h2 id="operator-action-title">{actionLabel(decision.action)}</h2>
         {isBlocked ? (
           <span
             className="operator-action__chip operator-action__chip--blocked"

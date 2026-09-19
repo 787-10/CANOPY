@@ -64,7 +64,7 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
 
   return (
     <main className="run-shell" data-testid="run-summary">
-      <TopBar title="Run scorecard" current="run" subsystems={false} />
+      <TopBar title="Run scorecard" current="run" />
       <section className="run-grid">
         <section className="panel run-panel run-panel--identity">
           <div className="panel__header">

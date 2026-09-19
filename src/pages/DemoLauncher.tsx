@@ -52,7 +52,7 @@ export function DemoLauncher({
 
   return (
     <main className="demo-shell" data-testid="demo-launcher">
-      <TopBar title="Demo launcher" current="demo" subsystems={false} />
+      <TopBar title="Demo launcher" current="demo" />
       <section className="panel demo-launcher" aria-label="Demo run launcher">
         <div className="demo-launcher__runs" role="radiogroup" aria-label="Run">
           {(Object.keys(DEMO_RUNS) as DemoRun[]).map((candidate) => (

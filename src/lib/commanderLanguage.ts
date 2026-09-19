@@ -413,6 +413,12 @@ export function domainLabel(domain: Domain): string {
 }
 
 export function signalKindLabel(signal: Signal): string {
+  if (signal.domain === 'rf_ew' && signal.payload.event_type === 'telemetry_degradation') {
+    return 'Ground link frame loss'
+  }
+  if (signal.domain === 'rf_ew' && signal.payload.event_type === 'rf_interference') {
+    return 'RF interference'
+  }
   const typed = eventTypeCopy(signal.payload.event_type)
   if (typed) {
     return typed.label
@@ -603,6 +609,20 @@ const friendlyLocationLabel = (signal: Signal) => {
 }
 
 const oneLineForSignal = (signal: Signal) => {
+  // Demo-scenario records carry their own operator-facing sentence, and the
+  // generic domain copy would mislabel them: a station's frame-loss report is
+  // not a drone relay message, and a nominal bus record calls for no recovery.
+  if (
+    signal.domain === 'rf_ew' &&
+    (signal.payload.event_type === 'rf_interference' ||
+      signal.payload.event_type === 'telemetry_degradation') &&
+    signal.payload.summary
+  ) {
+    return signal.payload.summary
+  }
+  if (signal.domain === 'bus_health' && signal.payload.event_type === 'nominal' && signal.payload.summary) {
+    return signal.payload.summary
+  }
   const observables = signal.payload.observables ?? {}
   const affectedAssets = stringArray(observables.affected_assets)
   const affectedSystems = stringArray(observables.affected_systems)
@@ -1061,7 +1081,10 @@ export function verdictHeadline(attribution: Attribution): string {
     return `${attribution.actor} pattern under review`
   }
   if (verdict === 'hostile_external') {
-    return `Hostile external: pattern consistent with ${attribution.actor}`
+    const actor = attribution.actor
+    return actor && actor !== 'Unknown' && actor !== 'None'
+      ? `Hostile external: pattern consistent with ${actor}`
+      : 'Hostile external: actor not yet attributed'
   }
   const subject = attribution.satellite_id
     ? spacecraftDisplayName(attribution.satellite_id)

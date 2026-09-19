@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
-import { fireEvent, render, screen } from '@testing-library/react'
+import { render, screen } from '@testing-library/react'
 import {
   CAPTURE_HIDES,
   CAPTURE_STORAGE_KEY,
@@ -9,11 +9,10 @@ import {
   withCapture,
 } from './captureStore'
 import { useEventStore } from './eventStore'
-import { EventFeed } from '../components/EventFeed'
 import { ReasoningPanel } from '../components/ReasoningPanel'
 import { StressMode } from '../components/StressMode'
 import { TopBar } from '../components/TopBar'
-import { makeBusHealthSignal, makeTrace } from '../test/factories'
+import { makeTrace } from '../test/factories'
 
 beforeAll(() => {
   if (typeof Element.prototype.scrollTo !== 'function') {
@@ -80,15 +79,6 @@ describe('capture mode — developer chrome is gone in both modes', () => {
     expect(screen.queryByRole('button', { name: 'reset' })).not.toBeInTheDocument()
   })
 
-  it('EventFeed has no view tabs and opens the bus-health card in place', () => {
-    const signal = makeBusHealthSignal('sig-cap')
-    render(<EventFeed signals={[signal]} />)
-    expect(screen.queryByRole('tab')).not.toBeInTheDocument()
-    expect(screen.queryByRole('button', { name: /map focus/i })).not.toBeInTheDocument()
-    fireEvent.click(screen.getByRole('button', { name: /link margin drop/i }))
-    expect(screen.getByRole('link', { name: 'Zoom' })).toHaveAttribute('href', '/signal?id=sig-cap')
-  })
-
   it('StressMode keeps the controls (F9) without the hint paragraph', () => {
     render(<StressMode />)
     expect(screen.queryByText(/Block input domains to simulate degraded ISR/)).not.toBeInTheDocument()
@@ -109,16 +99,14 @@ describe('capture mode — developer chrome is gone in both modes', () => {
 })
 
 describe('branding', () => {
-  it('the top bar is MEGALITH and CANOPY appears only as the external-awareness subsystem', () => {
+  it('the top bar is MEGALITH with the page title, a connection dot and the page links; CANOPY is not named', () => {
     render(<TopBar title="Console" current="brigade" />)
     expect(screen.getByTestId('brand')).toHaveTextContent('MEGALITH')
-    expect(screen.getByTestId('subsystem-external')).toHaveTextContent('External awareness')
-    expect(screen.getByTestId('subsystem-external')).toHaveTextContent('CANOPY')
-    expect(screen.getByTestId('subsystem-internal')).toHaveTextContent('Internal diagnosis')
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Console')
-    // No other CANOPY mention outside the subsystem strip.
-    const strip = screen.getByRole('list', { name: 'MEGALITH subsystems' })
-    const outside = document.body.textContent!.replace(strip.textContent!, '')
-    expect(outside).not.toMatch(/CANOPY/)
+    expect(screen.getByTestId('connection')).toBeInTheDocument()
+    for (const label of ['Verdict', 'Reasoning', 'Signals', 'Spacecraft', 'Run']) {
+      expect(screen.getByRole('link', { name: label })).toBeInTheDocument()
+    }
+    expect(document.body.textContent).not.toMatch(/CANOPY/)
   })
 })

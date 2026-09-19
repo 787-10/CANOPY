@@ -161,12 +161,9 @@ describe('Spacecraft page — states', () => {
     expect(within(belief).getByTestId('belief-external')).toHaveTextContent('79%')
     expect(within(belief).getByTestId('belief-top')).toHaveTextContent('Uplink interference · 56%')
     expect(within(belief).getByTestId('belief-top')).toHaveClass('belief__cause--external')
-    // Neutral copy: outside the top bar's subsystem strip (where CANOPY is
-    // the external-awareness subsystem) the page names no product.
-    const strip = screen.getByRole('list', { name: 'MEGALITH subsystems' })
-    const outside = document.body.textContent!.replace(strip.textContent!, '')
-    expect(outside).not.toMatch(/CANOPY/)
-    expect(outside).toMatch(/MEGALITH/)
+    // Neutral copy: the page names no product other than MEGALITH.
+    expect(document.body.textContent).not.toMatch(/CANOPY/)
+    expect(document.body.textContent).toMatch(/MEGALITH/)
   })
 
   it('follows ?sat= for a spacecraft that has no records', () => {

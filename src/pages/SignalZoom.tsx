@@ -36,7 +36,7 @@ export function SignalZoom({ signalId = null }: SignalZoomProps) {
       <TopBar
         title={signal ? `Bus-health signal · ${name}` : 'Bus-health signal'}
         current="signal"
-        subsystems={false}
+       
       />
       <section className="signal-zoom" aria-label="Zoomed signal card">
         {signal ? (
