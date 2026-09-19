@@ -14,10 +14,53 @@ import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import { selectEpisodeAttribution } from '../lib/episode'
 
+/** One row of `GET /archive` (docs/C2-API.md section 8): the headline of a
+ *  bundle's run.json. Not a bus event, so not in the generated types. */
+type ArchiveRow = {
+  run_id: string
+  run: string | null
+  scenario_id: string | null
+  created_at: string
+  provider: string | null
+  model: string | null
+  verdict: string | null
+  expected_verdict: string | null
+  verdict_correct: boolean | null
+  decision: string | null
+}
+
+const ARCHIVE_PATH = '/archive?limit=20'
+
+/** The rows of an archive list body; anything else (a body without `runs`,
+ *  a health body handed back by a permissive mock) is an empty archive. */
+function archiveRows(body: unknown): ArchiveRow[] {
+  if (!body || typeof body !== 'object') return []
+  const runs = (body as { runs?: unknown }).runs
+  if (!Array.isArray(runs)) return []
+  return runs.filter(
+    (row): row is ArchiveRow =>
+      !!row && typeof row === 'object' && typeof (row as ArchiveRow).run_id === 'string',
+  )
+}
+
+/** `2026-09-18T22:58:02.246451Z` -> `2026-09-18 22:58 UTC`; a value that is
+ *  not an ISO timestamp is shown as it came. */
+function recordedAt(iso: string): string {
+  return /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(iso) ? `${iso.slice(0, 10)} ${iso.slice(11, 16)} UTC` : iso
+}
+
+function scoreLabel(row: ArchiveRow): string {
+  if (row.verdict_correct === true) return 'correct'
+  if (row.verdict_correct === false) return `missed (expected ${(row.expected_verdict ?? '?').replaceAll('_', ' ')})`
+  return 'unscored'
+}
+
 /** S8: run scorecard. Stage timings from the reasoning trace, the verdict
- *  and decision from the store, the model provider from `GET /health`. The
- *  bundle written by `make demo-run` (inputs, outputs, commit hashes, model
- *  digest) lives on disk under docs/demo/runs/<run-id>/. */
+ *  and decision from the store, the model provider from `GET /health`, and
+ *  the archived bundles written by `make demo-run` (inputs, outputs, commit
+ *  hashes, model digest) from `GET /archive`, when the gateway serves one.
+ *  The archive panel is left out in capture mode so the pinned layout does
+ *  not shift. */
 export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) {
   useCanopySocket()
   const capture = useCaptureStore((s) => s.enabled)
@@ -28,6 +71,8 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
   const signals = useEventStore((s) => s.signals)
   const [health, setHealth] = useState<HealthSummary | null>(null)
   const [healthError, setHealthError] = useState<string | null>(null)
+  const [archive, setArchive] = useState<ArchiveRow[] | null>(null)
+  const [archiveError, setArchiveError] = useState<string | null>(null)
 
   useEffect(() => {
     let cancelled = false
@@ -46,6 +91,27 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
       cancelled = true
     }
   }, [fetchImpl])
+
+  useEffect(() => {
+    if (capture) return
+    let cancelled = false
+    fetchGateway(ARCHIVE_PATH, undefined, { fetchImpl })
+      .then(async (response) => {
+        // 503 is the gateway's "no archive directory configured" (C2-API section 8).
+        if (response.status === 503) throw new Error('not configured on this gateway')
+        if (!response.ok) throw new Error(`HTTP ${response.status}`)
+        return response.json()
+      })
+      .then((body) => {
+        if (!cancelled) setArchive(archiveRows(body))
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) setArchiveError(cause instanceof Error ? cause.message : 'unreachable')
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [fetchImpl, capture])
 
   // Episode verdict: the newest attribution that carries a satellite id (the
   // satellite cluster's latest revision), else the newest of all.
@@ -171,6 +237,64 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             prototype timings; nothing is rounded to a target.
           </p>
         </section>
+
+        {!capture ? (
+          <section
+            className="panel run-panel run-panel--archive"
+            style={{ gridArea: 'bundle' }}
+            data-testid="run-archive"
+          >
+            <div className="panel__header">
+              <h2>Archived runs</h2>
+              <span>
+                {archive
+                  ? `${archive.length} bundle${archive.length === 1 ? '' : 's'} from GET /archive`
+                  : archiveError
+                    ? `archive ${archiveError}`
+                    : 'loading…'}
+              </span>
+            </div>
+            {archive && archive.length ? (
+              <table className="run-timings" data-testid="run-archive-table">
+                <thead>
+                  <tr>
+                    <th>Recorded</th>
+                    <th>Run</th>
+                    <th>Scenario</th>
+                    <th>Model</th>
+                    <th>Verdict</th>
+                    <th>Decision</th>
+                    <th>Bundle</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {archive.map((row) => (
+                    <tr key={row.run_id} data-run-id={row.run_id}>
+                      <td>{recordedAt(row.created_at)}</td>
+                      <td>{row.run ?? 'n/a'}</td>
+                      <td>{row.scenario_id ?? 'n/a'}</td>
+                      <td>{[row.provider, row.model].filter(Boolean).join(' · ') || 'n/a'}</td>
+                      <td>
+                        {(row.verdict ?? 'none').replaceAll('_', ' ')} <small>{scoreLabel(row)}</small>
+                      </td>
+                      <td>{(row.decision ?? 'none').replaceAll('_', ' ')}</td>
+                      <td>
+                        <code>{row.run_id}</code>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            ) : archive ? (
+              <p className="run-note">No bundles in the archive directory yet.</p>
+            ) : null}
+            <p className="run-note">
+              Each row is one bundle written by <code>make demo-run</code> and served read-only by
+              the gateway (<code>GET /archive/&lt;run-id&gt;</code> for the run record, scorecard,
+              timings and files). The bundle is the retention unit; nothing here is editable.
+            </p>
+          </section>
+        ) : null}
       </section>
     </main>
   )

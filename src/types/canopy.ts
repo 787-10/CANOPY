@@ -92,6 +92,11 @@ export type SignalProvenance = {
 export type Signal = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4): `U`, `CUI` or
+   *  `CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]`, combined by
+   *  `lib/marking.ts`. The engine sets it on every event; optional so
+   *  fixtures predating it stay valid. */
+  marking?: string
   domain: Domain
   source: string
   realism: Realism
@@ -104,6 +109,8 @@ export type Signal = {
 export type Anomaly = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   kind: string
   source_signal: string
   source_signal_ids: string[]
@@ -129,6 +136,8 @@ export type KBRef = {
 export type Attribution = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   anomaly_ids: string[]
   actor: string
   confidence: number
@@ -186,6 +195,8 @@ export type WithheldRecovery = {
 export type Decision = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   attribution_id: string
   action: Action
   target: string
@@ -227,6 +238,8 @@ export type TraceLevel = 'info' | 'decision' | 'tool' | 'warn'
 export type ReasoningTrace = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   stage: TraceStage
   level: TraceLevel
   message: string
@@ -246,6 +259,8 @@ export type EmbeddingPoint = {
 export type OsintEmbeddingSnapshot = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   points: EmbeddingPoint[]
   cluster_count: number
   similarity_threshold: number
@@ -262,6 +277,8 @@ export type Recommendation = {
 export type UIEvent = {
   id: string
   ts: string
+  /** Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4); optional so fixtures predating it stay valid. */
+  marking?: string
   source_signal_ids: string[]
   type: 'threat_updated' | 'recommendation_created' | 'status_update'
   timestamp: string

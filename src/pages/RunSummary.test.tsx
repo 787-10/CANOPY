@@ -4,6 +4,7 @@ import { RunSummary } from './RunSummary'
 import { LAST_RUN_KEY } from '../lib/demoRuns'
 import { providerFromClass, scenarioIdFromSignals, summariseHealth } from '../lib/runSummary'
 import { resolveRoute } from '../lib/routes'
+import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import { MockWebSocket } from '../test/mockWebSocket'
 import { SIM01, makeAttribution, makeDecision, makeSignal, makeTrace } from '../test/factories'
@@ -11,11 +12,55 @@ import { SIM01, makeAttribution, makeDecision, makeSignal, makeTrace } from '../
 const response = (status: number, body: unknown) =>
   ({ ok: status >= 200 && status < 300, status, json: () => Promise.resolve(body) }) as unknown as Response
 
+const HEALTH = { status: 'ok', llm: 'StubLLMClient' }
+
+/** Two rows in the shape of `GET /archive` (docs/C2-API.md section 8). */
+const ARCHIVE = {
+  count: 2,
+  runs: [
+    {
+      run_id: '20260918T225802Z-run-b-anthropic',
+      run: 'B',
+      scenario_id: 'demo-link-margin-b',
+      satellite_id: SIM01,
+      created_at: '2026-09-18T22:58:02.246451Z',
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+      verdict: 'hostile_external',
+      expected_verdict: 'hostile_external',
+      verdict_correct: true,
+      decision: 'space_link_interdiction_request',
+      links: {
+        detail: '/archive/20260918T225802Z-run-b-anthropic',
+        files: '/archive/20260918T225802Z-run-b-anthropic/files/',
+      },
+    },
+    {
+      run_id: '20260918T225231Z-run-a-local',
+      run: 'A',
+      scenario_id: 'demo-link-margin-a',
+      satellite_id: SIM01,
+      created_at: '2026-09-18T22:52:31.578248Z',
+      provider: 'ollama',
+      model: 'demo-model',
+      verdict: 'natural_external',
+      expected_verdict: 'internal_fault',
+      verdict_correct: false,
+      decision: 'recovery_recommendation',
+      links: {
+        detail: '/archive/20260918T225231Z-run-a-local',
+        files: '/archive/20260918T225231Z-run-a-local/files/',
+      },
+    },
+  ],
+}
+
 beforeEach(() => {
   MockWebSocket.instances = []
   vi.stubGlobal('WebSocket', MockWebSocket as unknown as typeof WebSocket)
   useEventStore.getState().reset()
   sessionStorage.clear()
+  useCaptureStore.getState().setEnabled(false)
 })
 
 afterEach(() => {
@@ -127,25 +172,33 @@ describe('RunSummary page (S8)', () => {
     expect(screen.getByTestId('timing-decide-latency')).toHaveTextContent('5,300 ms')
     expect(screen.getByTestId('timing-fusion-stage')).toHaveTextContent('0 ms')
     expect(screen.getByText(/Recovery withheld: Reset transponder chain on Comms/)).toBeInTheDocument()
-    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    // /health for the provider and /archive for the bundle list: nothing else.
+    expect(fetchImpl).toHaveBeenCalledTimes(2)
     expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/health$/))
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/archive\?limit=20$/))
+    // A gateway without the archive routes reads as an HTTP error, not as an empty archive.
+    await waitFor(() => expect(screen.getByTestId('run-archive')).toHaveTextContent('archive HTTP 404'))
+    expect(screen.queryByTestId('run-archive-table')).not.toBeInTheDocument()
   })
 
   it('prefers the launched run for the scenario id', async () => {
     sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'A', stem: 'megalith_link_margin_a.jsonl', startedAt: 'x' }))
-    const fetchImpl = vi.fn(() => Promise.resolve(response(200, { status: 'ok', llm: 'StubLLMClient' })))
+    const fetchImpl = vi.fn(() => Promise.resolve(response(200, HEALTH)))
     render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
     expect(screen.getByTestId('run-scenario')).toHaveTextContent('megalith_link_margin_a.jsonl')
     expect(screen.queryByText(/run-bundle endpoint/)).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
   })
 
-  it('asks /health with the bearer header when the console carries a deploy-time token (C11)', async () => {
+  it('asks /health and /archive with the bearer header when the console carries a deploy-time token (C11)', async () => {
     vi.stubEnv('VITE_CANOPY_API_TOKEN', 'deploy-secret')
-    const fetchImpl = vi.fn(() => Promise.resolve(response(200, { status: 'ok', llm: 'StubLLMClient' })))
+    const fetchImpl = vi.fn(() => Promise.resolve(response(200, HEALTH)))
     render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
     expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/health$/), {
+      headers: { Authorization: 'Bearer deploy-secret' },
+    })
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/archive\?limit=20$/), {
       headers: { Authorization: 'Bearer deploy-secret' },
     })
   })
@@ -155,5 +208,55 @@ describe('RunSummary page (S8)', () => {
     render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('gateway connection refused'))
     expect(screen.getByTestId('run-verdict')).toHaveTextContent('none yet')
+    await waitFor(() => expect(screen.getByTestId('run-archive')).toHaveTextContent('archive connection refused'))
+  })
+})
+
+describe('RunSummary archive panel (C13)', () => {
+  const gateway = (archive: Response) =>
+    vi.fn((url: string) => Promise.resolve(url.includes('/archive') ? archive : response(200, HEALTH)))
+
+  it('lists the archived bundles from GET /archive, newest first as served', async () => {
+    const fetchImpl = gateway(response(200, ARCHIVE))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+
+    await waitFor(() => expect(screen.getByTestId('run-archive')).toHaveTextContent('2 bundles from GET /archive'))
+    const rows = screen.getByTestId('run-archive-table').querySelectorAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0]).toHaveAttribute('data-run-id', '20260918T225802Z-run-b-anthropic')
+    expect(rows[0]).toHaveTextContent('2026-09-18 22:58 UTC')
+    expect(rows[0]).toHaveTextContent('anthropic · claude-sonnet-4-6')
+    expect(rows[0]).toHaveTextContent('hostile external correct')
+    expect(rows[0]).toHaveTextContent('space link interdiction request')
+    expect(rows[1]).toHaveTextContent('natural external missed (expected internal fault)')
+    expect(rows[1]).toHaveTextContent('recovery recommendation')
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/archive\?limit=20$/))
+  })
+
+  it('reads an empty archive as empty, not as an error', async () => {
+    const fetchImpl = gateway(response(200, { count: 0, runs: [] }))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+    await waitFor(() => expect(screen.getByTestId('run-archive')).toHaveTextContent('0 bundles from GET /archive'))
+    expect(screen.getByText('No bundles in the archive directory yet.')).toBeInTheDocument()
+    expect(screen.queryByTestId('run-archive-table')).not.toBeInTheDocument()
+  })
+
+  it('says the archive is not configured when the gateway answers 503', async () => {
+    const fetchImpl = gateway(response(503, { detail: 'archive unavailable: MEGALITH_ARCHIVE_DIR is not set' }))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+    await waitFor(() =>
+      expect(screen.getByTestId('run-archive')).toHaveTextContent('archive not configured on this gateway'),
+    )
+    expect(screen.queryByTestId('run-archive-table')).not.toBeInTheDocument()
+  })
+
+  it('leaves the panel out in capture mode and does not ask the gateway for it', async () => {
+    useCaptureStore.getState().setEnabled(true)
+    const fetchImpl = gateway(response(200, ARCHIVE))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+    await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
+    expect(screen.queryByTestId('run-archive')).not.toBeInTheDocument()
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/health$/))
   })
 })
