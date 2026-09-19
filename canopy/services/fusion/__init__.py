@@ -8,7 +8,13 @@ from types import MappingProxyType
 from typing import Any
 
 from canopy.services.bus import Bus
-from canopy.services.schemas.events import Anomaly, Domain, Signal
+from canopy.services.schemas.events import (
+    MARKING_UNCLASSIFIED,
+    Anomaly,
+    Domain,
+    Signal,
+    most_restrictive,
+)
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
@@ -230,6 +236,9 @@ class _CollectionWindow:
     source_signal: str
     start_ts_s: float
     risk: float
+    # Marking of the signal that opened the window (spec §1.1), so an anomaly
+    # emitted against the window is never marked lower than it.
+    marking: str = MARKING_UNCLASSIFIED
 
 
 @dataclass
@@ -250,6 +259,9 @@ class _Correlation:
     source: str | None
     satellite: str = "unknown"
     cue: str | None = None
+    # The remembered signal's marking (spec §1.1): an anomaly that correlates
+    # with this signal carries at least this marking.
+    marking: str = MARKING_UNCLASSIFIED
 
 
 @dataclass(frozen=True)
@@ -584,6 +596,7 @@ class FusionService:
             source=signal.source,
             satellite=sat,
             cue=cue,
+            marking=signal.marking,
         )
 
     def _window_for(self, domain: str) -> tuple[int, int]:
@@ -719,15 +732,28 @@ class FusionService:
         severity: float,
         payload: dict[str, Any],
         suffix: str | None = None,
-        correlates: Iterable[str] = (),
+        correlates: Iterable[_Correlation] = (),
+        context_markings: Iterable[str] = (),
     ) -> Anomaly:
+        """Assemble the anomaly for ``signal``.
+
+        ``correlates`` are the remembered signals it lists in
+        ``source_signal_ids``; ``context_markings`` are the markings of inputs
+        that shaped it without being listed (a window's opening signal, the
+        cues that raised its severity). The anomaly's marking is the most
+        restrictive of the signal's, the correlates' and the context's
+        (spec §1.1).
+        """
         anomaly_id = (
             f"anom-{kind}-{signal.id}-{suffix}" if suffix else f"anom-{kind}-{signal.id}"
         )
         source_signal_ids = [signal.id]
-        for signal_id in correlates:
-            if signal_id not in source_signal_ids:
-                source_signal_ids.append(signal_id)
+        markings = [signal.marking]
+        for correlate in correlates:
+            if correlate.signal_id not in source_signal_ids:
+                source_signal_ids.append(correlate.signal_id)
+            markings.append(correlate.marking)
+        markings.extend(context_markings)
         enriched = dict(payload)
         for name, value in _payload_enrichment(signal, kind).items():
             enriched.setdefault(name, value)
@@ -739,6 +765,7 @@ class FusionService:
             source_signal_ids=source_signal_ids,
             severity=_clamp01(round(severity, 3)),
             payload=enriched,
+            marking=most_restrictive(markings),
         )
 
     # ---- Path 1: per-domain pattern echo ---------------------------------
@@ -770,7 +797,7 @@ class FusionService:
                 signal=signal,
                 severity=severity,
                 payload=payload,
-                correlates=[m.correlation.signal_id for m in matches],
+                correlates=[m.correlation for m in matches],
             )
         )
 
@@ -794,7 +821,7 @@ class FusionService:
         matches = self._cross_domain_matches(signal, now=now, sat=sat)
 
         self._state.open_windows[sat] = _CollectionWindow(
-            source_signal=signal.id, start_ts_s=now, risk=risk
+            source_signal=signal.id, start_ts_s=now, risk=risk, marking=signal.marking
         )
 
         kind = "orbital_collection_overlap" if overlaps else "orbital_collection_risk"
@@ -821,7 +848,8 @@ class FusionService:
                     "recommended_response": "low_observable_mode",
                     "summary": signal.payload.summary,
                 },
-                correlates=[m.correlation.signal_id for m in matches],
+                correlates=[m.correlation for m in matches],
+                context_markings=[c.marking for c in correlations],
             )
         )
         return kind
@@ -866,7 +894,8 @@ class FusionService:
                     "recommended_response": "request_space_support_options",
                     "confidence": signal.confidence,
                 },
-                correlates=[m.correlation.signal_id for m in matches],
+                correlates=[m.correlation for m in matches],
+                context_markings=[c.marking for c in correlations],
             )
         )
         return kind
@@ -896,6 +925,7 @@ class FusionService:
                         "summary": signal.payload.summary,
                     },
                     suffix=window.source_signal,
+                    context_markings=[window.marking],
                 )
             )
 

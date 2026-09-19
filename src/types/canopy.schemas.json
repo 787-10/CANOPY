@@ -299,6 +299,13 @@
         "title": "Ts",
         "type": "string"
       },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
+        "type": "string"
+      },
       "domain": {
         "enum": [
           "sda",
@@ -350,6 +357,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "domain",
       "source",
       "realism",
@@ -373,6 +381,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "kind": {
@@ -407,6 +422,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "kind",
       "source_signal",
       "source_signal_ids",
@@ -483,6 +499,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "anomaly_ids": {
@@ -640,6 +663,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "anomaly_ids",
       "actor",
       "confidence",
@@ -672,6 +696,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "primary_attribution_id": {
@@ -710,6 +741,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "primary_attribution_id",
       "alternative_actor",
       "objections",
@@ -813,6 +845,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "attribution_id": {
@@ -939,6 +978,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "attribution_id",
       "action",
       "target",
@@ -995,6 +1035,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "source_signal_ids": {
@@ -1071,6 +1118,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "source_signal_ids",
       "type",
       "timestamp",
@@ -1096,6 +1144,13 @@
       "ts": {
         "format": "date-time",
         "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
         "type": "string"
       },
       "stage": {
@@ -1148,6 +1203,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "stage",
       "level",
       "message",
@@ -1213,6 +1269,13 @@
         "title": "Ts",
         "type": "string"
       },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
+        "type": "string"
+      },
       "points": {
         "items": {
           "$ref": "#/$defs/EmbeddingPoint"
@@ -1246,6 +1309,7 @@
     "required": [
       "id",
       "ts",
+      "marking",
       "points",
       "cluster_count",
       "similarity_threshold",

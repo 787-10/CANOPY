@@ -17,6 +17,7 @@ from canopy.services.schemas.events import (
     UIEvent,
     UIEventType,
     UISeverity,
+    most_restrictive,
 )
 from canopy.services.traces import Tracer
 
@@ -344,4 +345,8 @@ class UIEventService:
             confidence=confidence,
             demoBeat=_extract_demo_beat(list(decision.source_signal_ids)),
             recommendation=recommendation,
+            # Spec §1.1: the card is never marked lower than what it shows.
+            marking=most_restrictive(
+                [decision.marking, *([attribution.marking] if attribution else [])]
+            ),
         )

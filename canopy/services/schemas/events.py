@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import re
+from collections.abc import Iterable
 from datetime import UTC, datetime
 from typing import Any, Literal, get_args
 from uuid import uuid4
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 Domain = Literal[
     "sda",
@@ -134,6 +136,74 @@ TraceStage = Literal[
 TraceLevel = Literal["info", "decision", "tool", "warn"]
 
 
+# ---- Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4) -----------------------
+#
+# Every event carries a ``marking``. Grammar: ``U`` (unclassified), ``CUI``
+# (controlled unclassified information, basic) or ``CUI//SP-<CATEGORY>`` with
+# one or more specified categories joined by ``/`` (``CUI//SP-A/SP-B``); a
+# category is uppercase letters, digits and hyphens. Ordering for derivation
+# is ``U`` < ``CUI`` < ``CUI//SP-*``; two specified markings combine to the
+# sorted union of their categories. ``most_restrictive`` is the propagation
+# rule every derivation site applies: a derived event's marking is never
+# lower than the most restrictive input. Nothing in the engine acts on the
+# marking yet; it is carried, combined and displayed.
+
+MARKING_UNCLASSIFIED = "U"
+MARKING_CUI = "CUI"
+_MARKING_SP_PREFIX = "CUI//SP-"
+_CATEGORY = r"[A-Z0-9][A-Z0-9-]*"
+MARKING_PATTERN = rf"^(U|CUI|CUI//SP-{_CATEGORY}(/SP-{_CATEGORY})*)$"
+_MARKING_RE = re.compile(MARKING_PATTERN)
+
+
+def marking_categories(marking: str) -> tuple[str, ...]:
+    """The specified categories of a marking, sorted; empty for ``U`` and ``CUI``."""
+    if not marking.startswith(_MARKING_SP_PREFIX):
+        return ()
+    return tuple(sorted(part[len("SP-") :] for part in marking[len("CUI//") :].split("/")))
+
+
+def validate_marking(value: object) -> str:
+    """Return ``value`` when it is a well-formed marking; raise ``ValueError`` otherwise."""
+    if not isinstance(value, str):
+        # ValueError, not TypeError: pydantic turns it into a ValidationError.
+        raise ValueError("marking must be a string")  # noqa: TRY004
+    if not _MARKING_RE.match(value):
+        raise ValueError(
+            f"marking {value!r} must be U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...] "
+            "(uppercase letters, digits and hyphens)"
+        )
+    categories = marking_categories(value)
+    if len(set(categories)) != len(categories):
+        raise ValueError(f"marking {value!r} repeats a category")
+    return value
+
+
+def most_restrictive(markings: Iterable[str]) -> str:
+    """The marking a derivation of ``markings`` must carry (spec §1.1).
+
+    ``U`` < ``CUI`` < ``CUI//SP-*``; specified categories accumulate as a
+    sorted union (``CUI//SP-A`` with ``CUI//SP-B`` gives ``CUI//SP-A/SP-B``).
+    No inputs give ``U``. Every input is validated.
+    """
+    level = 0
+    categories: set[str] = set()
+    for marking in markings:
+        marking = validate_marking(marking)
+        if marking == MARKING_UNCLASSIFIED:
+            continue
+        if marking == MARKING_CUI:
+            level = max(level, 1)
+            continue
+        level = 2
+        categories.update(marking_categories(marking))
+    if level == 0:
+        return MARKING_UNCLASSIFIED
+    if level == 1:
+        return MARKING_CUI
+    return "CUI//" + "/".join(f"SP-{c}" for c in sorted(categories))
+
+
 def _new_id() -> str:
     return uuid4().hex
 
@@ -200,12 +270,27 @@ class Payload(BaseModel):
 
 
 class _Event(BaseModel):
-    """Common base for in-bus event models with id + ts defaults."""
+    """Common base for in-bus event models with id + ts + marking defaults."""
 
     model_config = ConfigDict(extra="allow")
 
     id: str = Field(default_factory=_new_id)
     ts: datetime = Field(default_factory=_now)
+    # Marking (docs/INTERFACE-SPEC.md §1.1, spec 1.4). Defaults to ``U``;
+    # derivation sites set ``most_restrictive`` of their inputs.
+    marking: str = Field(
+        default=MARKING_UNCLASSIFIED,
+        pattern=MARKING_PATTERN,
+        description=(
+            "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event "
+            "carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1)."
+        ),
+    )
+
+    @field_validator("marking")
+    @classmethod
+    def _marking_is_well_formed(cls, value: str) -> str:
+        return validate_marking(value)
 
 
 class Signal(_Event):

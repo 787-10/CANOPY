@@ -55,6 +55,7 @@ from canopy._engine import (
     resolve_provider,
     start_engine_tasks,
 )
+from canopy.api import archive
 from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
 from canopy.services.bus import codec
 from canopy.services.scenario_replay import ScenarioReplayService
@@ -237,6 +238,8 @@ async def _lifespan(app: FastAPI):
         nats_url=os.environ.get("CANOPY_NATS_URL"),
     )
     app.state.engine = engine
+    # MEGALITH_ARCHIVE_DIR: the demo run bundles served by /archive (archive.py).
+    app.state.archive = archive.ArchiveReader(archive.resolve_archive_dir())
     app.state.clients = set()
     app.state.replay_task = None
     app.state.control_lock = asyncio.Lock()
@@ -529,6 +532,8 @@ def create_app(
             log.exception("websocket error")
         finally:
             app.state.clients.discard(websocket)
+
+    app.include_router(archive.router)  # GET /archive, /archive/{run_id}, .../files/{path}
 
     return app
 

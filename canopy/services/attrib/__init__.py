@@ -4,7 +4,6 @@ import asyncio
 import inspect
 import logging
 import time
-
 from collections import OrderedDict, deque
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field
@@ -22,7 +21,13 @@ from canopy.services.llm.validation import (
     VerdictResolution,
     resolve_verdict,
 )
-from canopy.services.schemas.events import Anomaly, Attribution, Domain, _new_id
+from canopy.services.schemas.events import (
+    Anomaly,
+    Attribution,
+    Domain,
+    _new_id,
+    most_restrictive,
+)
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
@@ -657,6 +662,8 @@ class AttribService:
             provisional=True,
             revision=cluster.revision,
             kb_ref=self._kb.source,
+            # Spec §1.1: never lower than the most restrictive anomaly.
+            marking=most_restrictive(a.marking for a in anomalies),
         )
         if self._tracer is not None:
             self._tracer.mark(attribution.id, cluster.t0)
@@ -972,6 +979,15 @@ class AttribService:
             attribution, t0=t0, stage_t0=stage_t0
         )
         attribution = attribution.model_copy(update={"kb_ref": self._kb.source})
+        # Marking (spec §1.1): the reasoning lane's output is never marked lower
+        # than the anomalies it read, whatever the client returned.
+        attribution = attribution.model_copy(
+            update={
+                "marking": most_restrictive(
+                    [attribution.marking, *(a.marking for a in anomalies)]
+                )
+            }
+        )
         if cluster is not None:
             attribution = attribution.model_copy(
                 update={

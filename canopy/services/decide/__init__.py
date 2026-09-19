@@ -43,6 +43,7 @@ from canopy.services.schemas.events import (
     Decision,
     RecoveryBlock,
     WithheldRecovery,
+    most_restrictive,
 )
 from canopy.services.traces import Tracer
 
@@ -438,6 +439,7 @@ class DecideService:
             decision = self._annotate_selection(
                 decision, model_action=model_action, recovery=recovery
             )
+            decision = self._stamp_marking(decision, event, cluster)
             t0 = self._timing[0] if self._timing is not None else None
             if self._tracer is not None and t0 is not None:
                 self._tracer.mark(decision.id, t0)
@@ -762,6 +764,29 @@ class DecideService:
             )
         return decision.model_copy(
             update={"selectable_set": selectable, "selection_basis": basis}
+        )
+
+    def _stamp_marking(
+        self, decision: Decision, attribution: Attribution, cluster: list[Anomaly]
+    ) -> Decision:
+        """Set ``marking`` at publish (spec §1.1).
+
+        Runs last. The decision is never marked lower than the attribution it
+        answers, any anomaly the gate read as context for it (the cluster and
+        the satellite's recent anomalies, the same set ``_apply_gate`` saw) or
+        the client's own output.
+        """
+        context = self._gate_context(attribution, cluster, decision)
+        return decision.model_copy(
+            update={
+                "marking": most_restrictive(
+                    [
+                        decision.marking,
+                        attribution.marking,
+                        *(a.marking for a in context.anomalies),
+                    ]
+                )
+            }
         )
 
     @staticmethod

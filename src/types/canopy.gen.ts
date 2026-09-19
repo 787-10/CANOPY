@@ -4,7 +4,7 @@
 //   is present on the wire, null when unset, so nothing here is optional.
 // Regenerate: cd external/canopy && uv run --no-sync python scripts/gen_ts_types.py
 // Fixture: src/types/canopy.schemas.json (the schemas this file was generated from).
-// Schema digest: sha256:9ae51433fa89858adeeaa6791e3ea0e729ba0fddf52591de76ca1fac8a6635f8
+// Schema digest: sha256:b1f88dc7aa3f18c9975d963668d127824be1ab516e11701c1142128c40cc9222
 
 /** Where the signal applies. Must include at least one localizer. */
 export type Location = {
@@ -47,6 +47,8 @@ export type Signal = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   domain: 'sda' | 'orbit' | 'osint' | 'humint' | 'rf_ew' | 'cyber' | 'pnt' | 'satcom' | 'drone' | 'terrain' | 'bus_health' | 'space_weather'
   source: string
   realism: 'real_source' | 'mock_operational' | 'synthetic_orbital_overlay'
@@ -62,6 +64,8 @@ export type Anomaly = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   kind: string
   source_signal: string
   source_signal_ids: string[]
@@ -85,6 +89,8 @@ export type Attribution = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   anomaly_ids: string[]
   actor: string
   confidence: number
@@ -109,6 +115,8 @@ export type AttributionChallenge = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   primary_attribution_id: string
   alternative_actor: string | null
   objections: string[]
@@ -142,6 +150,8 @@ export type Decision = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   attribution_id: string
   action: 'passive_defense' | 'active_defense_escort' | 'active_defense_counterattack' | 'orbital_strike_request' | 'terrestrial_strike_request' | 'space_link_interdiction_request' | 'sda_tasking' | 'threat_warning' | 'recovery_recommendation'
   target: string
@@ -170,6 +180,8 @@ export type UIEvent = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   source_signal_ids: string[]
   type: 'threat_updated' | 'recommendation_created' | 'status_update'
   /** ISO-8601 date-time (UTC). */
@@ -188,6 +200,8 @@ export type ReasoningTrace = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   stage: 'fusion' | 'attrib_primary' | 'attrib_redteam' | 'attrib_reconcile' | 'decide' | 'tools' | 'stress'
   level: 'info' | 'decision' | 'tool' | 'warn'
   message: string
@@ -213,6 +227,8 @@ export type OsintEmbeddingSnapshot = {
   id: string
   /** ISO-8601 date-time (UTC). */
   ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
   points: EmbeddingPoint[]
   cluster_count: number
   similarity_threshold: number

@@ -26,6 +26,12 @@
       "type": "string",
       "format": "date-time"
     },
+    "marking": {
+      "type": "string",
+      "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+      "default": "U",
+      "description": "Marking (docs/INTERFACE-SPEC.md 1.1): U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]. Optional so files recorded before spec 1.4 stay valid; the engine always emits it, U by default."
+    },
     "domain": {
       "type": "string",
       "enum": [

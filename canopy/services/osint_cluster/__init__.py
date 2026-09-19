@@ -35,10 +35,12 @@ import numpy as np
 
 from canopy.services.bus import Bus
 from canopy.services.schemas.events import (
+    MARKING_UNCLASSIFIED,
     Anomaly,
     EmbeddingPoint,
     OsintEmbeddingSnapshot,
     Signal,
+    most_restrictive,
 )
 from canopy.services.traces import Tracer
 
@@ -62,6 +64,9 @@ class _WindowEntry:
     embedding: np.ndarray
     cluster_id: int
     ts: datetime
+    # The member signal's marking (spec §1.1); a cluster anomaly carries the
+    # most restrictive marking of its members.
+    marking: str = MARKING_UNCLASSIFIED
 
 
 class OsintClusterService:
@@ -164,6 +169,7 @@ class OsintClusterService:
             embedding=emb,
             cluster_id=cluster_id,
             ts=signal.ts,
+            marking=signal.marking,
         )
         self._window.append(entry)
         self._projection_dirty = True
@@ -256,6 +262,7 @@ class OsintClusterService:
                 "embedding_dim": self._encoder_dim,
                 "signal_ids": signal_ids,
             },
+            marking=most_restrictive(m.marking for m in members),
         )
         await self._bus.publish(f"anomalies.{anomaly.kind}", anomaly)
         log.info(
