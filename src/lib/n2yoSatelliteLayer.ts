@@ -395,7 +395,7 @@ export const N2YO_SATELLITES: N2YOSatelliteConfig[] = [
 ]
 
 const MAP_FONT =
-  '12px "Aptos Display", Aptos, "IBM Plex Sans Condensed", "IBM Plex Sans", "SF Pro Text", ui-sans-serif, system-ui, sans-serif'
+  '12px "Barlow", "Helvetica Neue", Arial, sans-serif'
 const MAP_PANEL = Color.fromCssColorString('#091112')
 // Dedicated orbital palette. These colors deliberately avoid the Brigade COP
 // scenario/alert palette so a WGS marker never reads as "regional" or "blue
@@ -409,7 +409,7 @@ export const FAMILY_COLOR_HEX: Record<N2YOSatelliteFamily, string> = {
   'GPS-3': '#e6d66f',
   CHINA: '#ef4444',
   RUSSIA: '#38bdf8',
-  SIM: '#33f2f0',
+  SIM: '#7b96ff',
 }
 
 export const FAMILY_SHORT_LABEL: Record<N2YOSatelliteFamily, string> = {

@@ -58,10 +58,10 @@ import type { Signal } from '../types/canopy'
 
 const token = import.meta.env.VITE_CESIUM_ION_TOKEN?.trim()
 const MAP_FONT =
-  '12px "Aptos Display", Aptos, "IBM Plex Sans Condensed", "IBM Plex Sans", "SF Pro Text", ui-sans-serif, system-ui, sans-serif'
+  '12px "Barlow", "Helvetica Neue", Arial, sans-serif'
 const MAP_RED = Color.fromCssColorString('#e05c4f')
 const MAP_AMBER = Color.fromCssColorString('#c9a457')
-const MAP_CYAN = Color.fromCssColorString('#33f2f0')
+const MAP_CYAN = Color.fromCssColorString('#7b96ff')
 const MAP_PANEL = Color.fromCssColorString('#091112')
 const RESET_CAMERA_DESTINATION = Cartesian3.fromDegrees(0, 0, 22_000_000)
 

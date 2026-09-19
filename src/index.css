@@ -1,10 +1,64 @@
+/* Central Blue design language: Chakra Petch for the wordmark, headings and
+   labels; Barlow for text. Self-hosted so the console renders the same
+   offline as on the network. Royal Blue #1d3fa8 is the accent. */
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('/fonts/Barlow-400.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('/fonts/Barlow-500.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/Barlow-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Barlow';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/Barlow-700.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('/fonts/ChakraPetch-600.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: 'Chakra Petch';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('/fonts/ChakraPetch-700.woff2') format('woff2');
+}
+
 :root {
   --black: #07100f;
   --white: #f5f7f0;
   --amber: #c9a457;
   --red: #e05c4f;
   --green: #77b884;
-  --cyan: #33f2f0;
+  --brand: #1d3fa8;
+  --brand-bright: #7b96ff;
+  --brand-soft: rgba(29, 63, 168, 0.4);
+  --cyan: var(--brand-bright);
   --olive: #a7b96f;
   --violet: #8b87c7;
   --status-white: var(--white);
@@ -29,15 +83,15 @@
   --text-primary: #f5f7f0;
   --text-muted: #b6beb2;
   --text-subtle: #879188;
-  --ambient-cyan: rgba(79, 181, 178, 0.18);
+  --ambient-cyan: rgba(29, 63, 168, 0.22);
   --ambient-olive: rgba(145, 166, 92, 0.15);
   --ambient-violet: rgba(111, 101, 173, 0.12);
   --font-sans:
-    Aptos, "Aptos Display", "IBM Plex Sans Condensed", "IBM Plex Sans", "SF Pro Text",
-    ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    'Barlow', 'IBM Plex Sans', 'SF Pro Text', ui-sans-serif, system-ui, -apple-system,
+    'Segoe UI', sans-serif;
   --font-display:
-    "Aptos Display", Aptos, "IBM Plex Sans Condensed", "IBM Plex Sans", "SF Pro Display",
-    ui-sans-serif, system-ui, sans-serif;
+    'Chakra Petch', 'IBM Plex Sans Condensed', 'SF Pro Display', ui-sans-serif, system-ui,
+    sans-serif;
 
   font-family: var(--font-sans);
   font-size: 16px;
