@@ -17,6 +17,8 @@ Domain = Literal[
     "satcom",
     "drone",
     "terrain",
+    "bus_health",
+    "space_weather",
 ]
 
 Realism = Literal[
@@ -34,9 +36,18 @@ Action = Literal[
     "space_link_interdiction_request",
     "sda_tasking",
     "threat_warning",
+    "recovery_recommendation",
 ]
 
 Authority = Literal["local", "request"]
+
+# ---- Three-way verdict (MEGALITH) -----------------------------------------
+#
+# Every anomaly cluster resolves to one of three causes, or to ``unknown``.
+# ``verdict_basis`` records whether the deterministic rule lane or the LLM
+# reasoning lane set the final value. See docs/INTERFACE-SPEC.md §5.
+Verdict = Literal["internal_fault", "natural_external", "hostile_external", "unknown"]
+VerdictBasis = Literal["rule", "reasoning"]
 
 # ---- Action taxonomy: single source of truth ------------------------------
 #
@@ -45,6 +56,9 @@ Authority = Literal["local", "request"]
 # traces, the frontend operator panel, …) may carry any of these. Two things
 # are derived from it here so the taxonomy can't fork across the modules that
 # consume it:
+#
+#   recovery_recommendation is the one non-counterspace action: a recovery
+#   proposed by the internal-diagnosis lane for an internal or natural verdict.
 #
 #   ACTION_AUTHORITY   authority routing for *every* action. ``request`` means
 #                      the action exceeds local commander authority and must
@@ -65,6 +79,7 @@ ACTION_AUTHORITY: dict[Action, Authority] = {
     "passive_defense": "local",
     "threat_warning": "local",
     "sda_tasking": "local",
+    "recovery_recommendation": "local",
     "active_defense_escort": "request",
     "space_link_interdiction_request": "request",
     "active_defense_counterattack": "request",
@@ -74,6 +89,7 @@ ACTION_AUTHORITY: dict[Action, Authority] = {
 
 SELECTABLE_ACTIONS: tuple[Action, ...] = (
     "passive_defense",
+    "recovery_recommendation",
     "threat_warning",
     "sda_tasking",
     "active_defense_escort",
@@ -176,6 +192,7 @@ class Payload(BaseModel):
     summary: str = Field(min_length=1)
     beat: str | None = None
     asset: str | None = None
+    satellite_id: str | None = None
     observables: dict[str, Any] | None = None
 
 
@@ -224,6 +241,52 @@ class Attribution(_Event):
     predicted_next: str | None = None
     kb_citations: list[str] = Field(default_factory=list)
     source_signal_ids: list[str] = Field(default_factory=list)
+    # MEGALITH three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so
+    # pre-existing scenarios and fixtures stay valid.
+    verdict: Verdict | None = None
+    physics_consistency: float | None = Field(default=None, ge=0.0, le=1.0)
+    verdict_basis: VerdictBasis | None = None
+    verdict_evidence: list[str] = Field(default_factory=list)
+    satellite_id: str | None = None
+    # Fast lane (wave 3A): a provisional attribution is the rule lane's call,
+    # published before any LLM runs; the reasoning lane republishes the same
+    # id with ``provisional=False`` and ``revision`` incremented.
+    provisional: bool = False
+    revision: int = 0
+
+
+class RecoveryBlock(BaseModel):
+    """The internal-diagnosis recovery a ``recovery_recommendation`` carries.
+
+    Copied from the ``recommended_recovery`` observable of the bus-health
+    anomaly that triggered it (docs/INTERFACE-SPEC.md §3, §6). ``source`` is
+    fixed: only the internal-diagnosis lane proposes recoveries.
+    """
+
+    action_id: str
+    target_subsystem: str
+    requires_approval: bool
+    rationale: str
+    source: Literal["internal-diagnosis"] = "internal-diagnosis"
+    satellite_id: str | None = None
+
+
+class WithheldRecovery(BaseModel):
+    """A recovery the internal diagnosis recommended and the decide stage withheld.
+
+    Set on a Decision whose cluster carries a ``recommended_recovery`` but
+    whose action is not ``recovery_recommendation`` (docs/INTERFACE-SPEC.md
+    §6, wave 4B): the verdict is ``hostile_external`` or ``unknown``, or a
+    threat-context gate rule (§7) would block the recovery. ``reason_code`` is
+    one of ``threat/uplink_jamming_active``, ``threat/hostile_close_approach``,
+    ``verdict/hostile_external``, ``verdict/unknown``; the console renders a
+    label for it. Never coexists with ``recovery``.
+    """
+
+    action_id: str
+    target_subsystem: str
+    reason_code: str
+    source: Literal["internal-diagnosis"] = "internal-diagnosis"
 
 
 class Decision(_Event):
@@ -236,6 +299,16 @@ class Decision(_Event):
     authority: Authority
     request_packet: dict[str, Any] | None = None
     source_signal_ids: list[str] = Field(default_factory=list)
+    # Set iff ``action == "recovery_recommendation"`` (docs/INTERFACE-SPEC.md
+    # §6); such a decision is local authority with no request packet.
+    recovery: RecoveryBlock | None = None
+    # Set when the cluster recommended a recovery that this decision does not
+    # carry (docs/INTERFACE-SPEC.md §6, wave 4B); never set together with
+    # ``recovery``. Re-evaluated on every revision like the gate.
+    withheld_recovery: WithheldRecovery | None = None
+    # Mirrors the revision of the attribution the decision was made for; the
+    # decision id is stable across revisions (wave 3A).
+    revision: int = 0
 
 
 class Recommendation(BaseModel):

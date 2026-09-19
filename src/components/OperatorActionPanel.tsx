@@ -1,46 +1,30 @@
-import { useEventStore, type ManeuverDemo } from '../store/eventStore'
+import { useEventStore } from '../store/eventStore'
+import {
+  gateReasonLabel,
+  parseGateRationale,
+  recoveryActionLabel,
+  subsystemLabel,
+} from '../lib/commanderLanguage'
+import { actionLabel } from '../lib/actionLabels'
+import type { Decision } from '../types/canopy'
+import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
-const ACTION_LABELS: Record<string, string> = {
-  active_defense_escort: 'Active defense escort',
-  active_defense_counterattack: 'Active defense counterattack',
-  orbital_strike_request: 'Orbital strike request',
-  terrestrial_strike_request: 'Terrestrial strike request',
-  space_link_interdiction_request: 'Space-link interdiction',
-  sda_tasking: 'SDA tasking',
-  threat_warning: 'Threat warning',
-  passive_defense: 'Passive defense',
+type OperatorActionPanelProps = {
+  /** The decision to review. The console passes the episode's decision
+   *  (the one taken on the satellite cluster's verdict); left out, the
+   *  newest decision in the store is shown. */
+  decision?: Decision | null
 }
 
-// Map engine action → which Cesium animation runs on Accept. Evasion is
-// the default since it's the broadest visualisation (shared-orbit threat
-// + plane change) and reads correctly even for actions without a more
-// specific story (threat_warning, passive_defense, sda_tasking).
-const actionToDemoType = (action: string): ManeuverDemo['demoType'] => {
-  if (
-    action === 'orbital_strike_request' ||
-    action === 'active_defense_counterattack'
-  ) {
-    return 'strike'
-  }
-  if (action === 'space_link_interdiction_request') {
-    return 'interdiction'
-  }
-  return 'evasion'
-}
-
-const formatAction = (action: string) =>
-  ACTION_LABELS[action] ??
-  action
-    .split(/[_\s]+/)
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ')
-
-/** Operator-facing review surface for the latest decide-stage output.
- *  Lives in the left rail under the scenario list. When the engine
- *  produces a Decision, the operator can ACCEPT (authorize the action)
- *  or DENY (refuse it). Status persists per-decision via Zustand. */
-export function OperatorActionPanel() {
-  const decision = useEventStore((s) => s.decisions[0] ?? null)
+/** Operator-facing review surface for the decide-stage output: the action,
+ *  its authority and target, the recovery block or the withheld recovery,
+ *  and ACCEPT (authorize) / DENY (refuse). Status persists per decision in
+ *  the store. Accepting records the decision and nothing else: a recovery
+ *  runs on the friendly bus and a defensive response is routed to the
+ *  authority named, neither is animated. */
+export function OperatorActionPanel({ decision: episodeDecision }: OperatorActionPanelProps = {}) {
+  const newestDecision = useEventStore((s) => s.decisions[0] ?? null)
+  const decision = episodeDecision === undefined ? newestDecision : episodeDecision
   const accepted = useEventStore((s) =>
     decision ? s.acceptedDecisionIds.has(decision.id) : false,
   )
@@ -50,7 +34,6 @@ export function OperatorActionPanel() {
   const acceptDecision = useEventStore((s) => s.acceptDecision)
   const deferDecision = useEventStore((s) => s.deferDecision)
   const clearDecisionStatus = useEventStore((s) => s.clearDecisionStatus)
-  const startManeuverDemo = useEventStore((s) => s.startManeuverDemo)
 
   // Render nothing until the engine produces a decision. The empty
   // space stays empty rather than carrying placeholder chrome — the
@@ -65,15 +48,51 @@ export function OperatorActionPanel() {
     : deferred
       ? 'denied'
       : 'pending'
+  const isRecovery = decision.action === 'recovery_recommendation'
+  const recovery = isRecovery ? (decision.recovery ?? null) : null
+  const gate = parseGateRationale(decision.rationale)
+  const isBlocked = gate.reasonCode !== null
+  const withheld = decision.withheld_recovery ?? null
+  const eyebrow = isRecovery
+    ? 'Internal diagnosis recommendation'
+    : isBlocked
+      ? 'Gate blocked'
+      : withheld
+        ? 'Recovery withheld'
+        : 'Engine recommendation'
+
+  const accept = () => acceptDecision(decision.id)
 
   return (
     <section
-      className={`operator-action operator-action--${status}`}
+      className={[
+        'operator-action',
+        `operator-action--${status}`,
+        isRecovery ? 'operator-action--recovery' : '',
+        isBlocked ? 'operator-action--blocked' : '',
+        withheld ? 'operator-action--withheld' : '',
+      ]
+        .filter(Boolean)
+        .join(' ')}
       aria-labelledby="operator-action-title"
+      data-decision-kind={isRecovery ? 'recovery' : isBlocked ? 'blocked' : 'action'}
+      data-withheld={withheld ? withheld.reason_code : undefined}
     >
       <header className="operator-action__head">
-        <span className="operator-action__eyebrow">Engine recommendation</span>
-        <h2 id="operator-action-title">{formatAction(decision.action)}</h2>
+        <span className="operator-action__eyebrow">{eyebrow}</span>
+        <h2 id="operator-action-title">{actionLabel(decision.action)}</h2>
+        {isBlocked ? (
+          <span
+            className="operator-action__chip operator-action__chip--blocked"
+            data-testid="gate-chip"
+            title={gateReasonLabel(gate.reasonCode ?? '')}
+          >
+            <b>blocked</b> {gate.reasonCode}
+          </span>
+        ) : null}
+        {withheld ? (
+          <WithheldRecoveryChip withheld={withheld} variant="operator-action" />
+        ) : null}
       </header>
 
       <dl className="operator-action__meta">
@@ -87,40 +106,56 @@ export function OperatorActionPanel() {
         </div>
       </dl>
 
-      <p className="operator-action__rationale">{decision.rationale}</p>
+      {recovery ? (
+        <dl className="operator-action__recovery" data-testid="recovery-block">
+          <div>
+            <dt>Action id</dt>
+            <dd>
+              <code>{recovery.action_id}</code>
+              <span>{recoveryActionLabel(recovery.action_id)}</span>
+            </dd>
+          </div>
+          <div>
+            <dt>Target subsystem</dt>
+            <dd>{subsystemLabel(recovery.target_subsystem)}</dd>
+          </div>
+          <div>
+            <dt>Requires approval</dt>
+            <dd
+              className={
+                recovery.requires_approval
+                  ? 'operator-action__flag operator-action__flag--required'
+                  : 'operator-action__flag'
+              }
+            >
+              {recovery.requires_approval ? 'Yes' : 'No'}
+            </dd>
+          </div>
+          <div>
+            <dt>Source</dt>
+            <dd>internal diagnosis</dd>
+          </div>
+          <div className="operator-action__recovery-wide">
+            <dt>Recovery rationale</dt>
+            <dd>{recovery.rationale}</dd>
+          </div>
+        </dl>
+      ) : isRecovery ? (
+        <p className="operator-action__rationale operator-action__rationale--missing">
+          Recovery block missing from this decision; nothing to execute.
+        </p>
+      ) : null}
+
+      {!recovery || recovery.rationale !== gate.text ? (
+        <p className="operator-action__rationale">{gate.text}</p>
+      ) : null}
 
       {status === 'pending' ? (
         <div className="operator-action__buttons" role="group">
           <button
             type="button"
             className="operator-action__btn operator-action__btn--accept"
-            onClick={() => {
-              acceptDecision(decision.id)
-              const packet = (decision.request_packet ?? {}) as Record<
-                string,
-                unknown
-              >
-              const burn = (packet.recommended_burn ?? {}) as Record<
-                string,
-                unknown
-              >
-              const preMissKm = Number(packet.pre_miss_km ?? 0)
-              const postMissKm = Number(packet.post_miss_km ?? preMissKm + 80)
-              const dvMs = Number(burn.dv_m_s ?? 1.5)
-              startManeuverDemo({
-                decisionId: decision.id,
-                startedAt: Date.now(),
-                durationMs: 15000,
-                preMissKm,
-                postMissKm,
-                dvMs,
-                friendlyLabel:
-                  typeof burn.sat === 'string' ? burn.sat : undefined,
-                hostileLabel:
-                  typeof burn.against === 'string' ? burn.against : undefined,
-                demoType: actionToDemoType(decision.action),
-              })
-            }}
+            onClick={accept}
           >
             Accept
           </button>

@@ -2,75 +2,251 @@
 
 Endpoints:
 
-* ``GET  /health``                     — liveness
+* ``GET  /health``                     — liveness (never needs a token)
 * ``GET  /scenarios``                  — list checked-in scenario JSONL filenames
 * ``POST /scenarios/{name}/replay``    — start a ScenarioReplayService for that beat
+                                         (``speed``, ``max_delay_s`` query parameters)
+* ``POST /reset``                      — cancel a running replay and clear every
+                                         service's in-process state between runs
 * ``POST /signals``                    — accept a Signal and publish to the bus
+* ``GET  /schemas``                    — JSON Schema of every event kind, from the
+                                         pydantic models (``canopy.api.schemas``)
+* ``GET  /schemas/{kind}``             — one kind's schema
 * ``WS   /ws``                         — fan out every bus event as a JSON envelope:
-                                         ``{topic, kind, data}``
+                                         ``{topic, kind, data}`` (the spec §10
+                                         envelope from ``canopy.services.bus.codec``)
 
-The app boots an in-process engine in its lifespan; every connected WebSocket
-gets the same firehose. Brigade vs Operator filtering is the client's job.
+The app boots an engine in its lifespan; every connected WebSocket gets the
+same firehose. Brigade vs Operator filtering is the client's job. The bus
+backend follows ``CANOPY_BUS`` (``memory``, the default, or ``nats`` with
+``CANOPY_NATS_URL``), mirroring the CLI's ``--bus`` / ``--nats-url``.
+
+Access control is opt-in so local demos keep working (docs/C2-API.md):
+
+* ``CANOPY_API_TOKEN``: when set, every REST route except ``GET /health``
+  requires ``Authorization: Bearer <token>`` and the WebSocket requires
+  ``?token=<token>`` (or the same header). When unset the gateway is open and
+  logs one warning at startup.
+* ``CANOPY_CORS_ORIGINS``: comma-separated allow-list, replacing the default
+  Vite dev-server origins (``http://localhost:5173``, ``http://127.0.0.1:5173``).
 """
 from __future__ import annotations
 
 import asyncio
+import hmac
 import logging
 import os
+from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import Any
+from types import EllipsisType
+from typing import Any, get_args
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
-from canopy._engine import build_engine, resolve_provider, start_engine_tasks
+from canopy._engine import (
+    Engine,
+    DEFAULT_KB_PATH,
+    build_engine,
+    resolve_bus_backend,
+    resolve_provider,
+    start_engine_tasks,
+)
+from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
+from canopy.services.bus import codec
 from canopy.services.scenario_replay import ScenarioReplayService
-from canopy.services.schemas.events import Signal
+from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
 
 log = logging.getLogger(__name__)
+
+TOKEN_ENV = "CANOPY_API_TOKEN"
+CORS_ENV = "CANOPY_CORS_ORIGINS"
+DEFAULT_CORS_ORIGINS: tuple[str, ...] = ("http://localhost:5173", "http://127.0.0.1:5173")
+# REST paths served without a token even when one is configured.
+OPEN_PATHS: frozenset[str] = frozenset({"/health"})
+# WebSocket close code for a rejected handshake (RFC 6455 policy violation).
+WS_POLICY_VIOLATION = 1008
+# Replay pacing defaults (``POST /scenarios/{name}/replay``).
+DEFAULT_REPLAY_SPEED = 5.0
+DEFAULT_REPLAY_MAX_DELAY_S = 0.5
 
 ROOT = Path(__file__).resolve().parents[2]
 SCENARIOS_DIR = ROOT / "scenarios"
 SCENARIO_REGISTRY = load_scenario_registry()
 
-# Topic patterns we forward to clients, paired with the kind tag they get
-# tagged with in the WebSocket envelope.
-_FANOUT_PATTERNS: tuple[tuple[str, str], ...] = (
-    ("signals.*", "signal"),
-    ("anomalies.*", "anomaly"),
-    ("attributions.*", "attribution"),
-    ("decisions.*", "decision"),
-    ("ui_events.*", "ui_event"),
-    ("traces.*", "trace"),
-    ("embeddings.*", "embedding"),
+# Domains that POST /stress may block. Derived from the ``Domain`` literal so
+# the gateway cannot drift from the schema vocabulary again (a hand-typed copy
+# here once lagged the literal by two domains).
+_ALLOWED_DOMAINS: frozenset[str] = frozenset(get_args(Domain))
+
+# Topic patterns we forward to clients. The ``kind`` tag in the envelope
+# comes from the event's class through the bus codec registry, so the
+# WebSocket and the NATS backend can never disagree about a tag.
+_FANOUT_PATTERNS: tuple[str, ...] = (
+    "signals.*",
+    "anomalies.*",
+    "attributions.*",
+    "decisions.*",
+    "ui_events.*",
+    "traces.*",
+    "embeddings.*",
 )
+
+
+def resolve_api_token(env: Mapping[str, str] | None = None) -> str | None:
+    """The bearer token from ``CANOPY_API_TOKEN``, or None when unset or blank."""
+    source = os.environ if env is None else env
+    token = (source.get(TOKEN_ENV) or "").strip()
+    return token or None
+
+
+def resolve_cors_origins(env: Mapping[str, str] | None = None) -> list[str]:
+    """The CORS allow-list from ``CANOPY_CORS_ORIGINS``; the Vite origins when unset."""
+    source = os.environ if env is None else env
+    raw = source.get(CORS_ENV)
+    if raw is None:
+        return list(DEFAULT_CORS_ORIGINS)
+    origins = [origin.strip() for origin in raw.split(",") if origin.strip()]
+    return origins or list(DEFAULT_CORS_ORIGINS)
+
+
+def _bearer_token(authorization: str | None) -> str | None:
+    """The credential in an ``Authorization: Bearer <token>`` header, or None."""
+    if not authorization:
+        return None
+    scheme, _, credential = authorization.strip().partition(" ")
+    if scheme.lower() != "bearer":
+        return None
+    credential = credential.strip()
+    return credential or None
+
+
+def _token_matches(expected: str, presented: str | None) -> bool:
+    if presented is None:
+        return False
+    return hmac.compare_digest(expected.encode("utf-8"), presented.encode("utf-8"))
+
+
+async def cancel_replay(task: asyncio.Task | None) -> bool:
+    """Cancel an in-flight replay task and wait for it; True if one was running."""
+    if task is None or task.done():
+        return False
+    task.cancel()
+    try:
+        await task
+    except (asyncio.CancelledError, Exception):  # noqa: BLE001 - a replay error is not ours
+        pass
+    return True
+
+
+RESET_DRAIN_TIMEOUT_S = 3.0
+
+
+async def _drain_bounded(engine: Engine, timeout_s: float) -> bool:
+    """Drain the bus, but never wait longer than ``timeout_s``.
+
+    An in-flight LLM decide call can hold a queue item for a minute on a
+    local model; an unbounded drain would stall ``/reset`` behind it.
+    """
+    try:
+        await asyncio.wait_for(engine.bus.drain(), timeout_s)
+    except TimeoutError:
+        log.warning("engine reset: bus did not settle within %.1fs; continuing", timeout_s)
+        return False
+    return True
+
+
+def _control_lock(app: FastAPI) -> asyncio.Lock:
+    """One lock serialises /reset and /replay so neither orphans a replay task."""
+    lock = getattr(app.state, "control_lock", None)
+    if lock is None:
+        lock = asyncio.Lock()
+        app.state.control_lock = lock
+    return lock
+
+
+async def reset_engine(engine: Engine) -> dict[str, dict[str, int]]:
+    """Clear every service's in-process state so the next run starts clean.
+
+    The attrib stage cancels its in-flight reasoning tasks and window timer
+    first, the bus is given a bounded moment to settle, and every stage forgets
+    its run state
+    (fusion's windows, correlates and seen signals; attrib's per-satellite
+    context, buffer and clusters; decide's anomaly cache and decision ids; the
+    UI-event caches). Subscriptions, the knowledge base, the LLM client and
+    the blocked-domain set are untouched. Returns what each stage cleared.
+    """
+    # Attrib first: it is the source of new attributions (window timer and
+    # fast-lane reasoning tasks). Then a bounded settle, then the rest. Decide
+    # drops any LLM result that started before the reset (generation counter).
+    # attrib first: it cancels the in-flight reasoning tasks, which is what a
+    # slow local model would otherwise make the whole reset wait for. Fusion
+    # next, so nothing new reaches attrib during the drain. attrib once more
+    # at the end: anomalies fusion had already emitted before its reset are
+    # consumed during the drain and would otherwise refill attrib's arrival
+    # marks and context with the previous take's deterministic ids.
+    cleared: dict[str, dict[str, int]] = {"attrib": await engine.attrib.reset()}
+    cleared["fusion"] = engine.fusion.reset()
+    await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
+    cleared["decide"] = engine.decide.reset()
+    cleared["ui_events"] = engine.ui_events.reset()
+    # The shared tracer's first-wins arrival marks are keyed by anomaly id,
+    # which repeats between replays of one scenario: without this a retake
+    # measures latency_ms from the previous take.
+    cleared["tracer"] = engine.tracer.clear_marks()
+    await _drain_bounded(engine, RESET_DRAIN_TIMEOUT_S)
+    late = await engine.attrib.reset()
+    cleared["attrib_late"] = late
+    return cleared
 
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI):
     load_dotenv()
     provider = resolve_provider(llm_flag=None)
-    log.info("CANOPY API starting (llm=%s)", provider)
+    bus_backend = resolve_bus_backend(bus_flag=None)
+    log.info("CANOPY API starting (llm=%s bus=%s)", provider, bus_backend)
+    if app.state.api_token is None:
+        log.warning(
+            "%s is not set: the gateway accepts unauthenticated REST and WebSocket "
+            "clients. Set it before exposing the gateway beyond localhost.",
+            TOKEN_ENV,
+        )
+    else:
+        log.info(
+            "bearer-token auth enabled: REST routes except GET /health and the "
+            "WebSocket require the %s credential",
+            TOKEN_ENV,
+        )
+    log.info("CORS allow-list: %s", ", ".join(app.state.cors_origins))
 
     app.state.blocked_domains: set[str] = set()
+    # CANOPY_KB_PATH selects the knowledge base; the MEGALITH demo points it at
+    # the demo-only file so no entry naming a real actor can reach the model.
+    kb_path = os.environ.get("CANOPY_KB_PATH") or DEFAULT_KB_PATH
     engine = build_engine(
         provider=provider,
+        kb_path=kb_path,
         blocked_domains_provider=lambda: app.state.blocked_domains,
         enable_osint=not bool(os.environ.get("CANOPY_DISABLE_OSINT")),
+        bus_backend=bus_backend,
+        nats_url=os.environ.get("CANOPY_NATS_URL"),
     )
     app.state.engine = engine
     app.state.clients = set()
     app.state.replay_task = None
+    app.state.control_lock = asyncio.Lock()
     app.state.engine_tasks = start_engine_tasks(engine)
     app.state.fanout_tasks = [
         asyncio.create_task(
-            _fanout(engine.bus, pattern, kind, app.state.clients),
-            name=f"fanout-{kind}",
+            _fanout(engine.bus, pattern, app.state.clients),
+            name=f"fanout-{pattern}",
         )
-        for pattern, kind in _FANOUT_PATTERNS
+        for pattern in _FANOUT_PATTERNS
     ]
 
     try:
@@ -87,17 +263,19 @@ async def _lifespan(app: FastAPI):
             *(t for t in app.state.engine_tasks),
             return_exceptions=True,
         )
-        engine.bus.close()
+        await engine.bus.close()
 
 
-async def _fanout(bus, pattern: str, kind: str, clients: set[WebSocket]) -> None:
+async def _fanout(bus, pattern: str, clients: set[WebSocket]) -> None:
     """Forward every bus event matching *pattern* to every connected client."""
     async for topic, event in bus.subscribe(pattern):
-        if hasattr(event, "model_dump"):
-            data: Any = event.model_dump(mode="json")
-        else:
-            data = event
-        envelope = {"topic": topic, "kind": kind, "data": data}
+        try:
+            envelope = codec.envelope(topic, event)
+        except codec.CodecError:
+            log.warning(
+                "fanout: dropping unregistered event on %s: %r", topic, type(event)
+            )
+            continue
         # Iterate over a snapshot — clients can disconnect mid-fanout.
         for ws in list(clients):
             try:
@@ -106,14 +284,43 @@ async def _fanout(bus, pattern: str, kind: str, clients: set[WebSocket]) -> None
                 clients.discard(ws)
 
 
-def create_app() -> FastAPI:
+def create_app(
+    *,
+    api_token: str | None | EllipsisType = ...,
+    cors_origins: Sequence[str] | None = None,
+) -> FastAPI:
+    """Build the gateway.
+
+    ``api_token`` and ``cors_origins`` default to the environment
+    (``CANOPY_API_TOKEN``, ``CANOPY_CORS_ORIGINS``, read after ``.env`` is
+    loaded); pass them explicitly to pin a mode regardless of the environment,
+    which is what the tests do. ``api_token=None`` is the open gateway.
+    """
+    load_dotenv()
     app = FastAPI(title="CANOPY Engine Gateway", lifespan=_lifespan)
+    app.state.api_token = resolve_api_token() if api_token is ... else api_token
+    app.state.cors_origins = (
+        resolve_cors_origins() if cors_origins is None else [str(o) for o in cors_origins]
+    )
+
+    @app.middleware("http")
+    async def _require_bearer_token(request: Request, call_next):
+        token = app.state.api_token
+        if token is None or request.method == "OPTIONS" or request.url.path in OPEN_PATHS:
+            return await call_next(request)
+        if _token_matches(token, _bearer_token(request.headers.get("authorization"))):
+            return await call_next(request)
+        return JSONResponse(
+            {"detail": "missing or invalid bearer token"},
+            status_code=401,
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    # Added after the auth middleware so it wraps it: CORS preflights are
+    # answered here and never reach the token check.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[
-            "http://localhost:5173",
-            "http://127.0.0.1:5173",
-        ],
+        allow_origins=list(app.state.cors_origins),
         allow_credentials=False,
         allow_methods=["*"],
         allow_headers=["*"],
@@ -186,7 +393,17 @@ def create_app() -> FastAPI:
         return json.loads(path.read_text(encoding="utf-8"))
 
     @app.post("/scenarios/{name}/replay")
-    async def replay_scenario(name: str, speed: float = 5.0) -> dict[str, Any]:
+    async def replay_scenario(
+        name: str,
+        speed: float = Query(DEFAULT_REPLAY_SPEED, gt=0.0),
+        max_delay_s: float = Query(DEFAULT_REPLAY_MAX_DELAY_S, ge=0.0),
+    ) -> dict[str, Any]:
+        """Start replaying a demo scenario; a running replay is cancelled first.
+
+        ``speed`` scales the scenario's own timestamps; ``max_delay_s`` caps any
+        single inter-signal pause, so ``speed=20&max_delay_s=6`` paces a run
+        with long lulls to roughly a minute on screen.
+        """
         try:
             case = SCENARIO_REGISTRY.by_file(name)
         except KeyError:
@@ -195,30 +412,76 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=404, detail=f"scenario not found: {name}")
         path = case.scenario_path
 
-        prev = app.state.replay_task
-        if prev is not None and not prev.done():
-            prev.cancel()
+        async with _control_lock(app):
+            await cancel_replay(app.state.replay_task)
+            # Same input discipline as the bench: oracle records (the scenario's
+            # own answer key) never reach the bus, and redacted observables are
+            # stripped, so the console shows what an operator would see.
+            replay = ScenarioReplayService(
+                app.state.engine.bus,
+                path,
+                speed=speed,
+                max_delay_s=max_delay_s,
+                signal_filter=case.includes_as_input,
+                signal_transform=case.sanitize_input,
+            )
+            app.state.replay_task = asyncio.create_task(
+                replay.run(), name=f"replay-{name}"
+            )
+        return {
+            "status": "replaying",
+            "scenario": name,
+            "speed": speed,
+            "max_delay_s": max_delay_s,
+        }
 
-        replay = ScenarioReplayService(
-            app.state.engine.bus,
-            path,
-            speed=speed,
-            max_delay_s=0.5,
-        )
-        app.state.replay_task = asyncio.create_task(
-            replay.run(), name=f"replay-{name}"
-        )
-        return {"status": "replaying", "scenario": name, "speed": speed}
+    @app.post("/reset")
+    async def reset() -> dict[str, Any]:
+        """Cancel any replay and clear engine state so the next run starts clean.
+
+        One gateway process replaying Run B and then Run A would otherwise
+        carry B's RF anomaly on the same satellite into A's attrib context and
+        decide cache (docs/C2-API.md).
+        """
+        async with _control_lock(app):
+            cancelled = await cancel_replay(app.state.replay_task)
+            app.state.replay_task = None
+            cleared = await reset_engine(app.state.engine)
+        log.info("engine reset (replay_cancelled=%s): %s", cancelled, cleared)
+        return {"status": "reset", "replay_cancelled": cancelled, "cleared": cleared}
 
     @app.post("/signals")
     async def post_signal(signal: Signal) -> dict[str, Any]:
         await app.state.engine.bus.publish(f"signals.{signal.domain}", signal)
         return {"status": "queued", "id": signal.id}
 
-    _ALLOWED_DOMAINS = {
-        "sda", "orbit", "osint", "humint", "rf_ew", "cyber",
-        "pnt", "satcom", "drone", "terrain",
-    }
+    def _schema_mode(mode: str) -> str:
+        if mode not in SCHEMA_MODES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"unknown schema mode {mode!r}; expected one of {list(SCHEMA_MODES)}",
+            )
+        return mode
+
+    @app.get("/schemas")
+    async def list_schemas(mode: str = "serialization") -> dict[str, Any]:
+        """JSON Schema of every event kind, keyed by the bus codec's kind.
+
+        ``mode=serialization`` (default) describes what the WebSocket emits;
+        ``mode=validation`` describes what a client may send.
+        """
+        return event_schemas(mode=_schema_mode(mode))  # type: ignore[arg-type]
+
+    @app.get("/schemas/{kind}")
+    async def get_schema(kind: str, mode: str = "serialization") -> dict[str, Any]:
+        resolved = _schema_mode(mode)
+        try:
+            return event_schema(kind, mode=resolved)  # type: ignore[arg-type]
+        except codec.CodecError:
+            raise HTTPException(
+                status_code=404,
+                detail=f"unknown event kind {kind!r}; known: {sorted(codec.registered_kinds())}",
+            )
 
     @app.get("/stress")
     async def get_stress() -> dict[str, Any]:
@@ -241,6 +504,15 @@ def create_app() -> FastAPI:
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket) -> None:
+        token = app.state.api_token
+        if token is not None:
+            presented = websocket.query_params.get("token") or _bearer_token(
+                websocket.headers.get("authorization")
+            )
+            if not _token_matches(token, presented):
+                # Closing before accept() rejects the handshake (HTTP 403).
+                await websocket.close(code=WS_POLICY_VIOLATION, reason="missing or invalid token")
+                return
         await websocket.accept()
         app.state.clients.add(websocket)
         try:

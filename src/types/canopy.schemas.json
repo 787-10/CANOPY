@@ -1,0 +1,1149 @@
+{
+  "signal": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "Location": {
+        "additionalProperties": true,
+        "description": "Where the signal applies. Must include at least one localizer.",
+        "properties": {
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Label"
+          },
+          "lat": {
+            "anyOf": [
+              {
+                "maximum": 90,
+                "minimum": -90,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lat"
+          },
+          "lng": {
+            "anyOf": [
+              {
+                "maximum": 180,
+                "minimum": -180,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Lng"
+          },
+          "alt_km": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Alt Km"
+          },
+          "alt_m": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Alt M"
+          },
+          "ce_m": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Ce M"
+          },
+          "mgrs": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Mgrs"
+          },
+          "area_wkt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Area Wkt"
+          }
+        },
+        "title": "Location",
+        "type": "object",
+        "required": [
+          "label",
+          "lat",
+          "lng",
+          "alt_km",
+          "alt_m",
+          "ce_m",
+          "mgrs",
+          "area_wkt"
+        ]
+      },
+      "Payload": {
+        "additionalProperties": true,
+        "description": "Domain-specific observation. Carries the canonical event_type/summary.",
+        "properties": {
+          "event_type": {
+            "minLength": 1,
+            "title": "Event Type",
+            "type": "string"
+          },
+          "summary": {
+            "minLength": 1,
+            "title": "Summary",
+            "type": "string"
+          },
+          "beat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Beat"
+          },
+          "asset": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Asset"
+          },
+          "satellite_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Satellite Id"
+          },
+          "observables": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Observables"
+          }
+        },
+        "required": [
+          "event_type",
+          "summary",
+          "beat",
+          "asset",
+          "satellite_id",
+          "observables"
+        ],
+        "title": "Payload",
+        "type": "object"
+      },
+      "Provenance": {
+        "additionalProperties": true,
+        "description": "Source traceability for a signal.",
+        "properties": {
+          "source_id": {
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "citation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Citation"
+          },
+          "collector": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Collector"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Method"
+          },
+          "references": {
+            "items": {
+              "type": "string"
+            },
+            "title": "References",
+            "type": "array"
+          },
+          "generated_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Generated At"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Notes"
+          }
+        },
+        "required": [
+          "source_id",
+          "citation",
+          "collector",
+          "method",
+          "references",
+          "generated_at",
+          "notes"
+        ],
+        "title": "Provenance",
+        "type": "object"
+      }
+    },
+    "additionalProperties": true,
+    "description": "Canonical CANOPY Signal — matches services/bus/schemas/signal.schema.json.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "domain": {
+        "enum": [
+          "sda",
+          "orbit",
+          "osint",
+          "humint",
+          "rf_ew",
+          "cyber",
+          "pnt",
+          "satcom",
+          "drone",
+          "terrain",
+          "bus_health",
+          "space_weather"
+        ],
+        "title": "Domain",
+        "type": "string"
+      },
+      "source": {
+        "minLength": 1,
+        "title": "Source",
+        "type": "string"
+      },
+      "realism": {
+        "enum": [
+          "real_source",
+          "mock_operational",
+          "synthetic_orbital_overlay"
+        ],
+        "title": "Realism",
+        "type": "string"
+      },
+      "confidence": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "title": "Confidence",
+        "type": "number"
+      },
+      "location": {
+        "$ref": "#/$defs/Location"
+      },
+      "payload": {
+        "$ref": "#/$defs/Payload"
+      },
+      "provenance": {
+        "$ref": "#/$defs/Provenance"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "domain",
+      "source",
+      "realism",
+      "confidence",
+      "location",
+      "payload",
+      "provenance"
+    ],
+    "title": "Signal",
+    "type": "object"
+  },
+  "anomaly": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "description": "Canonical CANOPY Anomaly — matches services/bus/schemas/anomaly.schema.json.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "kind": {
+        "minLength": 1,
+        "title": "Kind",
+        "type": "string"
+      },
+      "source_signal": {
+        "minLength": 1,
+        "title": "Source Signal",
+        "type": "string"
+      },
+      "source_signal_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Source Signal Ids",
+        "type": "array"
+      },
+      "severity": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "title": "Severity",
+        "type": "number"
+      },
+      "payload": {
+        "additionalProperties": true,
+        "title": "Payload",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "kind",
+      "source_signal",
+      "source_signal_ids",
+      "severity",
+      "payload"
+    ],
+    "title": "Anomaly",
+    "type": "object"
+  },
+  "attribution": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "description": "Attribution assessment for an anomaly cluster.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "anomaly_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Anomaly Ids",
+        "type": "array"
+      },
+      "actor": {
+        "minLength": 1,
+        "title": "Actor",
+        "type": "string"
+      },
+      "confidence": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "title": "Confidence",
+        "type": "number"
+      },
+      "doctrine_match": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Doctrine Match"
+      },
+      "evidence": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Evidence",
+        "type": "array"
+      },
+      "predicted_next": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Predicted Next"
+      },
+      "kb_citations": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Kb Citations",
+        "type": "array"
+      },
+      "source_signal_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Source Signal Ids",
+        "type": "array"
+      },
+      "verdict": {
+        "anyOf": [
+          {
+            "enum": [
+              "internal_fault",
+              "natural_external",
+              "hostile_external",
+              "unknown"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Verdict"
+      },
+      "physics_consistency": {
+        "anyOf": [
+          {
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "type": "number"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Physics Consistency"
+      },
+      "verdict_basis": {
+        "anyOf": [
+          {
+            "enum": [
+              "rule",
+              "reasoning"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Verdict Basis"
+      },
+      "verdict_evidence": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Verdict Evidence",
+        "type": "array"
+      },
+      "satellite_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Satellite Id"
+      },
+      "provisional": {
+        "default": false,
+        "title": "Provisional",
+        "type": "boolean"
+      },
+      "revision": {
+        "default": 0,
+        "title": "Revision",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "anomaly_ids",
+      "actor",
+      "confidence",
+      "doctrine_match",
+      "evidence",
+      "predicted_next",
+      "kb_citations",
+      "source_signal_ids",
+      "verdict",
+      "physics_consistency",
+      "verdict_basis",
+      "verdict_evidence",
+      "satellite_id",
+      "provisional",
+      "revision"
+    ],
+    "title": "Attribution",
+    "type": "object"
+  },
+  "attribution_challenge": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "description": "Red-team agent's critique of a primary attribution.\n\nEmitted as part of the multi-agent attribution loop: primary →\nred-team → reconciler. Lives on the bus only as a trace payload\n(i.e., as the structured input to the reconciler); it is *not*\npublished as a top-level bus event so downstream services that\nlisten on ``attributions.*`` see only the final reconciled\nattribution.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "primary_attribution_id": {
+        "title": "Primary Attribution Id",
+        "type": "string"
+      },
+      "alternative_actor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Alternative Actor"
+      },
+      "objections": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Objections",
+        "type": "array"
+      },
+      "confidence_delta": {
+        "default": 0.0,
+        "title": "Confidence Delta",
+        "type": "number"
+      },
+      "rationale": {
+        "title": "Rationale",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "primary_attribution_id",
+      "alternative_actor",
+      "objections",
+      "confidence_delta",
+      "rationale"
+    ],
+    "title": "AttributionChallenge",
+    "type": "object"
+  },
+  "decision": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "RecoveryBlock": {
+        "description": "The internal-diagnosis recovery a ``recovery_recommendation`` carries.\n\nCopied from the ``recommended_recovery`` observable of the bus-health\nanomaly that triggered it (docs/INTERFACE-SPEC.md §3, §6). ``source`` is\nfixed: only the internal-diagnosis lane proposes recoveries.",
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "target_subsystem": {
+            "title": "Target Subsystem",
+            "type": "string"
+          },
+          "requires_approval": {
+            "title": "Requires Approval",
+            "type": "boolean"
+          },
+          "rationale": {
+            "title": "Rationale",
+            "type": "string"
+          },
+          "source": {
+            "const": "internal-diagnosis",
+            "default": "internal-diagnosis",
+            "title": "Source",
+            "type": "string"
+          },
+          "satellite_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Satellite Id"
+          }
+        },
+        "required": [
+          "action_id",
+          "target_subsystem",
+          "requires_approval",
+          "rationale",
+          "source",
+          "satellite_id"
+        ],
+        "title": "RecoveryBlock",
+        "type": "object"
+      },
+      "WithheldRecovery": {
+        "description": "A recovery the internal diagnosis recommended and the decide stage withheld.\n\nSet on a Decision whose cluster carries a ``recommended_recovery`` but\nwhose action is not ``recovery_recommendation`` (docs/INTERFACE-SPEC.md\n§6, wave 4B): the verdict is ``hostile_external`` or ``unknown``, or a\nthreat-context gate rule (§7) would block the recovery. ``reason_code`` is\none of ``threat/uplink_jamming_active``, ``threat/hostile_close_approach``,\n``verdict/hostile_external``, ``verdict/unknown``; the console renders a\nlabel for it. Never coexists with ``recovery``.",
+        "properties": {
+          "action_id": {
+            "title": "Action Id",
+            "type": "string"
+          },
+          "target_subsystem": {
+            "title": "Target Subsystem",
+            "type": "string"
+          },
+          "reason_code": {
+            "title": "Reason Code",
+            "type": "string"
+          },
+          "source": {
+            "const": "internal-diagnosis",
+            "default": "internal-diagnosis",
+            "title": "Source",
+            "type": "string"
+          }
+        },
+        "required": [
+          "action_id",
+          "target_subsystem",
+          "reason_code",
+          "source"
+        ],
+        "title": "WithheldRecovery",
+        "type": "object"
+      }
+    },
+    "additionalProperties": true,
+    "description": "Recommended action for an attribution.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "attribution_id": {
+        "title": "Attribution Id",
+        "type": "string"
+      },
+      "action": {
+        "enum": [
+          "passive_defense",
+          "active_defense_escort",
+          "active_defense_counterattack",
+          "orbital_strike_request",
+          "terrestrial_strike_request",
+          "space_link_interdiction_request",
+          "sda_tasking",
+          "threat_warning",
+          "recovery_recommendation"
+        ],
+        "title": "Action",
+        "type": "string"
+      },
+      "target": {
+        "title": "Target",
+        "type": "string"
+      },
+      "rationale": {
+        "title": "Rationale",
+        "type": "string"
+      },
+      "authority": {
+        "enum": [
+          "local",
+          "request"
+        ],
+        "title": "Authority",
+        "type": "string"
+      },
+      "request_packet": {
+        "anyOf": [
+          {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Request Packet"
+      },
+      "source_signal_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Source Signal Ids",
+        "type": "array"
+      },
+      "recovery": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/RecoveryBlock"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "withheld_recovery": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/WithheldRecovery"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "revision": {
+        "default": 0,
+        "title": "Revision",
+        "type": "integer"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "attribution_id",
+      "action",
+      "target",
+      "rationale",
+      "authority",
+      "request_packet",
+      "source_signal_ids",
+      "recovery",
+      "withheld_recovery",
+      "revision"
+    ],
+    "title": "Decision",
+    "type": "object"
+  },
+  "ui_event": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "Recommendation": {
+        "additionalProperties": true,
+        "description": "Optional recommendation surfaced to the operator on a UIEvent.",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "approveLabel": {
+            "default": "APPROVE",
+            "title": "Approvelabel",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "summary",
+          "approveLabel"
+        ],
+        "title": "Recommendation",
+        "type": "object"
+      }
+    },
+    "additionalProperties": true,
+    "description": "Frontend-facing event — matches data/expected_ui_events.json shape.\n\nField names use camelCase where the existing fixture does (demoBeat,\napproveLabel) so the frontend can read either source interchangeably.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "source_signal_ids": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Source Signal Ids",
+        "type": "array"
+      },
+      "type": {
+        "enum": [
+          "threat_updated",
+          "recommendation_created",
+          "status_update"
+        ],
+        "title": "Type",
+        "type": "string"
+      },
+      "timestamp": {
+        "format": "date-time",
+        "title": "Timestamp",
+        "type": "string"
+      },
+      "severity": {
+        "enum": [
+          "low",
+          "medium",
+          "high",
+          "critical"
+        ],
+        "title": "Severity",
+        "type": "string"
+      },
+      "title": {
+        "minLength": 1,
+        "title": "Title",
+        "type": "string"
+      },
+      "message": {
+        "minLength": 1,
+        "title": "Message",
+        "type": "string"
+      },
+      "confidence": {
+        "maximum": 1.0,
+        "minimum": 0.0,
+        "title": "Confidence",
+        "type": "number"
+      },
+      "demoBeat": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Demobeat"
+      },
+      "recommendation": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/Recommendation"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "source_signal_ids",
+      "type",
+      "timestamp",
+      "severity",
+      "title",
+      "message",
+      "confidence",
+      "demoBeat",
+      "recommendation"
+    ],
+    "title": "UIEvent",
+    "type": "object"
+  },
+  "trace": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "description": "A single line of agent / tool reasoning.\n\nStreams in real time on the bus topic ``traces.{stage}`` and is rendered\nby the frontend's terminal-styled reasoning panel. Every visible step\nthat contributes to an attribution or decision should produce one trace\nso the resulting log is the auditable explanation of why the engine\narrived at its assessment.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "stage": {
+        "enum": [
+          "fusion",
+          "attrib_primary",
+          "attrib_redteam",
+          "attrib_reconcile",
+          "decide",
+          "tools",
+          "stress"
+        ],
+        "title": "Stage",
+        "type": "string"
+      },
+      "level": {
+        "default": "info",
+        "enum": [
+          "info",
+          "decision",
+          "tool",
+          "warn"
+        ],
+        "title": "Level",
+        "type": "string"
+      },
+      "message": {
+        "minLength": 1,
+        "title": "Message",
+        "type": "string"
+      },
+      "ref_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Ref Id"
+      },
+      "payload": {
+        "additionalProperties": true,
+        "title": "Payload",
+        "type": "object"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "stage",
+      "level",
+      "message",
+      "ref_id",
+      "payload"
+    ],
+    "title": "ReasoningTrace",
+    "type": "object"
+  },
+  "embedding": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "EmbeddingPoint": {
+        "description": "A single OSINT signal projected to 2D via PCA for visualization.",
+        "properties": {
+          "signal_id": {
+            "title": "Signal Id",
+            "type": "string"
+          },
+          "summary": {
+            "title": "Summary",
+            "type": "string"
+          },
+          "cluster_id": {
+            "title": "Cluster Id",
+            "type": "integer"
+          },
+          "x": {
+            "title": "X",
+            "type": "number"
+          },
+          "y": {
+            "title": "Y",
+            "type": "number"
+          },
+          "ts": {
+            "format": "date-time",
+            "title": "Ts",
+            "type": "string"
+          }
+        },
+        "required": [
+          "signal_id",
+          "summary",
+          "cluster_id",
+          "x",
+          "y",
+          "ts"
+        ],
+        "title": "EmbeddingPoint",
+        "type": "object"
+      }
+    },
+    "additionalProperties": true,
+    "description": "A snapshot of the OSINT semantic clustering window.\n\nEmitted every time a new OSINT signal is ingested and clustered.\nCarries the entire current sliding window — points, cluster\nassignments, and PCA-projected (x, y) coordinates — so the frontend\ncan render a complete scatter plot from a single event without\nneeding to maintain its own incremental projection.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "points": {
+        "items": {
+          "$ref": "#/$defs/EmbeddingPoint"
+        },
+        "title": "Points",
+        "type": "array"
+      },
+      "cluster_count": {
+        "default": 0,
+        "title": "Cluster Count",
+        "type": "integer"
+      },
+      "similarity_threshold": {
+        "default": 0.7,
+        "title": "Similarity Threshold",
+        "type": "number"
+      },
+      "model_name": {
+        "default": "",
+        "title": "Model Name",
+        "type": "string"
+      },
+      "embedding_dim": {
+        "default": 0,
+        "title": "Embedding Dim",
+        "type": "integer"
+      }
+    },
+    "title": "OsintEmbeddingSnapshot",
+    "type": "object",
+    "required": [
+      "id",
+      "ts",
+      "points",
+      "cluster_count",
+      "similarity_threshold",
+      "model_name",
+      "embedding_dim"
+    ]
+  }
+}

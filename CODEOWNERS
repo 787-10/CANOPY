@@ -1,1 +1,14 @@
 @787-10 @dakkameka @jeewoo23 @lai-ethan
+
+# ---- MEGALITH integration surfaces (placeholder, 2026-09-18) --------------
+# Path-scoped ownership for the code the MEGALITH integration adds to or
+# depends on in this repository, so counsel and the maintainers have a
+# structure to edit once the product boundary is settled. Later rules take
+# precedence over earlier ones; the owners above still apply everywhere else.
+/canopy/services/attrib/   @787-10 @jeewoo23
+/canopy/services/decide/   @787-10 @jeewoo23
+/canopy/services/fusion/   @787-10 @jeewoo23
+/canopy/services/bus/      @787-10 @jeewoo23
+/canopy/api/               @787-10 @jeewoo23
+/scenarios/heldout/        @787-10 @jeewoo23
+/bench/                    @787-10 @jeewoo23

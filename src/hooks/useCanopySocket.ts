@@ -73,69 +73,74 @@ function normalizeMessage(value: unknown): CanopyMessage | null {
   return { type: discriminator, data: candidate.data } as CanopyMessage
 }
 
-function reduceMessage(
-  state: CanopySocketState,
-  message: CanopyMessage,
-): CanopySocketState {
-  // Mirror every event into the global Zustand store so the Operator
-  // page (and any other consumer reading from useEventStore) sees the
-  // same data Brigade sees. The local CanopySocketState mirror is kept
-  // because Brigade reads it directly for its decision-stack summary.
+/** Side effects of one envelope: the global store ingestion. Runs in the
+ *  socket's message listener, never inside a React state updater (updaters
+ *  run during render: a store write there is an update-during-render and the
+ *  receipt stamp would measure render to commit, not receipt to display). */
+function ingestIntoStore(message: CanopyMessage): void {
   const store = useEventStore.getState()
   switch (message.type) {
     case 'signal':
       store.ingestSignal(message.data as Signal)
-      return {
-        ...state,
-        signals: prependLimited<Signal>(state.signals, message.data, 50),
-      }
+      return
     case 'anomaly':
       store.ingestAnomaly(message.data as Anomaly)
-      return {
-        ...state,
-        anomalies: prependLimited<Anomaly>(state.anomalies, message.data, 20),
-      }
-    case 'attribution':
-      store.ingestAttribution(message.data as Attribution)
-      return {
-        ...state,
-        attributions: prependLimited<Attribution>(
-          state.attributions,
-          message.data,
-          20,
-        ),
-      }
+      return
+    case 'attribution': {
+      // Stamp the client receipt before the store update so the verdict
+      // panel can measure WebSocket receipt -> render (F3).
+      const attribution = message.data as Attribution
+      store.noteAttributionArrival(attribution.id, attribution.revision ?? 0, performance.now())
+      store.ingestAttribution(attribution)
+      return
+    }
     case 'decision':
       store.ingestDecision(message.data as Decision)
-      return {
-        ...state,
-        decisions: prependLimited<Decision>(state.decisions, message.data, 20),
-      }
+      return
     case 'ui_event':
       store.ingestUIEvent(message.data as UIEvent)
-      return {
-        ...state,
-        uiEvents: prependLimited<UIEvent>(state.uiEvents, message.data, 20),
-      }
+      return
     case 'trace':
       store.ingestTrace(message.data as ReasoningTrace)
+      return
+    case 'embedding':
+      store.ingestEmbeddingSnapshot(message.data as OsintEmbeddingSnapshot)
+      return
+  }
+}
+
+/** Pure: the hook's own bounded mirror of recent events. */
+function mirrorMessage(state: CanopySocketState, message: CanopyMessage): CanopySocketState {
+  switch (message.type) {
+    case 'signal':
+      return { ...state, signals: prependLimited<Signal>(state.signals, message.data, 50) }
+    case 'anomaly':
+      return { ...state, anomalies: prependLimited<Anomaly>(state.anomalies, message.data, 20) }
+    case 'attribution':
+      return {
+        ...state,
+        attributions: prependLimited<Attribution>(state.attributions, message.data, 20),
+      }
+    case 'decision':
+      return { ...state, decisions: prependLimited<Decision>(state.decisions, message.data, 20) }
+    case 'ui_event':
+      return { ...state, uiEvents: prependLimited<UIEvent>(state.uiEvents, message.data, 20) }
+    case 'trace':
       return {
         ...state,
         traces: [...state.traces, message.data as ReasoningTrace].slice(-500),
       }
     case 'embedding':
-      store.ingestEmbeddingSnapshot(message.data as OsintEmbeddingSnapshot)
-      // Embedding snapshots replace wholesale; we don't keep a history
-      // because each one carries the full sliding window.
+      // Snapshots replace wholesale; the store holds the current one.
       return state
   }
 }
 
 export function useCanopySocket(url: string | null = DEFAULT_URL) {
   const [state, setState] = useState<CanopySocketState>(initialState)
-  // Drive the global connection indicator (ConnectionStatus) from the only
-  // live socket. setConnection is a stable Zustand action, so listing it in
-  // the effect deps is safe and won't retrigger the connection.
+  // Drive the subsystem strip's connection state from the only live socket.
+  // setConnection is a stable Zustand action, so listing it in the effect
+  // deps is safe and won't retrigger the connection.
   const setConnection = useEventStore((s) => s.setConnection)
 
   useEffect(() => {
@@ -182,7 +187,8 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
           return
         }
 
-        setState((current) => reduceMessage(current, message))
+        ingestIntoStore(message)
+        setState((current) => mirrorMessage(current, message))
       } catch {
         setState((current) => ({
           ...current,

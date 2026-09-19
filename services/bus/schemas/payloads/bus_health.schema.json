@@ -1,0 +1,207 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://canopy.local/schemas/payloads/bus_health.schema.json",
+  "title": "Bus Health Payload",
+  "description": "Payload of a bus_health Signal published by the internal-diagnosis lane (docs/INTERFACE-SPEC.md §3). The Signal source is 'internal-diagnosis'.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "event_type",
+    "summary",
+    "asset",
+    "satellite_id",
+    "observables"
+  ],
+  "properties": {
+    "event_type": {
+      "type": "string",
+      "enum": [
+        "link_margin_drop",
+        "sensor_saturation",
+        "attitude_disturbance",
+        "unexpected_reset",
+        "power_thermal_excursion",
+        "orbit_decay",
+        "safe_mode_entry",
+        "nominal"
+      ]
+    },
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000
+    },
+    "beat": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 32
+    },
+    "asset": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "satellite_id": {
+      "description": "Flight identity, ctb://<authority>/<spacecraft-id>[/component/<component-id>]. Simulated assets publish their modeled flight identity here and put the sim URI in observables.sim_identity.",
+      "type": "string",
+      "pattern": "^ctb://[a-z0-9.-]+/[a-z0-9-]+(?:/component/[a-z0-9-]+)?$"
+    },
+    "observables": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "subsystem",
+        "symptom",
+        "onset_ts",
+        "onset_clock_domain",
+        "physics_consistency",
+        "rate_of_change",
+        "rate_unit",
+        "shape",
+        "recommended_recovery"
+      ],
+      "properties": {
+        "subsystem": {
+          "type": "string",
+          "enum": [
+            "power",
+            "thermal",
+            "comms",
+            "adcs",
+            "propulsion",
+            "cdh",
+            "payload"
+          ]
+        },
+        "symptom": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 120
+        },
+        "onset_ts": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "onset_clock_domain": {
+          "type": "string",
+          "enum": [
+            "utc",
+            "tai",
+            "gps",
+            "spacecraft_onboard",
+            "simulation"
+          ]
+        },
+        "sim_time_s": {
+          "description": "Seconds since the simulation epoch recorded in provenance.notes as epoch=<iso>. Required when onset_clock_domain is 'simulation'.",
+          "type": "number"
+        },
+        "rate_of_change": {
+          "description": "Null when no measurement window is available.",
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "rate_unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "physics_consistency": {
+          "description": "Always present; the placeholder scorer returns 0.5.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "physics_basis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000
+        },
+        "shape": {
+          "description": "Null when no measurement window is available.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "step",
+            "ramp",
+            "drift",
+            "unknown",
+            null
+          ]
+        },
+        "recommended_recovery": {
+          "description": "Recovery proposed by the internal-diagnosis lane, or null when none is available.",
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "required": [
+            "action_id",
+            "target_subsystem",
+            "requires_approval",
+            "rationale"
+          ],
+          "properties": {
+            "action_id": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "target_subsystem": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 120
+            },
+            "requires_approval": {
+              "type": "boolean"
+            },
+            "rationale": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 2000
+            }
+          }
+        },
+        "norad_cat_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "cospar_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        },
+        "sim_identity": {
+          "description": "The simulated asset's own URI (sim. authority prefix) when the signal comes from a simulation.",
+          "type": "string",
+          "pattern": "^ctb://sim\\.[a-z0-9.-]+/[a-z0-9-]+(?:/component/[a-z0-9-]+)?$"
+        }
+      },
+      "if": {
+        "properties": {
+          "onset_clock_domain": {
+            "const": "simulation"
+          }
+        },
+        "required": [
+          "onset_clock_domain"
+        ]
+      },
+      "then": {
+        "required": [
+          "sim_time_s"
+        ]
+      }
+    }
+  }
+}

@@ -8,7 +8,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, Field, model_validator
 
-from canopy.services.schemas.events import Action, Authority, Domain, Signal
+from canopy.services.schemas.events import Action, Authority, Domain, Signal, Verdict
 
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_SCENARIO_REGISTRY = ROOT / "scenarios" / "manifest.json"
@@ -16,6 +16,17 @@ DEFAULT_MODEL_SPECS = ROOT / "bench" / "models.yaml"
 
 RecordRole = Literal["stimulus", "context", "oracle", "display_only"]
 Visibility = Literal["demo", "public_eval", "heldout"]
+
+# Benchmark suites (MEGALITH wave 3D). ``public`` is the pre-existing public
+# evaluation set; ``heldout`` is the paired fault/natural/hostile suite that the
+# public selection never includes (plan §7 concern 8). ``SUITE_IDS`` is the
+# ``suite_id`` written into run bundles.
+Suite = Literal["public", "heldout"]
+SUITES: tuple[Suite, ...] = ("public", "heldout")
+SUITE_IDS: dict[str, str] = {
+    "public": "canopy-public-v1",
+    "heldout": "megalith-heldout-v1",
+}
 
 
 class RecordRoleRule(BaseModel):
@@ -47,6 +58,9 @@ class ExpectedOutcome(BaseModel):
     forbidden_actions: list[Action] = Field(default_factory=list)
     required_citations: list[str] = Field(default_factory=list)
     required_tools: list[str] = Field(default_factory=list)
+    # MEGALITH three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so the
+    # pre-existing cases stay valid; the held-out paired suite sets it.
+    verdict: Verdict | None = None
 
 
 class ScenarioSpec(BaseModel):
@@ -70,10 +84,12 @@ class ScenarioSpec(BaseModel):
 
     @property
     def scenario_path(self) -> Path:
-        path = (ROOT / "scenarios" / self.file).resolve()
         scenarios_root = (ROOT / "scenarios").resolve()
-        if path.parent != scenarios_root:
-            raise ValueError(f"scenario file must be directly under {scenarios_root}")
+        path = (scenarios_root / self.file).resolve()
+        # Files may live in a subdirectory of ``scenarios/`` (the held-out
+        # suite is under ``scenarios/heldout/``) but never outside it.
+        if scenarios_root not in path.parents:
+            raise ValueError(f"scenario file must lie under {scenarios_root}")
         return path
 
     def role_for(self, signal: Signal) -> RecordRole:
@@ -129,6 +145,21 @@ class ScenarioRegistry(BaseModel):
 
     def benchmark_cases(self) -> list[ScenarioSpec]:
         return [case for case in self.cases if "public_eval" in case.visibility]
+
+    def heldout_cases(self) -> list[ScenarioSpec]:
+        """The paired held-out suite, in id order (never part of the public suite)."""
+        return sorted(
+            (case for case in self.cases if "heldout" in case.visibility),
+            key=lambda case: case.id,
+        )
+
+    def suite_cases(self, suite: str) -> list[ScenarioSpec]:
+        """The cases a named suite runs; unknown suites fail closed."""
+        if suite == "public":
+            return self.benchmark_cases()
+        if suite == "heldout":
+            return self.heldout_cases()
+        raise ValueError(f"unknown benchmark suite {suite!r}; choose from {', '.join(SUITES)}")
 
     def by_file(self, filename: str) -> ScenarioSpec:
         try:

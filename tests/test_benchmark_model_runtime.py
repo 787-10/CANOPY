@@ -73,5 +73,21 @@ def test_benchmark_provenance_hashes_suite_prompts_and_kb() -> None:
         "decision",
     }
     assert "knowledge_base" in provenance["file_hashes"]
+    # The public benchmark suite: held-out cases are not part of its hash.
     assert len(provenance["scenario_hashes"]) == 11
+    assert not any(name.startswith("scenarios/heldout/") for name in provenance["scenario_hashes"])
     assert len(provenance["variant_hashes"]) == 44
+
+
+def test_benchmark_provenance_hashes_the_suite_it_is_given() -> None:
+    from bench.specs import load_scenario_registry
+
+    registry = load_scenario_registry()
+    heldout = [case for case in registry.cases if "heldout" in case.visibility]
+    public = benchmark_provenance()
+    provenance = benchmark_provenance(heldout)
+
+    assert len(provenance["scenario_hashes"]) == 18
+    assert all(name.startswith("scenarios/heldout/") for name in provenance["scenario_hashes"])
+    assert provenance["suite_hash"] != public["suite_hash"]
+    assert benchmark_provenance(registry.benchmark_cases())["suite_hash"] == public["suite_hash"]

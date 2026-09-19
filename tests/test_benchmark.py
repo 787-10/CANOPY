@@ -234,3 +234,64 @@ def test_bench_run_against_subset_produces_scorecard():
 
     # Latency budget is generous — even the heaviest seed should clear.
     assert payload["latency_p95"] < 30.0
+
+
+# ---- MEGALITH wave 3D: the held-out suite selection ---------------------------
+
+
+def test_heldout_labels_cover_the_paired_suite_and_stay_out_of_public():
+    from bench.run import _heldout_labels, suite_labels
+
+    heldout = _heldout_labels()
+    assert len(heldout) == 18
+    assert all(label["case_id"].startswith("heldout-") for label in heldout)
+    assert {label["expected_verdict"] for label in heldout} == {
+        "internal_fault",
+        "natural_external",
+        "hostile_external",
+    }
+    assert [label["case_id"] for label in heldout] == sorted(
+        label["case_id"] for label in heldout
+    )
+    assert suite_labels("heldout") == heldout
+    public_ids = {label["case_id"] for label in suite_labels("public")}
+    assert not public_ids & {label["case_id"] for label in heldout}
+    # Public labels carry the key too, unset, so scoring never branches on its absence.
+    assert all(label.get("expected_verdict") is None for label in _seed_labels())
+    with pytest.raises(ValueError, match="unknown benchmark suite"):
+        suite_labels("nope")
+
+
+def test_bench_run_heldout_suite_scores_the_verdict():
+    card: Scorecard = asyncio.run(
+        _run(provider="stub", seeds_only=True, limit=2, suite="heldout")
+    )
+
+    assert card.total == 2
+    assert all(r.case_id.startswith("heldout-") for r in card.results)
+    assert all(r.expected_verdict is not None for r in card.results)
+    assert len(card.verdict_results()) == 2
+    payload = card.to_dict()
+    for key in (
+        "verdict_scored",
+        "verdict_accuracy",
+        "verdict_confusion",
+        "verdict_classes",
+        "verdict_brier",
+        "verdict_ece",
+        "abstention_rate",
+        "gate_block_rate",
+        "recovery_rate",
+        "recovery_when_hostile",
+        "latency_by_stage",
+        "latency_source",
+    ):
+        assert key in payload, f"scorecard missing {key}"
+    assert payload["verdict_scored"] == 2
+    assert "episode" in payload["latency_by_stage"]
+    for item in card.items:
+        assert item["expected"]["verdict"] in (
+            "internal_fault",
+            "natural_external",
+            "hostile_external",
+        )

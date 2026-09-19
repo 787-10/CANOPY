@@ -114,6 +114,92 @@ describe('eventStore — ingestDecision', () => {
   })
 })
 
+describe('eventStore — revisions replace the entry with the same id', () => {
+  it('replaces an attribution in place of adding a duplicate and updates the lookup', () => {
+    const provisional = makeAttribution('attr-1', {
+      provisional: true,
+      revision: 0,
+      confidence: 0.83,
+    })
+    store().ingestAttribution(provisional)
+    store().ingestAttribution(makeAttribution('other'))
+    const revised = makeAttribution('attr-1', {
+      provisional: false,
+      revision: 1,
+      confidence: 0.68,
+    })
+    store().ingestAttribution(revised)
+
+    const { attributions, attributionsById } = store()
+    expect(attributions).toHaveLength(2)
+    expect(attributions.map((a) => a.id)).toEqual(['attr-1', 'other'])
+    expect(attributions[0]).toBe(revised)
+    expect(attributions[0]?.revision).toBe(1)
+    expect(attributions[0]?.provisional).toBe(false)
+    expect(attributionsById['attr-1']).toBe(revised)
+  })
+
+  it('replaces a decision with the same id and keeps the lookup current', () => {
+    store().ingestDecision(makeDecision('dec-1', { revision: 0, action: 'threat_warning' }))
+    const revised = makeDecision('dec-1', { revision: 1, action: 'recovery_recommendation' })
+    store().ingestDecision(revised)
+
+    const { decisions, decisionsById } = store()
+    expect(decisions).toHaveLength(1)
+    expect(decisions[0]).toBe(revised)
+    expect(decisionsById['dec-1']?.action).toBe('recovery_recommendation')
+  })
+
+  it('replaces a UI event with the same id (an update, not a new card)', () => {
+    store().ingestUIEvent(makeUIEvent('uievt-1', { severity: 'medium' }))
+    store().ingestUIEvent(makeUIEvent('uievt-2'))
+    const updated = makeUIEvent('uievt-1', { severity: 'high' })
+    store().ingestUIEvent(updated)
+
+    const { uiEvents } = store()
+    expect(uiEvents).toHaveLength(2)
+    expect(uiEvents[0]).toBe(updated)
+    expect(uiEvents.filter((e) => e.id === 'uievt-1')).toHaveLength(1)
+  })
+
+  it('replaces signals and anomalies by id too', () => {
+    store().ingestSignal(makeSignal('s1', { confidence: 0.1 }))
+    store().ingestSignal(makeSignal('s1', { confidence: 0.9 }))
+    expect(store().signals).toHaveLength(1)
+    expect(store().signals[0]?.confidence).toBe(0.9)
+    expect(store().signalsById['s1']?.confidence).toBe(0.9)
+
+    store().ingestAnomaly(makeAnomaly('a1', { severity: 1 }))
+    store().ingestAnomaly(makeAnomaly('a1', { severity: 2 }))
+    expect(store().anomalies).toHaveLength(1)
+    expect(store().anomalies[0]?.severity).toBe(2)
+  })
+
+  it('keeps the ring-buffer cap when revisions interleave with new ids', () => {
+    for (let i = 0; i < 205; i++) {
+      store().ingestAttribution(makeAttribution(`at${i}`))
+      // Every arrival also revises the very first attribution.
+      store().ingestAttribution(makeAttribution('at0', { revision: i + 1 }))
+    }
+    const { attributions } = store()
+    expect(attributions).toHaveLength(200)
+    expect(attributions[0]?.id).toBe('at0')
+    expect(attributions[0]?.revision).toBe(205)
+    expect(attributions.filter((a) => a.id === 'at0')).toHaveLength(1)
+    expect(attributions[1]?.id).toBe('at204')
+  })
+
+  it('does not re-pop the approval banner for an update the operator already approved', () => {
+    store().ingestUIEvent(makeRecommendationEvent('rec1'))
+    expect(store().pendingApproval?.id).toBe('rec1')
+    store().markApproved('rec1')
+
+    store().ingestUIEvent(makeRecommendationEvent('rec1', { severity: 'high' }))
+    expect(store().uiEvents.filter((e) => e.id === 'rec1')).toHaveLength(1)
+    expect(store().pendingApproval).toBeNull()
+  })
+})
+
 describe('eventStore — ingestUIEvent', () => {
   it('sets pendingApproval for a recommendation_created event with a recommendation', () => {
     const evt = makeRecommendationEvent('rec1')
@@ -487,5 +573,16 @@ describe('eventStore — persist partialize', () => {
     // The persisted blob carries exactly the partialized keys — nothing else.
     expect(Object.keys(persisted).sort()).toEqual([...includedKeys].sort())
     expect(parsed.version).toBe(2)
+  })
+})
+
+describe('eventStore — decision revisions', () => {
+  it('ignores a redelivered lower revision of a decision id', () => {
+    store().ingestDecision(makeDecision('dec-rev', { revision: 1, action: 'threat_warning' }))
+    store().ingestDecision(makeDecision('dec-rev', { revision: 0, action: 'passive_defense' }))
+    expect(store().decisionsById['dec-rev'].action).toBe('threat_warning')
+    expect(store().decisions.filter((d) => d.id === 'dec-rev')).toHaveLength(1)
+    store().ingestDecision(makeDecision('dec-rev', { revision: 2, action: 'sda_tasking' }))
+    expect(store().decisionsById['dec-rev'].action).toBe('sda_tasking')
   })
 })

@@ -6,6 +6,10 @@ Usage:
     uv run python -m bench.run                # runs seeds + variants
     uv run python -m bench.run --seeds-only   # skip variants
     uv run python -m bench.run --provider stub
+    uv run python -m bench.run --suite heldout --provider stub
+                                              # the paired held-out suite
+                                              # (MEGALITH wave 3D); never
+                                              # part of the public suite
 """
 from __future__ import annotations
 
@@ -26,8 +30,15 @@ from bench.model_runtime import (
     hardware_snapshot,
     preflight_model,
 )
-from bench.runner import run_trial
-from bench.specs import ModelSpec, load_model_specs, load_scenario_registry
+from bench.runner import TrialArtifact, run_trial
+from bench.specs import (
+    SUITE_IDS,
+    SUITES,
+    ModelSpec,
+    ScenarioSpec,
+    load_model_specs,
+    load_scenario_registry,
+)
 from bench.scoring import (
     ScenarioResult,
     Scorecard,
@@ -35,6 +46,12 @@ from bench.scoring import (
     actor_match,
     authority_match,
     confidence_band_match,
+    gate_block_messages,
+    latest_physics_consistency,
+    select_final_attribution,
+    select_final_decision,
+    select_provisional_attribution,
+    stage_timings_from_traces,
 )
 from canopy._engine import resolve_provider
 from canopy.services.schemas.events import Attribution, Decision
@@ -102,16 +119,38 @@ def _label_outputs(
     validation_events: list[dict] | None = None,
     *,
     evaluate_raw: bool = False,
+    traces: list | None = None,
 ) -> ScenarioResult:
-    attribution: Attribution | None = (
-        captured["attribution"][-1] if captured["attribution"] else None
+    """Score one episode's captured outputs against its label.
+
+    ``captured`` is ``TrialArtifact.captured()`` (or the same shape from a
+    rescored bundle). ``traces`` are the episode's reasoning traces; they
+    carry gate blocks and, from wave 3A, per-stage timings. The verdict is
+    scored only when the label carries ``expected_verdict`` (the held-out
+    suite does; public labels leave it ``None``).
+    """
+    # The satellite cluster's final revision and the decision made on it; the
+    # last attribution/decision when nothing is satellite-keyed (wave 3A).
+    anomalies = captured.get("anomaly", [])
+    attribution: Attribution | None = select_final_attribution(
+        captured["attribution"], anomalies
     )
-    decision: Decision | None = captured["decision"][-1] if captured["decision"] else None
+    decision: Decision | None = select_final_decision(captured["decision"], attribution)
+    provisional = select_provisional_attribution(captured["attribution"], attribution)
+    traces = list(traces or [])
 
     pred_actor = attribution.actor if attribution else None
     pred_conf = attribution.confidence if attribution else None
     pred_action = decision.action if decision else None
     pred_authority = decision.authority if decision else None
+    expected_verdict = label.get("expected_verdict")
+    pred_verdict = attribution.verdict if attribution else None
+    verdict_correct = (
+        (pred_verdict is not None and pred_verdict == expected_verdict)
+        if expected_verdict is not None
+        else None
+    )
+    blocked = gate_block_messages(traces)
 
     expected_actors = label.get("expected_actors", label["expected_actor"])
     expected_actions = label.get("expected_actions", label["expected_action"])
@@ -214,7 +253,52 @@ def _label_outputs(
             raw_attribution_valid if evaluate_raw else None
         ),
         raw_decision_schema_valid=(raw_decision_valid if evaluate_raw else None),
+        expected_verdict=expected_verdict,
+        predicted_verdict=pred_verdict,
+        verdict_correct=verdict_correct,
+        physics_consistency=latest_physics_consistency(anomalies),
+        gate_blocked=bool(blocked),
+        gate_block_messages=blocked,
+        stage_timings=stage_timings_from_traces(traces),
+        provisional_verdict=provisional.verdict if provisional is not None else None,
+        recovery_published=any(
+            d.action == "recovery_recommendation" for d in captured["decision"]
+        ),
     )
+
+
+def score_trial(
+    label: dict[str, Any], trial: TrialArtifact, *, evaluate_raw: bool = False
+) -> tuple[ScenarioResult, dict[str, Any]]:
+    """Score one replayed trial: the result row and the bundle item for it."""
+    result = _label_outputs(
+        label,
+        trial.captured(),
+        trial.elapsed_seconds,
+        trial.validation_events,
+        evaluate_raw=evaluate_raw,
+        traces=trial.traces,
+    )
+    item = trial.to_dict()
+    item.update(
+        {
+            "case_id": result.case_id or Path(label["file"]).stem,
+            "family": result.family,
+            "parent_id": result.parent_id,
+            "transformation": result.transformation,
+            "relation": result.relation,
+            "expected": {
+                "actors": label.get("expected_actors", [label["expected_actor"]]),
+                "actions": label.get("expected_actions", [label["expected_action"]]),
+                "authorities": label.get(
+                    "expected_authorities", [label["expected_authority"]]
+                ),
+                "forbidden_actions": label.get("forbidden_actions", []),
+                "verdict": label.get("expected_verdict"),
+            },
+        }
+    )
+    return result, item
 
 
 def _aggregate_scorecards(cards: list[Scorecard]) -> Scorecard:
@@ -231,30 +315,49 @@ def _aggregate_scorecards(cards: list[Scorecard]) -> Scorecard:
     return aggregate
 
 
+def case_label(case: ScenarioSpec) -> dict[str, Any]:
+    """The scoring label for one registry case (its manifest expectations)."""
+    expected = case.expected
+    return {
+        "file": case.file,
+        "expected_actor": expected.actors[0],
+        "expected_actors": expected.actors,
+        "expected_action": expected.actions[0],
+        "expected_actions": expected.actions,
+        "expected_authority": expected.authorities[0],
+        "expected_authorities": expected.authorities,
+        "confidence_band": expected.confidence_band,
+        "abstain": expected.abstain,
+        "forbidden_actions": expected.forbidden_actions,
+        # MEGALITH three-way verdict; ``None`` for cases that do not label one.
+        "expected_verdict": expected.verdict,
+        "case_id": case.id,
+        "family": case.family,
+        "cluster_id": case.id,
+        "_path": str(case.scenario_path),
+        "_case": case,
+    }
+
+
 def _seed_labels() -> list[dict[str, Any]]:
-    out: list[dict[str, Any]] = []
-    for case in load_scenario_registry().benchmark_cases():
-        expected = case.expected
-        out.append(
-            {
-                "file": case.file,
-                "expected_actor": expected.actors[0],
-                "expected_actors": expected.actors,
-                "expected_action": expected.actions[0],
-                "expected_actions": expected.actions,
-                "expected_authority": expected.authorities[0],
-                "expected_authorities": expected.authorities,
-                "confidence_band": expected.confidence_band,
-                "abstain": expected.abstain,
-                "forbidden_actions": expected.forbidden_actions,
-                "case_id": case.id,
-                "family": case.family,
-                "cluster_id": case.id,
-                "_path": str(case.scenario_path),
-                "_case": case,
-            }
-        )
-    return out
+    return [case_label(case) for case in load_scenario_registry().benchmark_cases()]
+
+
+def _heldout_labels() -> list[dict[str, Any]]:
+    """Labels for the paired held-out suite, in id order (wave 3D)."""
+    return [case_label(case) for case in load_scenario_registry().heldout_cases()]
+
+
+def suite_labels(suite: str, *, seeds_only: bool = False) -> list[dict[str, Any]]:
+    """Every label a suite runs. The held-out suite has no generated variants."""
+    if suite == "public":
+        labels = list(_seed_labels())
+        if not seeds_only:
+            labels.extend(_variant_labels())
+        return labels
+    if suite == "heldout":
+        return _heldout_labels()
+    raise ValueError(f"unknown benchmark suite {suite!r}; choose from {', '.join(SUITES)}")
 
 
 def _variant_labels() -> list[dict[str, Any]]:
@@ -287,16 +390,14 @@ async def _run(
     seeds_only: bool,
     limit: int | None,
     multi_agent: bool = True,
+    suite: str = "public",
 ) -> Scorecard:
     log.info(
-        "Building engine (llm=%s, multi_agent=%s)", provider, multi_agent
+        "Building engine (llm=%s, multi_agent=%s, suite=%s)", provider, multi_agent, suite
     )
     scorecard = Scorecard()
 
-    labels: list[dict[str, Any]] = []
-    labels.extend(_seed_labels())
-    if not seeds_only:
-        labels.extend(_variant_labels())
+    labels = suite_labels(suite, seeds_only=seeds_only)
     if limit is not None:
         labels = labels[:limit]
 
@@ -318,39 +419,17 @@ async def _run(
             timeout_s=trial_timeout,
             model_spec=model_spec,
         )
-        result = _label_outputs(
-            label,
-            trial.captured(),
-            trial.elapsed_seconds,
-            trial.validation_events,
-            evaluate_raw=provider != "stub",
-        )
-        item = trial.to_dict()
-        item.update(
-            {
-                "case_id": result.case_id or Path(label["file"]).stem,
-                "family": result.family,
-                "parent_id": result.parent_id,
-                "transformation": result.transformation,
-                "relation": result.relation,
-                "expected": {
-                    "actors": label.get(
-                        "expected_actors", [label["expected_actor"]]
-                    ),
-                    "actions": label.get(
-                        "expected_actions", [label["expected_action"]]
-                    ),
-                    "authorities": label.get(
-                        "expected_authorities", [label["expected_authority"]]
-                    ),
-                    "forbidden_actions": label.get("forbidden_actions", []),
-                },
-            }
-        )
+        result, item = score_trial(label, trial, evaluate_raw=provider != "stub")
         scorecard.append(result, item=item)
+        verdict_note = ""
+        if result.expected_verdict is not None:
+            verdict_note = (
+                f"  verdict={result.predicted_verdict or '—'}"
+                f"{'✓' if result.verdict_correct else '✗'}"
+            )
         log.info(
             "  [%d/%d] %-50s  actor=%s%s  action=%s%s  "
-            "auth=%s%s  conf=%s",
+            "auth=%s%s  conf=%s%s%s",
             i,
             len(labels),
             Path(label["file"]).name,
@@ -361,6 +440,8 @@ async def _run(
             result.predicted_authority or "—",
             "✓" if result.authority_correct else "✗",
             f"{result.confidence:.2f}" if result.confidence is not None else "—",
+            verdict_note,
+            "  GATE" if result.gate_blocked else "",
         )
 
     return scorecard
@@ -413,7 +494,60 @@ def _print_report(card: Scorecard) -> None:
             f"= {robustness['pass_rate'] * 100:.1f}%"
         )
     print(f"Latency p50: {card.latency_p(0.5):.2f}s, p95: {card.latency_p(0.95):.2f}s")
+    _print_verdict_report(card)
     print("=" * 60)
+
+
+def _print_verdict_report(card: Scorecard) -> None:
+    """The MEGALITH verdict, gate, recovery and per-stage latency lines."""
+    scored = card.verdict_results()
+    if scored:
+        correct = sum(bool(r.verdict_correct) for r in scored)
+        print(
+            f"Verdict accuracy: {correct}/{len(scored)} = {card.verdict_accuracy() * 100:.0f}%"
+            f"  (missing verdicts: {card.verdict_missing()})"
+        )
+        for cls, metrics in card.verdict_class_metrics().items():
+            print(
+                f"  {cls:17} precision {metrics['precision']:.2f}  "
+                f"recall {metrics['recall']:.2f}  support {metrics['support']}"
+            )
+        print(
+            f"  Verdict Brier: {card.verdict_brier():.3f}, "
+            f"verdict ECE: {card.verdict_ece():.3f}"
+        )
+        matrix = card.verdict_confusion()
+        short = {cls: cls.split("_")[0] for cls in matrix}
+        print("  Confusion (rows expected, columns predicted):")
+        print(f"    {'':10}" + "".join(f"{short[cls]:>10}" for cls in matrix))
+        for expected, row in matrix.items():
+            print(f"    {short[expected]:<10}" + "".join(f"{row[p]:>10}" for p in matrix))
+    print(
+        f"Abstention rate: {card.abstention_rate() * 100:.1f}%, "
+        f"gate block rate: {card.gate_block_rate() * 100:.1f}%, "
+        f"recovery rate: {card.recovery_rate() * 100:.1f}%"
+    )
+    hostile = sum(1 for r in card.results if r.expected_verdict == "hostile_external")
+    if hostile:
+        print(
+            f"Recovery under expected hostile verdict (safety misses): "
+            f"{card.recovery_when_hostile()}/{hostile} final, "
+            f"{card.any_recovery_when_hostile()}/{hostile} any published decision"
+        )
+    if card.provisional_verdict_scored():
+        print(
+            f"Provisional (fast-lane) verdict accuracy: "
+            f"{card.provisional_verdict_accuracy() * 100:.0f}% "
+            f"over {card.provisional_verdict_scored()} cases"
+        )
+    stages = card.latency_by_stage()
+    print(f"Stage latency (source: {card.latency_source()}):")
+    for stage, timings in stages.items():
+        for key, stats in timings.items():
+            print(
+                f"  {stage:17} {key:10} p50 {stats['p50']:.1f} ms  "
+                f"p95 {stats['p95']:.1f} ms  (n={stats['count']})"
+            )
 
 
 def main() -> int:
@@ -428,6 +562,16 @@ def main() -> int:
         "--provider",
         default=None,
         help="Legacy provider selector: stub|anthropic|ollama",
+    )
+    parser.add_argument(
+        "--suite",
+        choices=SUITES,
+        default="public",
+        help=(
+            "public (default): the public evaluation cases plus generated "
+            "variants; heldout: the paired fault/natural/hostile suite, which "
+            "the public selection never includes"
+        ),
     )
     parser.add_argument("--seeds-only", action="store_true")
     parser.add_argument("--regenerate-variants", action="store_true")
@@ -451,10 +595,14 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    if args.regenerate_variants and not args.seeds_only:
+    # Variants belong to the public suite only; the held-out suite is the
+    # generator's paired cases as checked in.
+    seeds_only = args.seeds_only or args.suite != "public"
+    if args.suite == "public" and not seeds_only and (
+        args.regenerate_variants or not (VARIANTS_DIR / "labels.json").exists()
+    ):
         bench_generate.generate(variants_per_seed=args.variants)
-    elif not args.seeds_only and not (VARIANTS_DIR / "labels.json").exists():
-        bench_generate.generate(variants_per_seed=args.variants)
+    suite_cases = load_scenario_registry().suite_cases(args.suite)
 
     specs = load_model_specs()
     if args.model_spec:
@@ -479,12 +627,13 @@ def main() -> int:
         else model_spec.repetitions
     )
     hardware = hardware_snapshot()
-    provenance = benchmark_provenance()
+    # The provenance hash covers the suite that actually runs.
+    provenance = benchmark_provenance(suite_cases)
     if repetitions < 1:
         parser.error("--repetitions must be at least 1")
 
     if model_spec.provider != "stub" and not args.skip_warmup:
-        warmup_case = load_scenario_registry().benchmark_cases()[0]
+        warmup_case = suite_cases[0]
         log.info("Running unscored warm-up for %s", model_spec.id)
         asyncio.run(
             run_trial(
@@ -513,9 +662,10 @@ def main() -> int:
             _run(
                 provider=model_spec.provider,
                 model_spec=model_spec,
-                seeds_only=args.seeds_only,
+                seeds_only=seeds_only,
                 limit=args.limit,
                 multi_agent=not args.no_redteam,
+                suite=args.suite,
             )
         )
         cards.append(card)
@@ -525,9 +675,10 @@ def main() -> int:
                 output_root=BENCH_DIR / "runs",
                 provider=model_spec.provider,
                 model=model_spec.model,
-                suite_id="canopy-public-v1",
+                suite_id=SUITE_IDS[args.suite],
                 multi_agent=not args.no_redteam,
                 metadata={
+                    "suite": args.suite,
                     "model_spec": model_spec.model_dump(mode="json"),
                     "runtime": runtime,
                     "hardware": hardware,
@@ -539,9 +690,14 @@ def main() -> int:
         )
 
     card = _aggregate_scorecards(cards)
-    SCORECARD.write_text(json.dumps(card.to_dict(), indent=2))
+    # The public scorecard keeps its historical path; other suites write
+    # beside it so a held-out run never overwrites the public numbers.
+    scorecard_path = (
+        SCORECARD if args.suite == "public" else BENCH_DIR / f"scorecard-{args.suite}.json"
+    )
+    scorecard_path.write_text(json.dumps(card.to_dict(), indent=2))
     _print_report(card)
-    print(f"Scorecard written to {SCORECARD.relative_to(ROOT)}")
+    print(f"Scorecard written to {scorecard_path.relative_to(ROOT)}")
     for bundle in bundles:
         print(f"Immutable run bundle written to {bundle.relative_to(ROOT)}")
 

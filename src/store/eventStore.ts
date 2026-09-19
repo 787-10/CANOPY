@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { isStaleRevision } from '../lib/episode'
 import { persist, createJSONStorage } from "zustand/middleware";
 import type {
   Anomaly,
@@ -45,8 +46,16 @@ export type ManeuverDemo = {
   demoType?: 'evasion' | 'strike' | 'interdiction';
 };
 
-function pushBounded<T>(buffer: T[], item: T): T[] {
-  const next = [item, ...buffer];
+// Newest-first ring buffer. An item whose id is already present replaces the
+// stored one (moved to the front as the newest arrival) instead of being
+// added again: the engine republishes attributions, decisions and UI events
+// under the same id when the reasoning lane revises a provisional verdict
+// (wave 3A).
+function pushBounded<T extends { id: string }>(buffer: T[], item: T): T[] {
+  const rest = buffer.some((existing) => existing.id === item.id)
+    ? buffer.filter((existing) => existing.id !== item.id)
+    : buffer;
+  const next = [item, ...rest];
   if (next.length > RING_BUFFER) next.length = RING_BUFFER;
   return next;
 }
@@ -77,6 +86,12 @@ interface EventState {
   attributionsById: Record<string, Attribution>;
   decisionsById: Record<string, Decision>;
 
+  /** Client receipt time of every attribution revision, keyed by
+   *  attribution id then revision: `performance.now()` when the WebSocket
+   *  message was parsed. The verdict panel measures arrival-to-display from
+   *  it (F3). Not persisted: it only means something for this page load. */
+  attributionArrivals: Record<string, Record<number, number>>;
+
   // Connection + view state.
   connection: ConnectionStatus;
   view: ViewMode;
@@ -104,6 +119,7 @@ interface EventState {
   ingestUIEvent: (event: UIEvent) => void;
   ingestTrace: (trace: ReasoningTrace) => void;
   ingestEmbeddingSnapshot: (snapshot: OsintEmbeddingSnapshot) => void;
+  noteAttributionArrival: (id: string, revision: number, at: number) => void;
 
   setConnection: (status: ConnectionStatus) => void;
   setView: (view: ViewMode) => void;
@@ -130,6 +146,7 @@ const initialState = (): Omit<
   | "ingestUIEvent"
   | "ingestTrace"
   | "ingestEmbeddingSnapshot"
+  | "noteAttributionArrival"
   | "setConnection"
   | "setView"
   | "selectEvent"
@@ -155,6 +172,7 @@ const initialState = (): Omit<
   signalsById: {},
   attributionsById: {},
   decisionsById: {},
+  attributionArrivals: {},
   connection: "connecting",
   view: "brigade",
   selectedEventId: null,
@@ -184,27 +202,60 @@ export const useEventStore = create<EventState>()(
     })),
 
   ingestAttribution: (attribution) =>
-    set((state) => ({
+    set((state) => {
+      // A revision lower than the one already held for this id is stale
+      // (redelivery or reordering); never let it overwrite the final.
+      if (isStaleRevision(attribution, state.attributionsById[attribution.id])) {
+        return {}
+      }
+      return {
       attributions: pushBounded(state.attributions, attribution),
       attributionsById: {
         ...state.attributionsById,
         [attribution.id]: attribution,
       },
-    })),
+      }
+    }),
 
   ingestDecision: (decision) =>
-    set((state) => ({
-      decisions: pushBounded(state.decisions, decision),
-      decisionsById: { ...state.decisionsById, [decision.id]: decision },
-    })),
+    set((state) => {
+      // Decision ids are stable across revisions; a redelivered lower revision
+      // must not overwrite the one already held (mirrors ingestAttribution).
+      const held = state.decisionsById[decision.id]
+      if (held && (decision.revision ?? 0) < (held.revision ?? 0)) {
+        return {}
+      }
+      return {
+        decisions: pushBounded(state.decisions, decision),
+        decisionsById: { ...state.decisionsById, [decision.id]: decision },
+      }
+    }),
 
   ingestTrace: (trace) =>
-    set((state) => ({
-      traces: appendBounded(state.traces, trace, TRACE_BUFFER),
-    })),
+    set((state) =>
+      // The same trace can be delivered twice (a reconnect, or React's
+      // development-mode double effect opening two sockets); keep one.
+      state.traces.some((existing) => existing.id === trace.id)
+        ? {}
+        : { traces: appendBounded(state.traces, trace, TRACE_BUFFER) },
+    ),
 
   ingestEmbeddingSnapshot: (snapshot) =>
     set({ embeddingSnapshot: snapshot }),
+
+  noteAttributionArrival: (id, revision, at) =>
+    set((state) => {
+      const existing = state.attributionArrivals[id] ?? {};
+      // First receipt of a revision wins: a replayed message must not
+      // shorten the measured arrival-to-display time.
+      if (existing[revision] !== undefined) return {};
+      return {
+        attributionArrivals: {
+          ...state.attributionArrivals,
+          [id]: { ...existing, [revision]: at },
+        },
+      };
+    }),
 
   ingestUIEvent: (event) =>
     set((state) => {

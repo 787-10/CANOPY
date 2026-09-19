@@ -8,10 +8,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from canopy._engine import BUS_BACKENDS, build_bus, resolve_bus_backend
 from canopy.services.attrib import AttribService
-from canopy.services.bus import InProcessBus
 from canopy.services.decide import DecideService
-from canopy.services.fusion import FusionService
+from canopy.services.fusion import DEFAULT_WINDOWS, FusionService
 from canopy.services.kb import KB
 from canopy.services.llm import LLMClient
 from canopy.services.orbit import OrbitService
@@ -74,15 +74,27 @@ async def main(
     drain_s: float = 4.0,
     attrib_window_s: float = 2.0,
     kb_path: str | Path = DEFAULT_KB_PATH,
+    bus_health_lookback_s: int | None = None,
+    bus_backend: str = "memory",
+    nats_url: str | None = None,
 ) -> None:
     logging.basicConfig(
         level=log_level,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
     log = logging.getLogger("canopy.cli")
-    log.info("CANOPY engine starting (llm=%s scenarios=%s)", provider, scenarios)
+    log.info(
+        "CANOPY engine starting (llm=%s bus=%s scenarios=%s)",
+        provider,
+        bus_backend,
+        scenarios,
+    )
 
-    bus = InProcessBus()
+    bus = build_bus(
+        bus_backend,  # type: ignore[arg-type]
+        nats_url=nats_url,
+        consumer_prefix="canopy-cli" if bus_backend == "nats" else None,
+    )
     kb = KB.load_from_json(kb_path)
     log.info("KB loaded: %d entries from %s", len(kb), kb_path)
     llm = _build_llm(provider=provider, kb=kb)
@@ -90,7 +102,14 @@ async def main(
     orbit = OrbitService()
     log.info("Orbit service loaded with %d cached satellites", len(orbit.known_satellites()))
 
-    fusion = FusionService(bus)
+    fusion_windows = None
+    if bus_health_lookback_s is not None:
+        # Override only the bus_health look-back; its look-ahead and every
+        # other row keep the spec defaults.
+        fusion_windows = {
+            "bus_health": (bus_health_lookback_s, DEFAULT_WINDOWS["bus_health"][1])
+        }
+    fusion = FusionService(bus, windows=fusion_windows)
     attrib = AttribService(bus, llm, kb, window_s=attrib_window_s)
     decide = DecideService(bus, llm, orbit=orbit)
     ui = UIEventService(bus)
@@ -133,7 +152,7 @@ async def main(
         for t in tasks:
             t.cancel()
         await asyncio.gather(*tasks, return_exceptions=True)
-        bus.close()
+        await bus.close()
 
 
 def cli() -> None:
@@ -161,6 +180,24 @@ def cli() -> None:
         action="store_true",
         default=_live_from_env(),
         help="Deprecated alias for --llm anthropic.",
+    )
+    parser.add_argument(
+        "--bus",
+        choices=BUS_BACKENDS,
+        default=None,
+        help=(
+            "Event bus backend: 'memory' (default, single process) or 'nats' "
+            "(durable JetStream broker with priority subjects; needs the "
+            "MEGALITH root environment). Falls back to the CANOPY_BUS env var."
+        ),
+    )
+    parser.add_argument(
+        "--nats-url",
+        default=None,
+        help=(
+            "NATS server URL for --bus nats. Falls back to CANOPY_NATS_URL, "
+            "then nats://127.0.0.1:4222."
+        ),
     )
     parser.add_argument(
         "--log-level",
@@ -191,9 +228,19 @@ def cli() -> None:
         default=2.0,
         help="Sliding window over anomalies before attribution fires.",
     )
+    parser.add_argument(
+        "--bus-health-lookback-s",
+        type=int,
+        default=None,
+        help=(
+            "How far back (seconds) fusion searches for correlates of a "
+            f"bus_health signal. Default {DEFAULT_WINDOWS['bus_health'][0]}."
+        ),
+    )
     args = parser.parse_args()
 
     provider = _resolve_provider(llm_flag=args.llm, live_flag=args.live)
+    bus_backend = resolve_bus_backend(bus_flag=args.bus)
 
     scenarios = list(args.scenario)
     if args.beats:
@@ -209,6 +256,9 @@ def cli() -> None:
                 scenario_max_delay_s=args.scenario_max_delay_s,
                 drain_s=args.drain_s,
                 attrib_window_s=args.attrib_window_s,
+                bus_health_lookback_s=args.bus_health_lookback_s,
+                bus_backend=bus_backend,
+                nats_url=args.nats_url,
             )
         )
     except KeyboardInterrupt:

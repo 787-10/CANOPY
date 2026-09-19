@@ -12,6 +12,12 @@ Configure via env vars (or constructor args):
   is typically ``http://<machine-name>:11434`` or ``http://<100.x.x.x>:11434``.
 * ``CANOPY_OLLAMA_MODEL`` — the model tag to use (e.g. ``gemma3:4b``).
 * ``CANOPY_OLLAMA_TIMEOUT_S`` — per-request HTTP timeout (default 180 s).
+* ``CANOPY_OLLAMA_NUM_CTX`` — context window requested per call (default
+  32768). Attribution prompts with the full knowledge base run to 12–16k
+  tokens; at the daemon's 4096-token default they are silently truncated and
+  the verdict degrades.
+* ``CANOPY_OLLAMA_THINK`` — set to ``0``/``false`` or ``1``/``true`` to send the
+  ``think`` flag for thinking-capable models; unset sends nothing.
 """
 from __future__ import annotations
 
@@ -24,6 +30,7 @@ from typing import Any
 from canopy.services.kb import KB
 from canopy.services.kb.models import KBEntry
 from canopy.services.llm.validation import (
+    RuleVerdictLike,
     validate_and_repair_attribution,
     validate_and_repair_decision,
 )
@@ -37,7 +44,17 @@ from canopy.services.schemas.events import (
 log = logging.getLogger(__name__)
 
 DEFAULT_OLLAMA_URL = "http://localhost:11434"
+
+
+def _verdict_fields(payload: dict[str, Any]) -> dict[str, Any]:
+    """Verdict lane fields from a validated attribution payload (spec §5)."""
+    return {
+        "verdict": payload.get("verdict"),
+        "verdict_basis": payload.get("verdict_basis"),
+        "verdict_evidence": list(payload.get("verdict_evidence") or []),
+    }
 DEFAULT_OLLAMA_MODEL = "gemma3:4b"
+DEFAULT_OLLAMA_NUM_CTX = 32768
 DEFAULT_TIMEOUT_S = 180.0
 
 
@@ -64,6 +81,11 @@ class OllamaLLMClient:
     ) -> None:
         self._kb = kb
         self._model = model or os.environ.get("CANOPY_OLLAMA_MODEL", DEFAULT_OLLAMA_MODEL)
+        self._num_ctx = int(os.environ.get("CANOPY_OLLAMA_NUM_CTX", str(DEFAULT_OLLAMA_NUM_CTX)))
+        think_env = os.environ.get("CANOPY_OLLAMA_THINK")
+        self._think: bool | None = (
+            None if think_env is None else think_env.strip().lower() in ("1", "true", "yes")
+        )
         url = base_url or os.environ.get("CANOPY_OLLAMA_URL", DEFAULT_OLLAMA_URL)
         self._base_url = url.rstrip("/")
         timeout = timeout_s
@@ -91,24 +113,28 @@ class OllamaLLMClient:
         return await self.attribute_primary(anomalies, kb_context)
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
             attribution_system_prompt,
+            attribution_tool,
             attribution_user_prompt,
         )
 
         source_ids = [sid for a in anomalies for sid in a.source_signal_ids]
         relevant = self._resolve_kb_context(anomalies, kb_context)
 
-        schema = ATTRIBUTION_TOOL["input_schema"]
+        schema = attribution_tool(rule_verdict)["input_schema"]
         payload = await self._chat(
             system=attribution_system_prompt(),
-            user=attribution_user_prompt(anomalies, relevant),
+            user=attribution_user_prompt(anomalies, relevant, rule_verdict),
             schema=schema,
         )
-        payload = self._repair_attribution(payload)
+        payload = self._repair_attribution(payload, rule_verdict)
         return Attribution(
             anomaly_ids=[a.id for a in anomalies],
             actor=str(payload.get("actor", "Unknown")),
@@ -118,6 +144,7 @@ class OllamaLLMClient:
             predicted_next=payload.get("predicted_next"),
             kb_citations=list(payload.get("kb_citations", [])),
             source_signal_ids=list(dict.fromkeys(source_ids)),
+            **_verdict_fields(payload),
         )
 
     async def attribute_redteam(
@@ -153,21 +180,23 @@ class OllamaLLMClient:
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: RuleVerdictLike | None = None,
     ) -> Attribution:
         from canopy.services.attrib.prompts import (
-            ATTRIBUTION_TOOL,
+            attribution_tool,
             reconcile_system_prompt,
             reconcile_user_prompt,
         )
 
         relevant = self._resolve_kb_context(anomalies, kb_context)
-        schema = ATTRIBUTION_TOOL["input_schema"]
+        schema = attribution_tool(rule_verdict)["input_schema"]
         payload = await self._chat(
             system=reconcile_system_prompt(),
-            user=reconcile_user_prompt(primary, challenge, anomalies, relevant),
+            user=reconcile_user_prompt(primary, challenge, anomalies, relevant, rule_verdict),
             schema=schema,
         )
-        payload = self._repair_attribution(payload)
+        payload = self._repair_attribution(payload, rule_verdict)
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
             actor=str(payload.get("actor", primary.actor)),
@@ -177,6 +206,7 @@ class OllamaLLMClient:
             predicted_next=payload.get("predicted_next"),
             kb_citations=list(payload.get("kb_citations", [])),
             source_signal_ids=list(primary.source_signal_ids),
+            **_verdict_fields(payload),
         )
 
     def _resolve_kb_context(
@@ -228,14 +258,20 @@ class OllamaLLMClient:
             rationale=payload["rationale"],
             authority=payload["authority"],
             request_packet=payload.get("request_packet"),
+            # The validator has already normalised an echoed recovery block
+            # to a well-formed dict or None (spec §6 invariants); keep it so
+            # the round trip is not lossy.
+            recovery=payload.get("recovery"),
             source_signal_ids=list(attribution.source_signal_ids),
         )
 
     # ---- HTTP plumbing ----------------------------------------------------
 
-    def _repair_attribution(self, payload: dict[str, Any]) -> dict[str, Any]:
+    def _repair_attribution(
+        self, payload: dict[str, Any], rule_verdict: RuleVerdictLike | None = None
+    ) -> dict[str, Any]:
         raw = dict(payload)
-        validation = validate_and_repair_attribution(payload)
+        validation = validate_and_repair_attribution(payload, rule_verdict)
         self.validation_events.append(
             {
                 "stage": "attribution",
@@ -268,8 +304,14 @@ class OllamaLLMClient:
                 {"role": "user", "content": user_with_schema},
             ],
             "stream": False,
-            "options": {"temperature": self._temperature, "seed": self._seed},
+            "options": {
+                "temperature": self._temperature,
+                "seed": self._seed,
+                "num_ctx": self._num_ctx,
+            },
         }
+        if self._think is not None:
+            base_body["think"] = self._think
 
         # Try schema-typed structured output first (Ollama ≥ 0.5). Fall back
         # to plain JSON mode if the daemon rejects the schema dict.

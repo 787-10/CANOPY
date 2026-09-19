@@ -6,12 +6,22 @@ entries by id, use "consistent with"/"confidence-scored" language, and use
 """
 from __future__ import annotations
 
+import copy
 import json
 from collections.abc import Iterable
 from typing import Any
 
 from canopy.services.kb.models import KBEntry
+from canopy.services.llm.validation import RuleVerdictLike
 from canopy.services.schemas.events import Anomaly, Attribution, AttributionChallenge
+
+# The three-way verdict plus abstention (docs/INTERFACE-SPEC.md §5).
+VERDICT_VALUES: tuple[str, ...] = (
+    "internal_fault",
+    "natural_external",
+    "hostile_external",
+    "unknown",
+)
 
 ATTRIBUTION_TOOL: dict[str, Any] = {
     "name": "submit_attribution",
@@ -127,9 +137,84 @@ ATTRIBUTION_TOOL: dict[str, Any] = {
                     "is an INVALID output."
                 ),
             },
+            "verdict": {
+                "type": "string",
+                "enum": list(VERDICT_VALUES),
+                "description": (
+                    "Three-way cause call for the cluster: 'internal_fault' "
+                    "(a fault on the monitored spacecraft; actor must be 'None'), "
+                    "'natural_external' (space weather or the environment; actor "
+                    "must be 'None'), 'hostile_external' (an adversary effect; "
+                    "actor is the attributed actor or 'Unknown'), or 'unknown' "
+                    "(actor 'Unknown', confidence < 0.50). A PROVISIONAL VERDICT "
+                    "from the deterministic rule lane is supplied in the prompt; "
+                    "keep it unless you can cite evidence in verdict_evidence. "
+                    "A changed verdict with empty verdict_evidence is reset to "
+                    "the provisional value by the validator."
+                ),
+            },
+            "verdict_evidence": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Cited strings that justify DEPARTING from the provisional "
+                    "verdict: one item per observable (anomaly id, kind, "
+                    "physics_consistency value, storm validity window, KB entry) "
+                    "that the rule lane did not weigh correctly. Leave empty when "
+                    "you keep the provisional verdict."
+                ),
+            },
         },
     },
 }
+
+
+def attribution_tool(rule_verdict: RuleVerdictLike | None = None) -> dict[str, Any]:
+    """``ATTRIBUTION_TOOL`` with the provisional verdict pre-filled.
+
+    Returns a deep copy so the module constant stays pristine. When a rule
+    verdict is given, the ``verdict`` property carries it as the JSON-schema
+    ``default`` (the "pre-filled" of spec §5.2) and its description names it.
+    """
+    tool = copy.deepcopy(ATTRIBUTION_TOOL)
+    if rule_verdict is not None:
+        prop = tool["input_schema"]["properties"]["verdict"]
+        prop["default"] = rule_verdict.verdict
+        prop["description"] = (
+            f"PROVISIONAL VERDICT for this cluster: '{rule_verdict.verdict}' at "
+            f"rule confidence {rule_verdict.confidence:.2f}. " + prop["description"]
+        )
+    return tool
+
+
+def provisional_verdict_block(rule_verdict: RuleVerdictLike | None) -> str:
+    """Prompt section describing the rule lane's provisional verdict."""
+    if rule_verdict is None:
+        return (
+            "## Provisional Verdict (rule lane)\n"
+            "No rule-lane verdict is available for this cluster. Choose the verdict "
+            "from the anomaly evidence and cite it in verdict_evidence.\n\n"
+        )
+    basis_lines = "\n".join(f"  - {line}" for line in rule_verdict.basis)
+    pc = (
+        "n/a (no bus telemetry in cluster)"
+        if rule_verdict.pc is None
+        else f"{rule_verdict.pc:.2f}"
+    )
+    return (
+        "## Provisional Verdict (rule lane)\n"
+        f"verdict: {rule_verdict.verdict}\n"
+        f"rule confidence: {rule_verdict.confidence:.2f}\n"
+        f"physics_consistency: {pc}\n"
+        f"satellite_id: {rule_verdict.satellite_id or 'n/a'}\n"
+        "basis:\n"
+        f"{basis_lines}\n"
+        "This verdict was set deterministically from the cluster's physics "
+        "consistency, the same-satellite hostile-domain context, and any overlapping "
+        "space-weather window. Keep it unless you can cite specific evidence in "
+        "verdict_evidence; the validator resets an uncited change and bounds your "
+        "confidence to within 0.15 of the rule confidence when the verdict stands.\n\n"
+    )
 
 
 def attribution_system_prompt() -> str:
@@ -199,6 +284,33 @@ def attribution_system_prompt() -> str:
         "Multi-actor confidence cap: 0.72 unless a KB entry documents a joint "
         "precedent between those specific actors.\n\n"
 
+        "## VERDICT — INTERNAL, NATURAL, HOSTILE, OR UNKNOWN\n"
+        "Every cluster also gets a three-way cause call in the `verdict` field:\n"
+        "  internal_fault   — a fault on the monitored spacecraft (degraded "
+        "amplifier, wheel friction, board reset). Physics consistency from the "
+        "internal-diagnosis lane is high and no hostile-domain cue sits on the "
+        "same satellite inside the look-back window. actor MUST be 'None'.\n"
+        "  natural_external — space weather or the environment explains the "
+        "symptom: a geomagnetic storm, radiation enhancement, or density "
+        "increase whose validity window overlaps the onset, and the symptom is "
+        "storm-sensitive (orbit decay, reset, power/thermal, saturation, safe "
+        "mode). actor MUST be 'None'.\n"
+        "  hostile_external — an adversary effect: RF, PNT, cyber, orbital, or "
+        "SDA cues on the same satellite inside the window, with low or no "
+        "physics consistency. actor is the attributed actor, or 'Unknown'.\n"
+        "  unknown          — the evidence is contradictory (physics consistent "
+        "AND a hostile cue) or insufficient. actor MUST be 'Unknown' and "
+        "confidence < 0.50.\n"
+        "A PROVISIONAL VERDICT from the deterministic rule lane is supplied in "
+        "the user prompt with its basis. Default to it. Change it ONLY when you "
+        "can cite the specific observables that the rule mis-weighed, one per "
+        "item, in `verdict_evidence` (anomaly ids, kinds, physics_consistency "
+        "values, storm windows, KB entries). A changed verdict with empty "
+        "verdict_evidence is reset to the provisional value by the validator, "
+        "and confidence is bounded to within 0.15 of the rule confidence when "
+        "the verdict stands. 'None' is not a hedge: internal and natural "
+        "verdicts are positive findings and keep their full confidence.\n\n"
+
         "## EVALUATION HYGIENE\n"
         "No scenario-specific worked examples are provided. Derive the assessment "
         "only from the anomaly cluster and KB context supplied for this call. "
@@ -210,7 +322,9 @@ def attribution_system_prompt() -> str:
 
 
 def attribution_user_prompt(
-    anomalies: list[Anomaly], kb_entries: Iterable[KBEntry]
+    anomalies: list[Anomaly],
+    kb_entries: Iterable[KBEntry],
+    rule_verdict: RuleVerdictLike | None = None,
 ) -> str:
     anomalies_blob = json.dumps(
         [a.model_dump(mode="json") for a in anomalies], indent=2, default=str
@@ -225,6 +339,8 @@ def attribution_user_prompt(
         "sufficient evidence for actor attribution.\n\n"
         f"```json\n{anomalies_blob}\n```\n\n"
 
+        + provisional_verdict_block(rule_verdict) +
+
         "## Knowledge Base\n"
         "These KB entries are the doctrinal threat concepts available to ground "
         "your assessment. Cite only entries that match observable signal patterns. "
@@ -233,7 +349,11 @@ def attribution_user_prompt(
 
         "## Pre-Submission Checklist — Verify All Before Calling Tool\n"
         "[ ] kb_citations contains 'kb-attribution-uncertainty-001'\n"
-        "[ ] If actor is not 'Unknown', at least one KB entry beyond the "
+        "[ ] verdict is set; if it differs from the provisional verdict, "
+        "verdict_evidence cites why\n"
+        "[ ] actor is 'None' for internal_fault / natural_external and "
+        "'Unknown' for unknown\n"
+        "[ ] If actor is not 'Unknown' or 'None', at least one KB entry beyond the "
         "uncertainty anchor is cited\n"
         "[ ] No prohibited phrases in any field "
         "('confirmed', 'proves', 'credible coordinated threat pattern', etc.)\n"
@@ -311,6 +431,11 @@ def redteam_system_prompt() -> str:
         "to -0.15); multi-domain corroboration warrants a smaller one or zero.\n"
         "  - 0 is a valid delta — endorse the primary when it's calibrated. "
         "Don't manufacture objections.\n"
+        "  - The primary carries a three-way `verdict` (internal_fault, "
+        "natural_external, hostile_external, unknown). If the look-alike cause "
+        "was not weighed (a hostile cue on the same satellite, a storm window, "
+        "or a high physics-consistency score), say so in objections; the "
+        "reconciler can only change the verdict by citing such evidence.\n"
         "Submit via submit_challenge."
     )
 
@@ -363,6 +488,14 @@ def reconcile_system_prompt() -> str:
         "0.50 floor when the actor remains named. If the actor changes, "
         "score the new actor on the same evidence — typically 0.50-0.60.\n\n"
 
+        "  5. VERDICT: keep the provisional rule-lane verdict supplied in the "
+        "user prompt unless the red-team objection cites specific observables "
+        "that the rule mis-weighed; then set the new verdict AND list those "
+        "observables in verdict_evidence. An uncited change is reset by the "
+        "validator. Actor follows the verdict: 'None' for internal_fault and "
+        "natural_external, 'Unknown' for unknown, the attributed actor or "
+        "'Unknown' for hostile_external.\n\n"
+
         "Always include 'kb-attribution-uncertainty-001' in kb_citations. "
         "Append one short evidence line summarising the red-team objection "
         "(e.g., 'Red-team flagged PRC alternative; primary KB match holds.'). "
@@ -375,6 +508,7 @@ def reconcile_user_prompt(
     challenge: "AttributionChallenge",
     anomalies: list[Anomaly],
     kb_entries: Iterable[KBEntry],
+    rule_verdict: RuleVerdictLike | None = None,
 ) -> str:
     primary_blob = json.dumps(primary.model_dump(mode="json"), indent=2, default=str)
     challenge_blob = json.dumps(
@@ -393,6 +527,7 @@ def reconcile_user_prompt(
         f"```json\n{challenge_blob}\n```\n\n"
         "## Anomalies\n"
         f"```json\n{anomalies_blob}\n```\n\n"
+        + provisional_verdict_block(rule_verdict) +
         "## Knowledge Base\n"
         f"```json\n{kb_blob}\n```\n\n"
         "Produce the final calibrated attribution. Submit via "

@@ -1,4 +1,5 @@
 import type { Domain, Signal } from '../types/canopy'
+import { eventTypeWatchTier } from './commanderLanguage'
 
 export type SignalEffectState = 'nominal' | 'watch' | 'danger'
 
@@ -41,11 +42,21 @@ export const signalEffectState = (signal: Signal | null): SignalEffectState => {
     return 'nominal'
   }
 
-  if (dangerEvents.has(signal.payload.event_type) || signal.confidence >= 0.9) {
+  const tier = eventTypeWatchTier(signal.payload.event_type)
+
+  if (
+    tier === 'danger' ||
+    dangerEvents.has(signal.payload.event_type) ||
+    signal.confidence >= 0.9
+  ) {
     return 'danger'
   }
 
-  if (watchEvents.has(signal.payload.event_type) || signal.confidence >= 0.78) {
+  if (
+    tier === 'watch' ||
+    watchEvents.has(signal.payload.event_type) ||
+    signal.confidence >= 0.78
+  ) {
     return 'watch'
   }
 
@@ -68,7 +79,23 @@ export const signalEffectLabel = (signal: Signal | null) => {
     satcom: 'SATCOM path degraded',
     drone: 'ISR relay change',
     terrain: 'Terrain masking risk',
+    bus_health: 'Spacecraft health change',
+    space_weather: 'Space weather activity',
   }
 
   return byDomain[signal.domain]
 }
+
+/** Event types that report "nothing to see": a healthy bus record or a quiet
+ *  space-weather window. They stay in the stream but do not deserve the
+ *  alert card over the globe. */
+const QUIET_EVENT_TYPES = new Set(['nominal', 'quiet'])
+
+/** The newest signal worth alerting on: the latest report whose event type
+ *  is not a nominal/quiet placeholder, else the newest signal of all. Run C
+ *  ends on a quiet space-weather record; the card should still show the
+ *  storm or the margin drop that the verdict is about. */
+export const latestReport = (signals: Signal[]): Signal | null =>
+  signals.find((signal) => !QUIET_EVENT_TYPES.has(signal.payload.event_type)) ??
+  signals[0] ??
+  null

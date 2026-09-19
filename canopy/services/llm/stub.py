@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import logging
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 
 from canopy.services.kb import KB
@@ -14,11 +14,15 @@ from canopy.services.schemas.events import (
     AttributionChallenge,
     Authority,
     Decision,
+    RecoveryBlock,
+    Verdict,
 )
 
 log = logging.getLogger(__name__)
 
 UNCERTAINTY_ENTRY = "kb-attribution-uncertainty-001"
+
+__all__ = ["StubLLMClient", "StubVerdictOverride"]
 
 
 # ---- Attribution templates -------------------------------------------------
@@ -452,6 +456,124 @@ _KIND_TO_ATTRIBUTION: dict[str, _AttribTemplate] = {
         predicted_next="Treat as one fused observation; pair with cross-domain cues before naming a single actor.",
         capability_lookups=["attribution_uncertainty"],
     ),
+    # ---- Bus health (internal-diagnosis lane) -----------------------------
+    # docs/INTERFACE-SPEC.md §3 / §5. These kinds describe a symptom on a
+    # monitored spacecraft, not adversary activity, so the actor is "None"
+    # (the actor used for internal_fault and natural_external verdicts).
+    # Evidence names the subsystem and symptom in neutral language; the
+    # verdict itself is set by the rule lane (wave 2A), not by these templates.
+    "bus_link_margin": _AttribTemplate(
+        actor="None",
+        confidence=0.66,
+        evidence=[
+            "Comms subsystem reports a falling downlink link margin; onset, trend shape, and rate are recorded by the internal-diagnosis lane.",
+            "The symptom is consistent with onboard amplifier or antenna degradation; an RF effect on the same satellite inside the look-back window would argue for an external cause.",
+        ],
+        predicted_next="Margin keeps falling at the reported rate until the redundant chain is selected or the trend reverses.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_sensor_saturation": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "A sensor channel reports saturated readings; the affected subsystem and channel are carried in the anomaly payload.",
+            "Saturation is consistent with sun-in-field-of-view geometry or elevated radiation; a directed-energy source would present the same reading.",
+        ],
+        predicted_next="Readings return to range once the geometry or radiation environment clears; persistence beyond that points to hardware.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_attitude_disturbance": _AttribTemplate(
+        actor="None",
+        confidence=0.64,
+        evidence=[
+            "ADCS reports an attitude disturbance outside the expected pointing envelope; onset time and rate are recorded.",
+            "A ramp-shaped disturbance is consistent with reaction-wheel friction or a momentum event; a step would argue for an external impulse.",
+        ],
+        predicted_next="Momentum management absorbs the disturbance if it is internal; a recurring step pattern warrants a co-orbital check.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_unexpected_reset": _AttribTemplate(
+        actor="None",
+        confidence=0.58,
+        evidence=[
+            "Command-and-data-handling reports an unexpected processor reset with no matching ground command.",
+            "Single-event upsets during elevated radiation and unauthorized commanding produce the same symptom; space-weather and cyber context inside the look-back window separate them.",
+        ],
+        predicted_next="A single reset is usually benign; repeated resets on one board indicate a degraded component.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_power_thermal": _AttribTemplate(
+        actor="None",
+        confidence=0.63,
+        evidence=[
+            "Power or thermal subsystem reports an excursion outside its operating band; the trend shape distinguishes a step from a drift.",
+            "Consistent with a degraded solar string, heater fault, or eclipse-season loading; a storm-driven heating event would present the same drift.",
+        ],
+        predicted_next="Load shedding or heater reconfiguration holds the bus inside limits while the trend is characterised.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_orbit_decay": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Orbit determination shows semi-major-axis decay faster than the modelled drag baseline.",
+            "Storm-driven density increases and unintended thrust both raise the decay rate; the space-weather window and propulsion telemetry separate them.",
+        ],
+        predicted_next="Decay rate tracks the density profile if it is environmental; a persistent rate after the window closes points to propulsion.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "bus_safe_mode": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "The spacecraft entered safe mode; the triggering fault-protection rule and subsystem are carried in the anomaly payload.",
+            "Safe-mode entry is a consequence, not a cause; attribution follows the underlying symptom in the same cluster.",
+        ],
+        predicted_next="Recovery from safe mode proceeds once the triggering symptom is understood and cleared.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    # ---- Space weather ----------------------------------------------------
+    # docs/INTERFACE-SPEC.md §4. Global natural events with no actor.
+    "space_weather_storm": _AttribTemplate(
+        actor="None",
+        confidence=0.66,
+        evidence=[
+            "Geomagnetic storm in progress: Kp at or above 5, with the validity window carried in the observables.",
+            "Storm conditions raise drag, charging, and single-event-upset rates on every asset in the affected regime; this is a natural, global event, not attributable activity.",
+        ],
+        predicted_next="Expect storm-sensitive bus symptoms (orbit decay, resets, power or thermal excursions, safe-mode entries) on exposed assets during the validity window.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_radio_burst": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Solar radio burst reported by the space-weather feed; wideband noise rises across communication and navigation bands for the burst duration.",
+            "A radio burst mimics uplink or downlink interference on sunlit passes; it is a natural event and carries no actor.",
+        ],
+        predicted_next="Link-margin and GNSS carrier-to-noise dips coincident with the burst window should be discounted as interference.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_radiation": _AttribTemplate(
+        actor="None",
+        confidence=0.62,
+        evidence=[
+            "Radiation enhancement reported: proton flux at or above S1, with severity scaled from the S-scale.",
+            "Elevated proton flux raises single-event-upset and sensor-noise rates; a natural event with no actor.",
+        ],
+        predicted_next="Expect unexpected resets and sensor saturation on assets in polar or high-altitude regimes during the enhancement.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
+    "space_weather_density": _AttribTemplate(
+        actor="None",
+        confidence=0.60,
+        evidence=[
+            "Storm-driven upper-atmosphere density increase reported; drag on low-orbit assets rises above baseline.",
+            "Density enhancements produce orbit decay and attitude disturbances without any external actor.",
+        ],
+        predicted_next="Expect faster-than-baseline decay on low-orbit assets; re-plan station-keeping after the window closes.",
+        capability_lookups=["attribution_uncertainty"],
+    ),
 }
 
 _DEFAULT_ATTRIBUTION = _AttribTemplate(
@@ -463,6 +585,43 @@ _DEFAULT_ATTRIBUTION = _AttribTemplate(
 )
 
 
+def _dominant_kind(anomalies: list[Anomaly]) -> str:
+    """The kind whose template drives the stub's answer for this batch.
+
+    Most common kind wins, ties by first appearance. Kinds whose template
+    carries no actor (bus health, space weather) yield to actor-bearing kinds
+    when the batch mixes them: a bus symptom clustered with an RF cue is
+    attributed through the RF template, and the verdict lane (wave 2A)
+    decides whether the cause is hostile. Batches made only of actor-less
+    kinds are unchanged, as are the pre-existing scenarios, which contain no
+    actor-less kinds.
+    """
+    counts = Counter(a.kind for a in anomalies)
+    actor_bearing = {
+        kind: n
+        for kind, n in counts.items()
+        if _KIND_TO_ATTRIBUTION.get(kind, _DEFAULT_ATTRIBUTION).actor != "None"
+    }
+    pool = actor_bearing or dict(counts)
+    return Counter(pool).most_common(1)[0][0]
+
+
+@dataclass(frozen=True)
+class StubVerdictOverride:
+    """Test knob: make ``reconcile`` propose a verdict for a dominant kind.
+
+    Keyed by the batch's dominant kind in ``StubLLMClient(verdict_overrides=)``.
+    With ``verdict_evidence`` the attribution service treats the change as a
+    cited reasoning-lane departure; without it the change is repaired back to
+    the rule verdict. Not used by any default template, so existing scenarios
+    leave the verdict to the rule lane.
+    """
+
+    verdict: Verdict
+    verdict_evidence: tuple[str, ...] = ()
+    confidence: float | None = None
+
+
 # ---- Decision templates ----------------------------------------------------
 
 
@@ -472,6 +631,8 @@ class _DecisionTemplate:
     target: str
     rationale: str
     authority: Authority
+    # Set only on recovery_recommendation (docs/INTERFACE-SPEC.md §6).
+    recovery: RecoveryBlock | None = None
 
 
 _DECISIONS: dict[str, _DecisionTemplate] = {
@@ -535,8 +696,34 @@ _DECISIONS: dict[str, _DecisionTemplate] = {
 }
 
 
-def _select_decision(citations: list[str], actor: str) -> _DecisionTemplate:
-    cset = set(citations)
+def _select_decision(
+    attribution: Attribution, anomalies: Iterable[Anomaly] = ()
+) -> _DecisionTemplate:
+    """Pick the decision template for an attribution.
+
+    Recovery routing comes first (docs/INTERFACE-SPEC.md §6): an internal or
+    natural verdict whose cluster carries an internal-diagnosis
+    ``recommended_recovery`` yields a local ``recovery_recommendation``
+    carrying that block. ``anomalies`` is the cluster when the caller has it;
+    otherwise the block is read from the context DecideService attaches to the
+    attribution. Everything else is keyed on the KB citations.
+    """
+    # Imported here, as the live clients import their prompts: the decide
+    # package pulls in the orbit service, which the stub's import graph
+    # otherwise stays clear of.
+    from canopy.services.decide.prompts import recovery_context, recovery_rationale
+
+    recovery = recovery_context(attribution, anomalies)
+    if recovery is not None:
+        return _DecisionTemplate(
+            action="recovery_recommendation",
+            target=recovery.target,
+            rationale=recovery_rationale(recovery, attribution),
+            authority="local",
+            recovery=recovery.block,
+        )
+    cset = set(attribution.kb_citations)
+    actor = attribution.actor
     if "kb-rpo-ambiguity-001" in cset:
         return _DECISIONS["rpo_escort"]
     if "kb-satcom-jamming-001" in cset:
@@ -657,6 +844,153 @@ _KIND_TO_REDTEAM: dict[str, _RedTeamTemplate] = {
             "cyber paired evidence the uncertainty floor should hold."
         ),
     ),
+    # ---- Bus health (internal-diagnosis lane) -----------------------------
+    # The red team's job on a bus symptom is to name the hostile or natural
+    # look-alike that produces the same reading, so the internal explanation
+    # is not locked before the same-satellite context window is checked.
+    "bus_link_margin": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "An uplink or downlink jammer on the same pass produces the same margin drop; an RF anomaly on this satellite inside the look-back window changes the reading.",
+            "Trend shape alone does not separate slow amplifier ageing from a slowly ramped interference source.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Internal amplifier degradation is the simplest reading, but an "
+            "external RF effect is not ruled out until the RF picture for this "
+            "satellite and window is clear."
+        ),
+    ),
+    "bus_sensor_saturation": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Directed-energy dazzle and sun-in-field-of-view geometry saturate the same detector.",
+            "Saturation during a radiation enhancement is expected and carries no fault.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Saturation is ambiguous between a benign geometry event, a natural "
+            "radiation enhancement, and deliberate dazzle; hold the internal "
+            "reading until the context window is checked."
+        ),
+    ),
+    "bus_attitude_disturbance": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A co-orbital close approach or an unintended thrust event produces a disturbance with the same signature.",
+            "Wheel friction usually ramps; a step-shaped disturbance argues for an external impulse.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "The disturbance shape decides this: a ramp favors a wheel fault, a "
+            "step favors an external impulse. Do not lock the internal reading "
+            "on the symptom alone."
+        ),
+    ),
+    "bus_unexpected_reset": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "An unauthorized command or a malformed uplink can trigger the same watchdog reset.",
+            "Resets during a radiation enhancement are natural and should not be read as a fault.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "A reset with no matching ground command is what both a single-event "
+            "upset and an unauthorized command look like; the cyber and "
+            "space-weather context decide it."
+        ),
+    ),
+    "bus_power_thermal": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A step-shaped excursion is as consistent with a commanded load change as with a hardware fault.",
+            "Storm-driven heating produces a drift that resembles a slow thermal fault.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Power and thermal excursions have benign, natural, and hostile "
+            "explanations with similar shapes; the internal reading should stay "
+            "bounded until the context window is checked."
+        ),
+    ),
+    "bus_orbit_decay": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A storm-driven density increase raises decay rates without any fault.",
+            "Unintended or induced thrust produces the same semi-major-axis change as drag.",
+        ],
+        confidence_delta=-0.05,
+        rationale=(
+            "Decay above the drag model is under-determined: a density "
+            "enhancement, a propulsion fault, and induced thrust all fit. The "
+            "space-weather window and propulsion telemetry separate them."
+        ),
+    ),
+    "bus_safe_mode": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Safe mode is a downstream effect; attributing the entry without the triggering symptom over-reads the event.",
+            "Fault protection can be tripped deliberately by a spoofed telemetry frame or a malformed command.",
+        ],
+        confidence_delta=-0.04,
+        rationale=(
+            "Safe-mode entry says only that fault protection fired. The verdict "
+            "belongs to the triggering symptom in the same cluster, not to the "
+            "entry itself."
+        ),
+    ),
+    # ---- Space weather ----------------------------------------------------
+    "space_weather_storm": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Storm indices are global; a storm does not by itself explain a single-satellite symptom.",
+            "Hostile activity timed to a storm window would be masked by it; the same-satellite RF, cyber, and orbit check still applies.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "A storm is a strong natural prior but not an alibi: keep the "
+            "same-satellite hostile-domain check inside the window before "
+            "crediting every symptom to the environment."
+        ),
+    ),
+    "space_weather_radio_burst": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Radio bursts are short; a symptom that outlasts the burst window is not explained by it.",
+            "Interference on a night-side pass cannot be a solar radio burst.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Credit a radio burst only for symptoms inside its window and on "
+            "sunlit geometry; anything else keeps its original explanation."
+        ),
+    ),
+    "space_weather_radiation": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "Radiation enhancements raise upset rates but do not cause every reset; check the reset timing against the flux profile.",
+            "Shielded assets in low-inclination orbits see little of the enhancement.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "The enhancement is a valid natural prior for resets and saturation "
+            "on exposed assets only; it should not be applied to shielded or "
+            "low-inclination assets."
+        ),
+    ),
+    "space_weather_density": _RedTeamTemplate(
+        alternative_actor=None,
+        objections=[
+            "A density enhancement affects every low-orbit object in the regime; a single asset decaying alone points elsewhere.",
+            "Decay rate should track the storm profile; a rate that persists after the window is not drag.",
+        ],
+        confidence_delta=-0.03,
+        rationale=(
+            "Drag from a density enhancement is fleet-wide and time-bound; a "
+            "lone asset or a persistent rate argues against the natural "
+            "explanation."
+        ),
+    ),
 }
 
 _DEFAULT_REDTEAM = _RedTeamTemplate(
@@ -682,8 +1016,14 @@ class StubLLMClient:
     decision logic stays grounded in the same KB the attribution cites.
     """
 
-    def __init__(self, kb: KB) -> None:
+    def __init__(
+        self,
+        kb: KB,
+        *,
+        verdict_overrides: Mapping[str, StubVerdictOverride] | None = None,
+    ) -> None:
         self._kb = kb
+        self._verdict_overrides: dict[str, StubVerdictOverride] = dict(verdict_overrides or {})
 
     async def attribute(
         self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
@@ -691,12 +1031,19 @@ class StubLLMClient:
         return await self.attribute_primary(anomalies, kb_context)
 
     async def attribute_primary(
-        self, anomalies: list[Anomaly], kb_context: Iterable[KBEntry] = ()
+        self,
+        anomalies: list[Anomaly],
+        kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: object | None = None,
     ) -> Attribution:
+        # ``rule_verdict`` is the provisional verdict the attribution service
+        # passes to every client; the stub leaves ``verdict`` unset so the
+        # service fills it from the rule lane.
         if not anomalies:
             raise ValueError("attribute() requires at least one anomaly")
 
-        dominant_kind, _ = Counter(a.kind for a in anomalies).most_common(1)[0]
+        dominant_kind = _dominant_kind(anomalies)
         template = _KIND_TO_ATTRIBUTION.get(dominant_kind, _DEFAULT_ATTRIBUTION)
 
         source_ids = list(
@@ -741,8 +1088,7 @@ class StubLLMClient:
         if not anomalies:
             template = _DEFAULT_REDTEAM
         else:
-            dominant_kind, _ = Counter(a.kind for a in anomalies).most_common(1)[0]
-            template = _KIND_TO_REDTEAM.get(dominant_kind, _DEFAULT_REDTEAM)
+            template = _KIND_TO_REDTEAM.get(_dominant_kind(anomalies), _DEFAULT_REDTEAM)
 
         # If primary already landed on Unknown, soften the challenge — the
         # red-team's job there is to defend the uncertainty floor, not invent
@@ -774,6 +1120,8 @@ class StubLLMClient:
         challenge: AttributionChallenge,
         anomalies: list[Anomaly],
         kb_context: Iterable[KBEntry] = (),
+        *,
+        rule_verdict: object | None = None,
     ) -> Attribution:
         # Apply the red-team's confidence delta against the existing 0.49
         # uncertainty floor used by the rest of the engine.
@@ -784,6 +1132,21 @@ class StubLLMClient:
         for objection in challenge.objections:
             evidence.append(f"Red-team objection: {objection}")
 
+        # Default templates leave the verdict to the rule lane. A registered
+        # override (tests only) makes the stub propose one, with or without
+        # cited evidence, so the §5.2 repair path can be exercised.
+        override = (
+            self._verdict_overrides.get(_dominant_kind(anomalies)) if anomalies else None
+        )
+        verdict_fields: dict[str, object] = {}
+        if override is not None:
+            verdict_fields = {
+                "verdict": override.verdict,
+                "verdict_evidence": list(override.verdict_evidence),
+            }
+            if override.confidence is not None:
+                new_confidence = override.confidence
+
         return Attribution(
             anomaly_ids=list(primary.anomaly_ids),
             actor=primary.actor,
@@ -793,10 +1156,13 @@ class StubLLMClient:
             predicted_next=primary.predicted_next,
             kb_citations=list(primary.kb_citations),
             source_signal_ids=list(primary.source_signal_ids),
+            **verdict_fields,
         )
 
-    async def decide(self, attribution: Attribution) -> Decision:
-        template = _select_decision(attribution.kb_citations, attribution.actor)
+    async def decide(
+        self, attribution: Attribution, anomalies: Iterable[Anomaly] = ()
+    ) -> Decision:
+        template = _select_decision(attribution, anomalies)
         request_packet = (
             {
                 "to": "CJFSCC",
@@ -817,4 +1183,5 @@ class StubLLMClient:
             authority=template.authority,
             request_packet=request_packet,
             source_signal_ids=list(attribution.source_signal_ids),
+            recovery=template.recovery,
         )

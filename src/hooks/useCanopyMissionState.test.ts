@@ -470,3 +470,69 @@ describe('useCanopyMissionState — combined / integration behaviour', () => {
     expect(result.current.statuses.spaceLayer.state).toBe('red')
   })
 })
+
+describe('useCanopyMissionState — spacecraft health feeds the space card', () => {
+  const busSignal = (confidence: number) =>
+    makeSignal({
+      domain: 'bus_health',
+      confidence,
+      payload: {
+        event_type: 'link_margin_drop',
+        summary: 'downlink margin falling',
+        observables: { subsystem: 'comms', physics_consistency: 0.83 },
+      },
+    })
+
+  it('counts a bus_health signal in spaceLayer and not in blosComms', () => {
+    const state = run([busSignal(0.81)], [])
+    expect(state.statuses.spaceLayer.metric).toBe('81% / 1 live')
+    expect(state.statuses.spaceLayer.state).toBe('amber')
+    expect(state.statuses.blosComms.metric).toBe('No live hits')
+    expect(state.statuses.blosComms.state).toBe('white')
+  })
+
+  it('aggregates bus_health with orbit/sda and uses the highest confidence', () => {
+    const state = run(
+      [
+        makeSignal({ domain: 'orbit', confidence: 0.4 }),
+        busSignal(0.9),
+        makeSignal({ domain: 'sda', confidence: 0.5 }),
+      ],
+      [],
+    )
+    expect(state.statuses.spaceLayer.metric).toBe('90% / 3 live')
+    expect(state.statuses.spaceLayer.state).toBe('red')
+  })
+
+  it('describes the latest in-bucket bus_health signal with its event-type copy', () => {
+    const state = run([busSignal(0.5)], [])
+    expect(state.statuses.spaceLayer.detail).toBe(
+      'Downlink or uplink margin is falling faster than the pass geometry explains.',
+    )
+  })
+
+  it('a correlated bus_health signal lifts the space card to amber', () => {
+    const sig = busSignal(0.3)
+    const event = makeUiEvent({ severity: 'low', source_signal_ids: [sig.id] })
+    expect(run([sig], [event]).statuses.spaceLayer.state).toBe('amber')
+  })
+
+  it('keeps space_weather outside both cards: it is context for the verdict, not a support signal', () => {
+    const storm = makeSignal({
+      domain: 'space_weather',
+      confidence: 0.95,
+      payload: {
+        event_type: 'geomagnetic_storm',
+        summary: 'G2 storm',
+        observables: { kp: 6.3 },
+      },
+    })
+    const state = run([storm], [])
+    expect(state.statuses.spaceLayer.metric).toBe('No live hits')
+    expect(state.statuses.spaceLayer.state).toBe('white')
+    expect(state.statuses.blosComms.metric).toBe('No live hits')
+    expect(state.statuses.blosComms.state).toBe('white')
+    // It is still the latest signal for everything that is not a card.
+    expect(state.latestSignal).toBe(storm)
+  })
+})

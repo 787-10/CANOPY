@@ -160,3 +160,121 @@ def test_uievent_validates_against_data_fixture() -> None:
 def test_recommendation_default_label() -> None:
     r = Recommendation(id="rec-1", summary="x")
     assert r.approveLabel == "APPROVE"
+
+
+# ---- MEGALITH domains (docs/INTERFACE-SPEC.md §3, §4) ---------------------
+
+SCHEMA_EXAMPLES = ROOT / "services" / "bus" / "schemas" / "examples"
+
+_BUS_HEALTH_PAYLOAD = {
+    "event_type": "link_margin_drop",
+    "summary": "LEO-SCIENCE-1 downlink margin falling 0.42 dB/s since 14:32:10Z.",
+    "asset": "LEO-SCIENCE-1",
+    "satellite_id": "ctb://centralblue.dev/leo-science-1",
+    "observables": {
+        "subsystem": "comms",
+        "symptom": "link_margin_db_drop",
+        "onset_ts": "2026-09-17T14:32:10Z",
+        "onset_clock_domain": "simulation",
+        "sim_time_s": 812.0,
+        "rate_of_change": -0.42,
+        "rate_unit": "dB/s",
+        "physics_consistency": 0.83,
+        "physics_basis": "belief:pa_degradation=0.79;shape=ramp",
+        "shape": "ramp",
+        "recommended_recovery": {
+            "action_id": "switch_redundant_amplifier",
+            "target_subsystem": "comms",
+            "requires_approval": True,
+            "rationale": "Primary amplifier output trending down; redundant unit nominal.",
+        },
+        "norad_cat_id": "99901",
+        "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+    },
+}
+
+_SPACE_WEATHER_PAYLOAD = {
+    "event_type": "geomagnetic_storm",
+    "summary": "Geomagnetic storm in progress (G2): Kp 6.33.",
+    "observables": {
+        "kp": 6.33,
+        "dst_nt": -112,
+        "f107": 158.4,
+        "severity": 0.4,
+        "valid_from": "2026-09-17T14:00:00Z",
+        "valid_to": "2026-09-17T20:00:00Z",
+    },
+}
+
+
+def test_bus_health_signal_validates() -> None:
+    s = Signal(
+        **_signal_kwargs(
+            domain="bus_health",
+            source="internal-diagnosis",
+            confidence=0.81,
+            location=Location(label="LEO-SCIENCE-1"),
+            payload=_BUS_HEALTH_PAYLOAD,
+            provenance=Provenance(
+                source_id="internal-diagnosis",
+                collector="megalith-bus-health-adapter",
+                method="rule_fdir+belief",
+                notes="epoch=2026-09-17T14:18:38Z",
+            ),
+        )
+    )
+    parsed = Signal.model_validate_json(s.model_dump_json())
+    assert parsed.domain == "bus_health"
+    assert parsed.source == "internal-diagnosis"
+    assert parsed.payload.satellite_id == "ctb://centralblue.dev/leo-science-1"
+    obs = parsed.payload.observables
+    assert obs is not None
+    assert obs["subsystem"] == "comms"
+    assert obs["recommended_recovery"]["action_id"] == "switch_redundant_amplifier"
+    assert obs["sim_identity"] == "ctb://sim.centralblue.dev/leo-science-1"
+
+
+def test_bus_health_recovery_may_be_null() -> None:
+    payload = json.loads(json.dumps(_BUS_HEALTH_PAYLOAD))
+    payload["observables"].update(
+        {"recommended_recovery": None, "rate_of_change": None, "rate_unit": None, "shape": None}
+    )
+    s = Signal(**_signal_kwargs(domain="bus_health", source="internal-diagnosis", payload=payload))
+    assert s.payload.observables is not None
+    assert s.payload.observables["recommended_recovery"] is None
+
+
+def test_bus_health_example_file_validates() -> None:
+    example = json.loads((SCHEMA_EXAMPLES / "bus_health.json").read_text())
+    sig = Signal.model_validate(example)
+    assert sig.domain == "bus_health"
+    assert sig.payload.satellite_id == "ctb://centralblue.dev/leo-science-1"
+    assert sig.provenance.notes == "epoch=2026-09-17T14:18:38Z"
+
+
+def test_space_weather_signal_validates() -> None:
+    s = Signal(
+        **_signal_kwargs(
+            domain="space_weather",
+            source="noaa-swpc",
+            confidence=0.9,
+            location=Location(label="geospace"),
+            payload=_SPACE_WEATHER_PAYLOAD,
+            provenance=Provenance(source_id="noaa-swpc", collector="megalith-space-weather-adapter"),
+        )
+    )
+    parsed = Signal.model_validate_json(s.model_dump_json())
+    assert parsed.domain == "space_weather"
+    # Space weather is global: no satellite identity, location is geospace.
+    assert parsed.payload.satellite_id is None
+    assert parsed.location.label == "geospace"
+    assert parsed.payload.observables is not None
+    assert parsed.payload.observables["kp"] == 6.33
+
+
+def test_space_weather_example_file_validates() -> None:
+    example = json.loads((SCHEMA_EXAMPLES / "space_weather.json").read_text())
+    sig = Signal.model_validate(example)
+    assert sig.domain == "space_weather"
+    assert sig.payload.event_type == "geomagnetic_storm"
+    assert sig.payload.satellite_id is None

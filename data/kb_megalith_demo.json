@@ -1,0 +1,201 @@
+{
+  "entries": [
+    {
+      "id": "kb-attribution-uncertainty-001",
+      "title": "Public indicators support fast assessment, not definitive attribution",
+      "actor": "Unknown",
+      "domain": [
+        "osint",
+        "rf_ew",
+        "cyber",
+        "pnt",
+        "orbit"
+      ],
+      "capability_type": "attribution_uncertainty",
+      "summary": "Open-source reporting can support fast, doctrine-grounded hypotheses, but it cannot replace classified all-source attribution or prove adversary intent.",
+      "tactical_relevance": "CANOPY should give commanders an actionable confidence-scored assessment while preserving humility and escalation discipline.",
+      "decision_implications": [
+        "Use language like 'consistent with' and 'confidence-scored assessment'.",
+        "Preserve evidence chains for every attribution.",
+        "Fall back to 'insufficient signal' when evidence is thin."
+      ],
+      "source_refs": [
+        {
+          "source_id": "csis-space-threat-2025",
+          "locator": "Counterspace weapons taxonomy / cyber and electronic effects discussion",
+          "claim_supported": "Attribution varies by attack mode and can be limited or uncertain."
+        }
+      ],
+      "claim_type": "inference",
+      "confidence": "high",
+      "sensitivity": "derived",
+      "escalation_risk": "high",
+      "time_horizon": "current",
+      "scenario_signal_ids": []
+    },
+    {
+      "id": "kb-megalith-demo-actor1-doctrine-001",
+      "title": "Actor-1 doctrine: uplink interference against LEO downlinks during passes over a targeted ground station",
+      "actor": "Actor-1",
+      "domain": [
+        "rf_ew",
+        "satcom"
+      ],
+      "capability_type": "uplink_interference_leo",
+      "summary": "Actor-1's doctrine (synthetic Doctrine Note SD-3, Field Manual FM-EW-2) places a ground-mobile S-band emitter 150 to 250 km from a targeted ground station and radiates on the satellite's uplink frequency only while the satellite is in mutual view. The satellite's receiver noise floor rises as one step at acquisition of signal and holds for the pass; the downlink margin falls with it while forward power and amplifier temperature stay nominal. A spectrum watch at the station keeps the bearing on the pass.",
+      "tactical_relevance": "A step-shaped margin loss on one satellite during one pass, a stable interference bearing from the ground station and consistent emitter geometry is the Actor-1 pattern; a gradual decline with rising amplifier temperature is not.",
+      "decision_implications": [
+        "Verdict hostile_external, actor Actor-1, when the bus-health record reads a receiver noise floor above baseline with nominal forward power and amplifier temperature and an rf_interference report from the ground station is in the cluster.",
+        "Respond with passive defense (alternate ground station, frequency plan change) or a threat warning; never an offensive action.",
+        "Never route a radio or transponder reset while the interference is active."
+      ],
+      "source_refs": [
+        {
+          "source_id": "actor1-doctrine-note-sd3-synthetic",
+          "locator": "Doctrine Note SD-3 (synthetic), section 4",
+          "claim_supported": "Actor-1 denies LEO downlinks by uplink interference timed to the pass over a targeted ground station."
+        },
+        {
+          "source_id": "actor1-field-manual-fm-ew-2-synthetic",
+          "locator": "Field Manual FM-EW-2 (synthetic), chapter 3",
+          "claim_supported": "Emitters sit 150 to 250 km from the station and are cued by a spectrum watch on the pass."
+        }
+      ],
+      "claim_type": "expert_assessment",
+      "confidence": "medium",
+      "sensitivity": "public",
+      "escalation_risk": "medium",
+      "time_horizon": "current",
+      "scenario_signal_ids": [
+        "demo-link-margin-b-003",
+        "demo-link-margin-b-005",
+        "demo-link-margin-b-004",
+        "demo-link-margin-b-006",
+        "demo-link-margin-b-007",
+        "demo-link-margin-b-008"
+      ],
+      "notes": "Synthetic doctrine corpus for the MEGALITH demo; Actor-1 is fictional. Confidence basis: two synthetic doctrine documents that agree plus the SC-7 catalog entry. Attribution support, not proof of intent."
+    },
+    {
+      "id": "kb-megalith-demo-actor1-capability-001",
+      "title": "Actor-1 capability: SC-7 class ground-mobile S-band uplink interferer",
+      "actor": "Actor-1",
+      "domain": [
+        "rf_ew"
+      ],
+      "capability_type": "uplink_interference_leo",
+      "summary": "The synthetic emitter catalog credits Actor-1 with the SC-7 class: a light-vehicle S-band interferer, 2025 to 2110 MHz, 4 MHz swept-CW, raising a LEO receiver's noise floor 6 to 12 dB at 550 km. Signature: step onset at acquisition of signal, a bearing from the affected ground station that holds for the pass, 150 to 250 km standoff. The affected satellite's bus-health record reads 'forward power 20 W (nominal 20 W), amplifier temperature 305 K (baseline), receiver noise floor +8 dB from baseline, receiver lock lost' with a step shape: the SC-7 effect on the receive side, not amplifier ageing.",
+      "tactical_relevance": "An rf_interference report from a ground station such as Site A naming a swept-CW S-band emitter on the satellite's uplink frequency, a stable bearing and a 150 to 250 km standoff matches SC-7 and therefore Actor-1.",
+      "decision_implications": [
+        "Name Actor-1 when an rf_interference report matches the SC-7 signature and the bus symptom is a step-shaped margin loss on the same satellite.",
+        "Recommend passive defense: hand the pass to an alternate ground station or change the uplink frequency plan.",
+        "Hold the internal-diagnosis transponder reset until the interference ceases."
+      ],
+      "source_refs": [
+        {
+          "source_id": "actor1-emitter-catalog-2026-synthetic",
+          "locator": "Emitter catalog (synthetic), entry SC-7",
+          "claim_supported": "SC-7 parameters, mobility and standoff from the targeted ground station."
+        }
+      ],
+      "claim_type": "expert_assessment",
+      "confidence": "medium",
+      "sensitivity": "public",
+      "escalation_risk": "medium",
+      "time_horizon": "current",
+      "scenario_signal_ids": [
+        "demo-link-margin-b-003",
+        "demo-link-margin-b-005",
+        "demo-link-margin-b-004",
+        "demo-link-margin-b-006",
+        "demo-link-margin-b-007",
+        "demo-link-margin-b-008"
+      ],
+      "notes": "Synthetic catalog for the MEGALITH demo; SC-7 and every parameter are invented."
+    },
+    {
+      "id": "kb-megalith-demo-space-weather-001",
+      "title": "Geomagnetic storms (G-scale): effects on LEO links, drag and single-event upsets",
+      "actor": "None",
+      "domain": [
+        "space_weather",
+        "bus_health"
+      ],
+      "capability_type": "space_weather_context",
+      "summary": "Storms are graded G1 to G5 on Kp 5 to 9, with Dst near -50 nT (G1), -150 nT (G3) and beyond -250 nT (G4, G5). On a LEO fleet the effects arrive together: scintillation raises the noise floor and fades L- and S-band links on every satellite in view, safe-mode entries cluster across the fleet, density raises drag, energetic particles raise upset and reset rates. The storm window brackets the symptoms; no single satellite shows a precursor.",
+      "tactical_relevance": "Kp at or above 5 with a Dst depression overlapping the onset and more than one satellite showing the symptom means a natural cause: forward the internal-diagnosis recovery, do not escalate.",
+      "decision_implications": [
+        "Verdict natural_external, actor None, when a storm window overlaps the onset and the symptom is storm-sensitive.",
+        "Forward the internal-diagnosis recovery recommendation; no threat warning, no posture change.",
+        "Re-check if a hostile-domain cue on the same satellite appears inside the look-back window."
+      ],
+      "source_refs": [
+        {
+          "source_id": "megalith-demo-space-weather-primer-synthetic",
+          "locator": "Space-weather primer (synthetic), sections 2 and 5",
+          "claim_supported": "G-scale thresholds, typical Dst per level, and fleet-wide link, drag and upset effects."
+        }
+      ],
+      "claim_type": "expert_assessment",
+      "confidence": "high",
+      "sensitivity": "public",
+      "escalation_risk": "low",
+      "time_horizon": "current",
+      "scenario_signal_ids": [
+        "demo-link-margin-c-002",
+        "demo-link-margin-c-003",
+        "demo-link-margin-c-004",
+        "demo-link-margin-c-005",
+        "demo-link-margin-c-006",
+        "demo-link-margin-c-007",
+        "demo-link-margin-c-008",
+        "demo-link-margin-c-009",
+        "demo-link-margin-c-010",
+        "demo-link-margin-a-003",
+        "demo-link-margin-a-004",
+        "demo-link-margin-a-005",
+        "demo-link-margin-a-006"
+      ],
+      "notes": "Context entry, not an attribution (actor None); synthetic primer for the MEGALITH demo."
+    },
+    {
+      "id": "kb-megalith-demo-internal-fault-001",
+      "title": "Amplifier ageing physics: gradual forward-power loss with rising device temperature",
+      "actor": "None",
+      "domain": [
+        "bus_health"
+      ],
+      "capability_type": "internal_fault_context",
+      "summary": "A power amplifier ages by cathode depletion or gain compression: forward power declines gradually over hours, efficiency falls and the device warms a few kelvin above baseline. The margin follows as a ramp or drift, the receiver noise floor stays at baseline and nothing else in the fleet moves; the recovery is the redundant amplifier (approval required). This entry does not apply when the record reads a noise floor above baseline or nominal forward power and temperature: the transmit chain is then healthy and the loss is on the receive side, an external cause (interference or space weather).",
+      "tactical_relevance": "A gradual margin decline with rising amplifier temperature and no noise-floor rise on one satellite is an internal fault: no RF report, no step, no storm window, no fleet pattern.",
+      "decision_implications": [
+        "Verdict internal_fault, actor None, when the physics-consistency score is high and no hostile-domain cue sits on the satellite inside the look-back window.",
+        "Forward the internal-diagnosis recovery recommendation (switch_redundant_amplifier, approval required).",
+        "Treat a noise-floor rise or a step-shaped onset as evidence against this hypothesis."
+      ],
+      "source_refs": [
+        {
+          "source_id": "megalith-demo-amplifier-ageing-note-synthetic",
+          "locator": "Amplifier ageing note (synthetic), section 3",
+          "claim_supported": "Ageing lowers forward power gradually and raises device temperature; the noise floor is unaffected."
+        }
+      ],
+      "claim_type": "expert_assessment",
+      "confidence": "high",
+      "sensitivity": "public",
+      "escalation_risk": "low",
+      "time_horizon": "current",
+      "scenario_signal_ids": [
+        "demo-link-margin-a-003",
+        "demo-link-margin-a-004",
+        "demo-link-margin-a-005",
+        "demo-link-margin-a-006",
+        "demo-link-margin-c-006",
+        "demo-link-margin-c-008",
+        "demo-link-margin-c-009",
+        "demo-link-margin-c-010"
+      ],
+      "notes": "Context entry, not an attribution (actor None); synthetic note for the MEGALITH demo. Indexed to Runs A and C only: in a hostile run the record's own readings exclude it."
+    }
+  ]
+}

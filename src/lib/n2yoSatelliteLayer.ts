@@ -10,12 +10,36 @@ import {
   PolylineDashMaterialProperty,
   Viewer,
 } from 'cesium'
+import {
+  fetchN2YOPositionCache,
+  loadN2YOPositionCaches,
+  syntheticAnchorPoint,
+  type N2YOLoadResult,
+  type N2YOPositionCache,
+  type N2YOTrackPoint,
+} from './positionCache'
+import { SYNTHETIC_SATELLITES } from './syntheticSatellites'
+
+export {
+  fetchN2YOPositionCache,
+  loadN2YOPositionCaches,
+  type N2YOLoadResult,
+  type N2YOPositionCache,
+  type N2YOTrackPoint,
+}
 
 export type N2YOSatelliteConfig = {
   family: N2YOSatelliteFamily
+  /** Catalogue number for real tracks; a synthetic globe-layer id (>= 900000)
+   *  for the simulated demo spacecraft, never a real NORAD id. */
   id: number
   label: string
   cacheUrl: string
+  /** Simulated spacecraft: labels say "synthetic id", never "NORAD", and a
+   *  missing position file is skipped rather than failing the layer. */
+  synthetic?: boolean
+  /** `ctb://` spacecraft id the track belongs to (docs/INTERFACE-SPEC.md §1). */
+  satelliteId?: string
 }
 
 export type N2YOSatelliteFamily =
@@ -27,12 +51,26 @@ export type N2YOSatelliteFamily =
   | 'GPS-3'
   | 'CHINA'
   | 'RUSSIA'
+  | 'SIM'
+
+export {
+  SYNTHETIC_SATELLITES,
+  syntheticSatelliteFor,
+  resolveRequestedSatellite,
+} from './syntheticSatellites'
 
 export const isN2YOGeostationaryFamily = (family: N2YOSatelliteFamily) =>
   family === 'AEHF' ||
   family === 'MUOS' ||
   family === 'WGS' ||
   family === 'SBIRS'
+
+/** Families drawn at a fixed point rather than animated along the orbit:
+ *  geostationary spacecraft, and the synthetic demo tracks, which are pinned
+ *  at their pass so SIM-01 sits over its ground station in every frame. The
+ *  synthetic orbit ring still draws (unlike GEO). */
+export const isN2YOStaticDisplayFamily = (family: N2YOSatelliteFamily) =>
+  isN2YOGeostationaryFamily(family) || family === 'SIM'
 
 export const N2YO_SATELLITES: N2YOSatelliteConfig[] = [
   {
@@ -353,6 +391,7 @@ export const N2YO_SATELLITES: N2YOSatelliteConfig[] = [
     label: 'COSMOS 2436',
     cacheUrl: '/orbital/n2yo_32395_positions.json',
   },
+  ...SYNTHETIC_SATELLITES,
 ]
 
 const MAP_FONT =
@@ -370,6 +409,7 @@ export const FAMILY_COLOR_HEX: Record<N2YOSatelliteFamily, string> = {
   'GPS-3': '#e6d66f',
   CHINA: '#ef4444',
   RUSSIA: '#38bdf8',
+  SIM: '#33f2f0',
 }
 
 export const FAMILY_SHORT_LABEL: Record<N2YOSatelliteFamily, string> = {
@@ -381,6 +421,7 @@ export const FAMILY_SHORT_LABEL: Record<N2YOSatelliteFamily, string> = {
   'GPS-3': 'PNT timing',
   CHINA: 'Chinese ISR',
   RUSSIA: 'GLONASS / ISR',
+  SIM: 'Simulated bus',
 }
 
 const familyColor = (family: N2YOSatelliteFamily) =>
@@ -403,32 +444,10 @@ const RESET_CAMERA_LONGITUDE_DEG = 0
 const RESET_CAMERA_LATITUDE_DEG = 0
 const RESET_CAMERA_ALTITUDE_M = 22000000
 
-type N2YOTrackPoint = {
-  timestamp: number
-  timestamp_utc: string
-  lat: number
-  lng: number
-  alt_km: number
-}
-
 export type N2YODisplayPoint = {
   lat: number
   lng: number
   timestampUtc: string
-}
-
-export type N2YOPositionCache = {
-  fetched_at: string
-  satellite: {
-    id: number
-    name: string
-  }
-  track: N2YOTrackPoint[]
-  orbit?: N2YOTrackPoint[]
-  tle?: {
-    line1: string
-    line2: string
-  }
 }
 
 export type N2YOLayerState = {
@@ -443,9 +462,6 @@ export type N2YOLayerState = {
 
 export const orbitEntityIdForSatellite = (satelliteId: number) =>
   `n2yo-${satelliteId}-orbit`
-
-const parsedPositionCacheByUrl = new Map<string, N2YOPositionCache>()
-const pendingPositionCacheByUrl = new Map<string, Promise<N2YOPositionCache>>()
 
 const realSatelliteMarker = (colorHex: string, family: N2YOSatelliteFamily) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
@@ -481,6 +497,11 @@ const latestTrackPoint = (cache: N2YOPositionCache) =>
   cache.track.reduce((latest, point) =>
     point.timestamp > latest.timestamp ? point : latest,
   )
+
+/** Where a spacecraft is drawn: real tracks at their latest sample, synthetic
+ *  demo tracks at their pass (see positionCache.syntheticAnchorPoint). */
+const displayTrackPoint = (cache: N2YOPositionCache, synthetic: boolean) =>
+  synthetic && cache.track.length ? syntheticAnchorPoint(cache) : latestTrackPoint(cache)
 
 export const latestN2YOAltitudeKm = (cache: N2YOPositionCache) =>
   latestTrackPoint(cache).alt_km
@@ -536,12 +557,14 @@ const normalize = (v: { x: number; y: number; z: number }) => {
   }
 }
 
-const latestPointOrbitBasis = (track: N2YOTrackPoint[]) => {
-  const selectedPoint = latestTrackPoint({
-    fetched_at: '',
-    satellite: { id: 0, name: '' },
-    track,
-  })
+const latestPointOrbitBasis = (track: N2YOTrackPoint[], anchor?: N2YOTrackPoint) => {
+  const selectedPoint =
+    anchor ??
+    latestTrackPoint({
+      fetched_at: '',
+      satellite: { id: 0, name: '' },
+      track,
+    })
   const selectedIndex = Math.max(
     track.findIndex((point) => point.timestamp === selectedPoint.timestamp),
     0,
@@ -624,11 +647,14 @@ export function currentN2YODisplayPoint(
     track,
   })
 
-  if ('satelliteFamily' in layer && isN2YOGeostationaryFamily(layer.satelliteFamily)) {
+  if ('satelliteFamily' in layer && isN2YOStaticDisplayFamily(layer.satelliteFamily)) {
+    const pinned = 'cache' in layer && layer.satelliteFamily === 'SIM'
+      ? syntheticAnchorPoint(layer.cache)
+      : point
     return {
-      lat: point.lat,
-      lng: point.lng,
-      timestampUtc: point.timestamp_utc,
+      lat: pinned.lat,
+      lng: pinned.lng,
+      timestampUtc: pinned.timestamp_utc,
     }
   }
 
@@ -656,49 +682,15 @@ export function currentN2YODisplayPoint(
 const createSampledMotionOrbitPositions = (
   track: N2YOTrackPoint[],
   displayAltitudeM: number,
+  anchor?: N2YOTrackPoint,
 ) => {
-  const { current, tangent } = latestPointOrbitBasis(track)
+  const { current, tangent } = latestPointOrbitBasis(track, anchor)
   const positions: Cartesian3[] = []
   for (let index = 0; index <= ORBIT_SAMPLE_COUNT; index += 1) {
     const theta = (index / ORBIT_SAMPLE_COUNT) * Math.PI * 2
     positions.push(cartesianFromOrbitBasis(current, tangent, theta, displayAltitudeM))
   }
   return positions
-}
-
-export async function fetchN2YOPositionCache(
-  config: N2YOSatelliteConfig,
-): Promise<N2YOPositionCache> {
-  const parsedCache = parsedPositionCacheByUrl.get(config.cacheUrl)
-  if (parsedCache) {
-    return parsedCache
-  }
-
-  const pendingCache = pendingPositionCacheByUrl.get(config.cacheUrl)
-  if (pendingCache) {
-    return pendingCache
-  }
-
-  const cachePromise = fetch(config.cacheUrl)
-    .then(async (response) => {
-      if (!response.ok) {
-        throw new Error(`failed to load N2YO cache: HTTP ${response.status}`)
-      }
-
-      const cache = (await response.json()) as N2YOPositionCache
-      if (!Array.isArray(cache.track) || cache.track.length === 0) {
-        throw new Error('N2YO cache did not contain track points')
-      }
-
-      parsedPositionCacheByUrl.set(config.cacheUrl, cache)
-      return cache
-    })
-    .finally(() => {
-      pendingPositionCacheByUrl.delete(config.cacheUrl)
-    })
-
-  pendingPositionCacheByUrl.set(config.cacheUrl, cachePromise)
-  return cachePromise
 }
 
 export function clearN2YOSatelliteLayer(
@@ -714,14 +706,20 @@ export function addN2YOSatellite(
   config: N2YOSatelliteConfig,
   displayAltitudeM: number,
 ): N2YOLayerState {
-  const point = latestTrackPoint(cache)
-  const satelliteId = cache.satellite.id
-  const satelliteName = config.label || cache.satellite.name || `NORAD ${satelliteId}`
-  const isGeostationary = isN2YOGeostationaryFamily(config.family)
-  const position = isGeostationary
+  const point = displayTrackPoint(cache, config.synthetic === true)
+  // Synthetic files may omit the catalogue id; the config id keys the entities.
+  const satelliteId =
+    typeof cache.satellite?.id === 'number' ? cache.satellite.id : config.id
+  const idLabel = config.synthetic
+    ? `SYNTHETIC ID ${satelliteId}`
+    : `NORAD ${satelliteId}`
+  const satelliteName =
+    config.label || cache.satellite?.name || (config.synthetic ? config.label : `NORAD ${satelliteId}`)
+  const isStatic = isN2YOStaticDisplayFamily(config.family)
+  const position = isStatic
     ? Cartesian3.fromDegrees(point.lng, point.lat, displayAltitudeM)
     : createAnimatedOrbitPosition(cache.track, displayAltitudeM)
-  const footprintPosition = isGeostationary
+  const footprintPosition = isStatic
     ? Cartesian3.fromDegrees(point.lng, point.lat, 0)
     : createAnimatedOrbitPosition(cache.track, 0)
   const entityIds = [
@@ -735,7 +733,7 @@ export function addN2YOSatellite(
 
   viewer.entities.add({
     id: entityIds[0],
-    name: `REAL N2YO ${satelliteName}`,
+    name: config.synthetic ? `SIMULATED ${satelliteName}` : `REAL N2YO ${satelliteName}`,
     position,
     billboard: {
       color: Color.WHITE,
@@ -752,12 +750,14 @@ export function addN2YOSatellite(
       font: MAP_FONT,
       pixelOffset: new Cartesian2(0, -42),
       scaleByDistance: new NearFarScalar(1500000, 1, 25000000, 0.58),
-      show: false,
+      show: config.synthetic === true,
       showBackground: true,
       style: LabelStyle.FILL,
-      text: `${config.family} · ${FAMILY_SHORT_LABEL[config.family]}\n${satelliteName}\nNORAD ${cache.satellite.id}\nTRUE ALT ${Math.round(point.alt_km).toLocaleString()} km\n${formatUtcTime(point.timestamp_utc)}`,
+      text: `${config.family} · ${FAMILY_SHORT_LABEL[config.family]}\n${satelliteName}\n${idLabel}\nTRUE ALT ${Math.round(point.alt_km).toLocaleString()} km\n${formatUtcTime(point.timestamp_utc)}`,
     },
-    description: `${config.family} ${FAMILY_SHORT_LABEL[config.family]} satellite from N2YO cache. NORAD ${cache.satellite.id}. True altitude ${point.alt_km.toFixed(2)} km; displayed at ${(displayAltitudeM / 1000).toFixed(0)} km for scene readability.`,
+    description: config.synthetic
+      ? `${satelliteName}: simulated spacecraft on a synthetic track (${idLabel}). Altitude ${point.alt_km.toFixed(2)} km; displayed at ${(displayAltitudeM / 1000).toFixed(0)} km for scene readability.`
+      : `${config.family} ${FAMILY_SHORT_LABEL[config.family]} satellite from N2YO cache. ${idLabel}. True altitude ${point.alt_km.toFixed(2)} km; displayed at ${(displayAltitudeM / 1000).toFixed(0)} km for scene readability.`,
   })
 
   viewer.entities.add({
@@ -840,6 +840,7 @@ export function showN2YOOrbit(viewer: Viewer, layer: N2YOLayerState) {
   const positions = createSampledMotionOrbitPositions(
     layer.cache.track,
     layer.displayAltitudeM,
+    layer.satelliteFamily === 'SIM' ? syntheticAnchorPoint(layer.cache) : undefined,
   )
   if (positions.length <= 1) {
     return

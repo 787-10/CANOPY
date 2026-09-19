@@ -10,21 +10,38 @@ Anthropic tool-use loop and the deterministic stub planner.
 from __future__ import annotations
 
 import logging
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Protocol
 
 from canopy.services.kb import KB
 from canopy.services.orbit import MIN_OPERATIONAL_LEAD_S, OrbitService
-from canopy.services.schemas.events import ACTION_AUTHORITY, Action, Authority
+from canopy.services.schemas.events import (
+    ACTION_AUTHORITY,
+    SELECTABLE_ACTIONS,
+    Action,
+    Anomaly,
+    Authority,
+    Decision,
+    Verdict,
+)
 from canopy.services.traces import Tracer
 
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "GATE_DOWNGRADE_ACTION",
+    "REASON_AUTHORITY_MISMATCH",
+    "REASON_UNSELECTABLE_ACTION",
     "DecisionTool",
+    "Gate",
+    "GateContext",
+    "GateResult",
     "ToolContext",
     "build_tool_registry",
+    "gate_allow",
+    "policy_gate",
 ]
 
 
@@ -322,6 +339,82 @@ class RoutingValidateTool:
         return {"valid": True, "reason": f"action {action} routed correctly to {authority}"}
 
 
+# ---- Decision gate contract -----------------------------------------------
+#
+# A gate runs in DecideService between tool enrichment and publish
+# (docs/INTERFACE-SPEC.md §7). It sees the decision plus the threat context
+# for the satellite it concerns and either allows it, allows it with an
+# authority repair, or blocks it; a blocked decision is republished as a local
+# threat_warning. The two threat-context rules (R1 uplink jamming, R2 hostile
+# close approach) need the anomaly kind→domain table and live in
+# ``megalith.gate.rules``; the two policy rules below (R3 unselectable action,
+# R4 authority mismatch) depend only on the action taxonomy and live here so
+# CANOPY enforces them even when it runs without the MEGALITH package.
+# ``megalith.gate.rules`` re-exports these types and chains onto
+# :func:`policy_gate` after its own rules.
+
+REASON_UNSELECTABLE_ACTION = "policy/unselectable_action"
+REASON_AUTHORITY_MISMATCH = "policy/authority_mismatch"
+
+# What a blocked decision is republished as.
+GATE_DOWNGRADE_ACTION: Action = "threat_warning"
+
+
+@dataclass(frozen=True)
+class GateContext:
+    """Threat context for one decision: everything recent on its satellite."""
+
+    satellite_id: str | None
+    verdict: Verdict | None
+    anomalies: tuple[Anomaly, ...]
+
+
+@dataclass(frozen=True)
+class GateResult:
+    """``allow=False`` blocks; ``allow=True`` with a reason code is a repair."""
+
+    allow: bool
+    reason_code: str | None
+    downgrade_to: Action | None
+    note: str
+
+
+Gate = Callable[[Decision, GateContext], GateResult]
+
+
+def gate_allow(note: str = "") -> GateResult:
+    return GateResult(allow=True, reason_code=None, downgrade_to=None, note=note)
+
+
+def policy_gate(decision: Decision, ctx: GateContext) -> GateResult:
+    """Rules R3 and R4 of the decision gate; pure and deterministic.
+
+    R3 blocks any action outside ``SELECTABLE_ACTIONS`` (the offensive
+    counterspace actions exist in the taxonomy for routing and replay but must
+    never be published as a recommendation). R4 allows but flags an authority
+    that disagrees with ``ACTION_AUTHORITY``; the caller repairs it.
+    """
+    if decision.action not in SELECTABLE_ACTIONS:
+        return GateResult(
+            allow=False,
+            reason_code=REASON_UNSELECTABLE_ACTION,
+            downgrade_to=GATE_DOWNGRADE_ACTION,
+            note=f"{decision.action} is not a selectable action",
+        )
+    expected = ACTION_AUTHORITY[decision.action]
+    if decision.authority != expected:
+        return GateResult(
+            allow=True,
+            reason_code=REASON_AUTHORITY_MISMATCH,
+            downgrade_to=None,
+            note=(
+                f"{decision.action} requires authority={expected}; "
+                f"got {decision.authority}; repaired"
+            ),
+        )
+    return gate_allow()
+
+
 # ---- Helpers ---------------------------------------------------------------
 
 
@@ -368,7 +461,7 @@ async def dispatch(
     """Execute a tool and emit a tools-stage trace before/after."""
     try:
         result = await tool.execute(args, ctx)
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         log.exception("decide tool %s failed: %s", tool.name, exc)
         if ctx.tracer is not None:
             await ctx.tracer.emit(

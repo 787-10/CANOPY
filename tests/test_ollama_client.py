@@ -156,7 +156,8 @@ async def test_attribute_speaks_correct_wire_format() -> None:
     assert req["messages"][1]["role"] == "user"
     # Schema-typed structured output (Ollama ≥ 0.5)
     assert isinstance(req["format"], dict)
-    assert req["options"] == {"temperature": 0.0, "seed": 1337}
+    assert req["options"] == {"temperature": 0.0, "seed": 1337, "num_ctx": 32768}
+    assert "think" not in req  # opt-in only
     # The user prompt should echo the schema as a markdown fence so smaller
     # models that ignore the format hint still have it in context.
     assert "```json" in req["messages"][1]["content"]

@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import get_args
 
-from canopy.services.decide.prompts import DECISION_TOOL
+from canopy.services.decide.prompts import DECISION_TOOL, decision_system_prompt
 from canopy.services.decide.tools import RoutingValidateTool, ToolContext
 from canopy.services.kb import KB
 from canopy.services.schemas.events import (
@@ -56,6 +56,31 @@ def test_tool_authority_mapping_matches_canonical_table() -> None:
     # The agent's menu never lists offensive actions.
     for action in OFFENSIVE_ACTIONS:
         assert action not in desc
+
+
+def test_recovery_recommendation_is_selectable_local_and_not_offensive() -> None:
+    # docs/INTERFACE-SPEC.md §6: the one non-counterspace action. Local
+    # authority, on the menu right after passive_defense, never offensive.
+    assert "recovery_recommendation" in SELECTABLE_ACTIONS
+    assert ACTION_AUTHORITY["recovery_recommendation"] == "local"
+    assert "recovery_recommendation" not in OFFENSIVE_ACTIONS
+    assert (
+        SELECTABLE_ACTIONS.index("recovery_recommendation")
+        == SELECTABLE_ACTIONS.index("passive_defense") + 1
+    )
+    enum = DECISION_TOOL["input_schema"]["properties"]["action"]["enum"]
+    assert "recovery_recommendation" in enum
+
+
+def test_decision_prompt_states_recovery_rule() -> None:
+    # The hard-rule table tells the model when recovery_recommendation is
+    # appropriate: local authority, internal_fault or natural_external only.
+    prompt = decision_system_prompt()
+    rule_lines = [line for line in prompt.splitlines() if "recovery_recommendation" in line]
+    assert rule_lines, "system prompt never mentions recovery_recommendation"
+    hard_rule = next(line for line in rule_lines if "authority='local'" in line)
+    assert "internal_fault" in hard_rule
+    assert "natural_external" in hard_rule
 
 
 async def test_routing_validate_agrees_with_action_authority_for_all_actions() -> None:
