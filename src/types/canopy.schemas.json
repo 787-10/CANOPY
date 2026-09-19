@@ -418,6 +418,61 @@
   },
   "attribution": {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$defs": {
+      "KBRef": {
+        "description": "Provenance of the knowledge base an attribution was reasoned against.\n\nStamped on every published ``Attribution`` (docs/INTERFACE-SPEC.md §5.3).\n``path`` is the knowledge-base file as configured (``CANOPY_KB_PATH``),\n``resolved`` its absolute path and ``sha256`` the digest of the file\nbytes; a knowledge base built in memory has neither path and hashes the\ncanonical JSON of its entries. ``actor_entry_count`` counts every entry\nother than the uncertainty anchor; when it is zero the attrib stage\nwithholds any named actor at publish.",
+        "properties": {
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Path"
+          },
+          "resolved": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Resolved"
+          },
+          "sha256": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256",
+            "type": "string"
+          },
+          "entry_count": {
+            "minimum": 0,
+            "title": "Entry Count",
+            "type": "integer"
+          },
+          "actor_entry_count": {
+            "minimum": 0,
+            "title": "Actor Entry Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "path",
+          "resolved",
+          "sha256",
+          "entry_count",
+          "actor_entry_count"
+        ],
+        "title": "KBRef",
+        "type": "object"
+      }
+    },
     "additionalProperties": true,
     "description": "Attribution assessment for an anomaly cluster.",
     "properties": {
@@ -485,6 +540,17 @@
         },
         "title": "Kb Citations",
         "type": "array"
+      },
+      "kb_ref": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/KBRef"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
       },
       "source_signal_ids": {
         "items": {
@@ -581,6 +647,7 @@
       "evidence",
       "predicted_next",
       "kb_citations",
+      "kb_ref",
       "source_signal_ids",
       "verdict",
       "physics_consistency",
@@ -829,6 +896,44 @@
         "default": 0,
         "title": "Revision",
         "type": "integer"
+      },
+      "selectable_set": {
+        "anyOf": [
+          {
+            "items": {
+              "enum": [
+                "passive_defense",
+                "active_defense_escort",
+                "active_defense_counterattack",
+                "orbital_strike_request",
+                "terrestrial_strike_request",
+                "space_link_interdiction_request",
+                "sda_tasking",
+                "threat_warning",
+                "recovery_recommendation"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Selectable Set"
+      },
+      "selection_basis": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Selection Basis"
       }
     },
     "required": [
@@ -843,7 +948,9 @@
       "source_signal_ids",
       "recovery",
       "withheld_recovery",
-      "revision"
+      "revision",
+      "selectable_set",
+      "selection_basis"
     ],
     "title": "Decision",
     "type": "object"

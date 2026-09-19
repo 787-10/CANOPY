@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName, verdictLabel, withheldRecoveryLabel } from '../lib/commanderLanguage'
+import { fetchGateway } from '../lib/gateway'
 import {
   readLastRun,
   scenarioIdFromSignals,
@@ -12,8 +13,6 @@ import { formatMs, stageTimings } from '../lib/timing'
 import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import { selectEpisodeAttribution } from '../lib/episode'
-
-const API_URL = import.meta.env.VITE_CANOPY_API_URL ?? 'http://localhost:8000'
 
 /** S8: run scorecard. Stage timings from the reasoning trace, the verdict
  *  and decision from the store, the model provider from `GET /health`. The
@@ -32,7 +31,7 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
 
   useEffect(() => {
     let cancelled = false
-    fetchImpl(`${API_URL}/health`)
+    fetchGateway('/health', undefined, { fetchImpl })
       .then(async (response) => {
         if (!response.ok) throw new Error(`HTTP ${response.status}`)
         return response.json()

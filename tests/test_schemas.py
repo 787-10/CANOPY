@@ -278,3 +278,46 @@ def test_space_weather_example_file_validates() -> None:
     assert sig.domain == "space_weather"
     assert sig.payload.event_type == "geomagnetic_storm"
     assert sig.payload.satellite_id is None
+
+
+# ---- Bounded response (docs/INTERFACE-SPEC.md §6, spec 1.4) -------------------
+
+
+def _plain_decision(**overrides) -> Decision:
+    data = {
+        "attribution_id": "attr-1",
+        "action": "threat_warning",
+        "target": "brigade-c2",
+        "rationale": "watch it",
+        "authority": "local",
+    }
+    data.update(overrides)
+    return Decision(**data)
+
+
+def test_decision_selection_fields_default_to_none_and_serialise_nothing_for_old_data() -> None:
+    plain = _plain_decision()
+    assert plain.selectable_set is None
+    assert plain.selection_basis is None
+    dumped = plain.model_dump(mode="json", exclude_none=True)
+    assert "selectable_set" not in dumped and "selection_basis" not in dumped
+    # A pre-1.4 wire record without the keys still validates.
+    assert Decision.model_validate(dumped).selectable_set is None
+
+
+def test_decision_selection_fields_round_trip_through_json() -> None:
+    menu = ["passive_defense", "threat_warning", "sda_tasking", "active_defense_escort", "space_link_interdiction_request"]
+    decision = _plain_decision(selectable_set=menu, selection_basis="model-within-set")
+    again = Decision.model_validate_json(decision.model_dump_json())
+    assert again.selectable_set == menu
+    assert again.selection_basis == "model-within-set"
+    gated = _plain_decision(
+        rationale="[gate:threat/uplink_jamming_active] r",
+        selectable_set=["threat_warning"], selection_basis="gate-withheld:threat/uplink_jamming_active",
+    )
+    assert Decision.model_validate(gated.model_dump(mode="json")) == gated
+
+
+def test_decision_selectable_set_is_typed_over_the_action_vocabulary() -> None:
+    with pytest.raises(ValidationError):
+        _plain_decision(selectable_set=["not_an_action"])  # type: ignore[list-item]

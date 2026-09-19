@@ -1,8 +1,6 @@
 import { useEffect, useState } from 'react'
+import { fetchGateway } from '../lib/gateway'
 import { DOMAINS, type Domain } from '../types/canopy'
-
-const API_URL =
-  import.meta.env.VITE_CANOPY_API_URL ?? 'http://localhost:8000'
 
 // Every blockable input domain, in vocabulary order (see types/canopy.ts).
 const ALL_DOMAINS: readonly Domain[] = DOMAINS
@@ -22,14 +20,16 @@ const LABELS: Record<Domain, string> = {
   space_weather: 'Space weather',
 }
 
-export function StressMode() {
+/** Reads and sets the gateway's blocked input domains (`GET`/`POST
+ *  /stress`); `fetchImpl` is injectable for tests. */
+export function StressMode({ fetchImpl = fetch }: { fetchImpl?: typeof fetch } = {}) {
   const [blocked, setBlocked] = useState<Set<Domain>>(new Set())
   const [pending, setPending] = useState<Set<Domain>>(new Set())
   const [status, setStatus] = useState<'idle' | 'applying' | 'error'>('idle')
 
   useEffect(() => {
     let cancelled = false
-    void fetch(`${API_URL}/stress`)
+    void fetchGateway('/stress', undefined, { fetchImpl })
       .then((r) => r.json())
       .then((data: { blocked_domains: Domain[] }) => {
         if (cancelled) return
@@ -43,7 +43,7 @@ export function StressMode() {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [fetchImpl])
 
   function toggle(domain: Domain) {
     setPending((current) => {
@@ -57,11 +57,15 @@ export function StressMode() {
   async function apply() {
     setStatus('applying')
     try {
-      const response = await fetch(`${API_URL}/stress`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ blocked_domains: [...pending] }),
-      })
+      const response = await fetchGateway(
+        '/stress',
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ blocked_domains: [...pending] }),
+        },
+        { fetchImpl },
+      )
       if (!response.ok) throw new Error(`status=${response.status}`)
       const data = (await response.json()) as { blocked_domains: Domain[] }
       setBlocked(new Set(data.blocked_domains))

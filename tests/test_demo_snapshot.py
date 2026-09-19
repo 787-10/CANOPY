@@ -25,6 +25,7 @@ spot-checked separately via `verify.py --live`.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from pathlib import Path
 
 import pytest
@@ -107,6 +108,16 @@ EXPECTED_ATTRIBUTION_CITATIONS = {
 EXPECTED_DECISION_ACTION = "active_defense_escort"
 EXPECTED_DECISION_AUTHORITY = "request"
 EXPECTED_DECISION_TARGET = "threatened_geo_asset"
+# Spec 1.4 bounded response (docs/INTERFACE-SPEC.md §6): the defensive menu in
+# SELECTABLE_ACTIONS order, and the basis saying the model chose from it.
+EXPECTED_DECISION_SELECTABLE_SET = [
+    "passive_defense",
+    "threat_warning",
+    "sda_tasking",
+    "active_defense_escort",
+    "space_link_interdiction_request",
+]
+EXPECTED_DECISION_SELECTION_BASIS = "model-within-set"
 
 EXPECTED_UI_EVENT_TYPE = "recommendation_created"
 EXPECTED_UI_EVENT_SEVERITY = "high"
@@ -219,6 +230,13 @@ def test_attribution(pipeline_output) -> None:
     assert attribution.confidence == pytest.approx(EXPECTED_ATTRIBUTION_CONFIDENCE)
     assert set(attribution.kb_citations) == EXPECTED_ATTRIBUTION_CITATIONS
     assert attribution.source_signal_ids == EXPECTED_ANOMALY_SOURCE_SIGNALS
+    # 1.4 (spec §5.3): the attribution names the knowledge base it cited. The
+    # citations above resolve against this file and no other.
+    assert attribution.kb_ref is not None
+    assert attribution.kb_ref.path == str(KB_FILE)
+    assert attribution.kb_ref.sha256 == hashlib.sha256(KB_FILE.read_bytes()).hexdigest()
+    assert attribution.kb_ref.entry_count == len(KB.load_from_json(KB_FILE))
+    assert attribution.kb_ref.actor_entry_count == attribution.kb_ref.entry_count - 1
 
 
 def test_decision(pipeline_output) -> None:
@@ -231,6 +249,11 @@ def test_decision(pipeline_output) -> None:
     assert decision.request_packet is not None
     assert decision.request_packet["to"] == "CJFSCC"
     assert decision.source_signal_ids == EXPECTED_ANOMALY_SOURCE_SIGNALS
+    # Snapshot extended for spec 1.4 (bounded response), nothing else changed:
+    # no recovery block in this scenario, so the menu is the defensive set and
+    # the stub's escort is on it.
+    assert decision.selectable_set == EXPECTED_DECISION_SELECTABLE_SET
+    assert decision.selection_basis == EXPECTED_DECISION_SELECTION_BASIS
 
 
 def test_decision_request_packet_carries_maneuver_math(pipeline_output) -> None:

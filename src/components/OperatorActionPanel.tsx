@@ -6,6 +6,7 @@ import {
   subsystemLabel,
 } from '../lib/commanderLanguage'
 import { actionLabel } from '../lib/actionLabels'
+import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
 import type { Decision } from '../types/canopy'
 import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
@@ -53,6 +54,7 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
   const gate = parseGateRationale(decision.rationale)
   const isBlocked = gate.reasonCode !== null
   const withheld = decision.withheld_recovery ?? null
+  const selection = selectionSummary(decision)
   const eyebrow = isRecovery
     ? 'Internal diagnosis recommendation'
     : isBlocked
@@ -105,6 +107,20 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
           <dd>{decision.target}</dd>
         </div>
       </dl>
+
+      {selection ? (
+        // Spec 1.4 bounded response: the menu the action came from and why.
+        // Muted Barlow text; hidden in capture mode so the pinned 1920x1080
+        // layout does not shift.
+        <p
+          className="operator-action__rationale operator-action__selection"
+          data-testid="selection-basis"
+          data-capture-hide
+        >
+          {selectionSentence(selection)}
+          {selection.basis ? ` · ${selection.basis}` : ''}
+        </p>
+      ) : null}
 
       {recovery ? (
         <dl className="operator-action__recovery" data-testid="recovery-block">

@@ -3,10 +3,16 @@ from __future__ import annotations
 from collections import defaultdict
 from pathlib import Path
 
-from canopy.services.kb.loader import load_kb_json
+from canopy.services.kb.loader import (
+    UNCERTAINTY_ANCHOR_ID,
+    load_kb,
+    load_kb_json,
+    memory_kb_ref,
+)
 from canopy.services.kb.models import KBEntry, SourceRef
+from canopy.services.schemas.events import KBRef
 
-__all__ = ["KB", "KBEntry", "SourceRef"]
+__all__ = ["KB", "KBEntry", "KBRef", "SourceRef", "UNCERTAINTY_ANCHOR_ID", "load_kb_json"]
 
 
 class KB:
@@ -14,10 +20,13 @@ class KB:
 
     Built from data/kb_seed_entries.json. Indexes entries by id, scenario
     signal id, capability type, actor, and domain so attribution can retrieve
-    relevant context fast.
+    relevant context fast. ``source`` records where the entries came from
+    (path, SHA-256, counts; docs/INTERFACE-SPEC.md §5.3): the loader's record
+    for a file-backed knowledge base, a hash of the entries for one built in
+    memory.
     """
 
-    def __init__(self, entries: list[KBEntry]) -> None:
+    def __init__(self, entries: list[KBEntry], *, source: KBRef | None = None) -> None:
         self._by_id: dict[str, KBEntry] = {}
         self._by_scenario_id: dict[str, list[KBEntry]] = defaultdict(list)
         self._by_capability: dict[str, list[KBEntry]] = defaultdict(list)
@@ -31,10 +40,12 @@ class KB:
             self._by_actor[entry.actor].append(entry)
             for dom in entry.domain:
                 self._by_domain[dom].append(entry)
+        self.source: KBRef = source if source is not None else memory_kb_ref(entries)
 
     @classmethod
     def load_from_json(cls, path: str | Path = "data/kb_seed_entries.json") -> "KB":
-        return cls(load_kb_json(path))
+        loaded = load_kb(path)
+        return cls(loaded.entries, source=loaded.ref)
 
     def get(self, entry_id: str) -> KBEntry | None:
         return self._by_id.get(entry_id)

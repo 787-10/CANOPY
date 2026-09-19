@@ -51,6 +51,9 @@ class TrialArtifact:
     validation_events: list[dict] = field(default_factory=list)
     runtime_events: list[dict] = field(default_factory=list)
     kb_context: list[dict] = field(default_factory=list)
+    # Provenance of the knowledge base the engine loaded (``KBRef``):
+    # path, SHA-256 and entry counts; every attribution carries the same.
+    kb_ref: dict | None = None
 
     @property
     def anomaly_source_signal_ids(self) -> list[str]:
@@ -87,6 +90,7 @@ class TrialArtifact:
             "validation_events": self.validation_events,
             "runtime_events": self.runtime_events,
             "kb_context": self.kb_context,
+            "kb_ref": self.kb_ref,
         }
 
 
@@ -145,6 +149,7 @@ async def run_trial(
     artifact.kb_context = [
         entry.model_dump(mode="json") for entry in engine.kb.all_entries()
     ]
+    artifact.kb_ref = engine.kb.source.model_dump(mode="json")
     service_tasks = start_engine_tasks(engine)
 
     async def consume(pattern: str, target: list, expected_type: type) -> None:

@@ -20,6 +20,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('run summary helpers', () => {
@@ -137,6 +138,16 @@ describe('RunSummary page (S8)', () => {
     expect(screen.getByTestId('run-scenario')).toHaveTextContent('megalith_link_margin_a.jsonl')
     expect(screen.queryByText(/run-bundle endpoint/)).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
+  })
+
+  it('asks /health with the bearer header when the console carries a deploy-time token (C11)', async () => {
+    vi.stubEnv('VITE_CANOPY_API_TOKEN', 'deploy-secret')
+    const fetchImpl = vi.fn(() => Promise.resolve(response(200, { status: 'ok', llm: 'StubLLMClient' })))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+    await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
+    expect(fetchImpl).toHaveBeenCalledWith(expect.stringMatching(/\/health$/), {
+      headers: { Authorization: 'Bearer deploy-secret' },
+    })
   })
 
   it('says the gateway is unreachable rather than guessing a provider', async () => {

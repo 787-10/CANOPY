@@ -3,9 +3,10 @@
 // navigation can be unit-tested with doubles.
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
+import { apiUrl, fetchGateway } from './gateway'
 
-export const DEMO_API_URL: string =
-  import.meta.env.VITE_CANOPY_API_URL ?? 'http://localhost:8000'
+/** The gateway's REST base, from src/lib/gateway.ts. */
+export const DEMO_API_URL: string = apiUrl()
 
 export type DemoRun = 'A' | 'B' | 'C'
 
@@ -66,12 +67,18 @@ export const PENDING_REPLAY_KEY = 'megalith-pending-replay'
 // for a gateway that hangs, not for a reset that is merely slow.
 export const RESET_TIMEOUT_MS = 8000
 
+const RESET_PATH = '/reset'
+
 export function resetUrl(apiUrl: string = DEMO_API_URL): string {
-  return `${apiUrl}/reset`
+  return `${apiUrl}${RESET_PATH}`
+}
+
+export function replayPath(spec: DemoRunSpec): string {
+  return `/scenarios/${encodeURIComponent(spec.stem)}/replay?speed=${REPLAY_SPEED}&max_delay_s=${REPLAY_MAX_DELAY_S}`
 }
 
 export function replayUrl(spec: DemoRunSpec, apiUrl: string = DEMO_API_URL): string {
-  return `${apiUrl}/scenarios/${encodeURIComponent(spec.stem)}/replay?speed=${REPLAY_SPEED}&max_delay_s=${REPLAY_MAX_DELAY_S}`
+  return `${apiUrl}${replayPath(spec)}`
 }
 
 export function parseRun(value: string | null | undefined): DemoRun | null {
@@ -115,7 +122,11 @@ export async function startDemoRun(
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), RESET_TIMEOUT_MS)
     try {
-      await fetchImpl(resetUrl(apiUrl), { method: 'POST', signal: controller.signal })
+      await fetchGateway(
+        RESET_PATH,
+        { method: 'POST', signal: controller.signal },
+        { fetchImpl, baseUrl: apiUrl },
+      )
     } finally {
       clearTimeout(timer)
     }
@@ -167,7 +178,11 @@ export async function startPendingReplay({
     // storage unavailable
   }
   const spec = DEMO_RUNS[pending.run]
-  const response = await fetchImpl(replayUrl(spec, apiUrl), { method: 'POST' })
+  const response = await fetchGateway(
+    replayPath(spec),
+    { method: 'POST' },
+    { fetchImpl, baseUrl: apiUrl },
+  )
   if (!response.ok) {
     throw new Error(`gateway refused replay of ${spec.stem}: HTTP ${response.status}`)
   }

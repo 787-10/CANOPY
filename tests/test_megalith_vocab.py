@@ -228,6 +228,38 @@ async def test_stub_batch_of_new_kinds_yields_valid_attribution_and_decision(
     assert set(decision.source_signal_ids) == {a.source_signal for a in batch}
 
 
+@pytest.mark.parametrize(
+    "batch", [BUS_BATCH, STORM_BATCH], ids=["bus_only", "space_weather_only"]
+)
+async def test_stub_batch_of_new_kinds_on_an_empty_kb_keeps_the_no_actor_value(
+    batch: list[Anomaly],
+) -> None:
+    """An empty knowledge base changes nothing for a positive finding.
+
+    The empty-KB rule (docs/INTERFACE-SPEC.md §5.3) withholds a named
+    adversary; the ``None`` actor of a bus or storm batch is not one, and the
+    stub still yields a valid decision. The adversary case is in
+    ``tests/test_kb_provenance.py``.
+    """
+    kb = KB(entries=[])
+    assert kb.source.path is None
+    assert kb.source.entry_count == 0 and kb.source.actor_entry_count == 0
+    llm = StubLLMClient(kb)
+
+    primary = await llm.attribute_primary(batch)
+    assert primary.actor == "None"
+    assert primary.kb_citations == []  # nothing to cite, not even the anchor
+    challenge = await llm.attribute_redteam(primary, batch)
+    final = await llm.reconcile(primary, challenge, batch)
+    assert final.actor == "None"
+    assert 0.49 <= final.confidence <= 1.0
+
+    decision = await llm.decide(final)
+    assert isinstance(decision, Decision)
+    assert decision.action in ("passive_defense", "threat_warning")
+    assert decision.authority == ACTION_AUTHORITY[decision.action]
+
+
 # ---- UI events --------------------------------------------------------------
 
 

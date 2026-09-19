@@ -4,7 +4,7 @@
 //   is present on the wire, null when unset, so nothing here is optional.
 // Regenerate: cd external/canopy && uv run --no-sync python scripts/gen_ts_types.py
 // Fixture: src/types/canopy.schemas.json (the schemas this file was generated from).
-// Schema digest: sha256:c5d55fc011d4d442351ad142dbe5dc7e568c6c057db16edb16c299de22a24e41
+// Schema digest: sha256:9ae51433fa89858adeeaa6791e3ea0e729ba0fddf52591de76ca1fac8a6635f8
 
 /** Where the signal applies. Must include at least one localizer. */
 export type Location = {
@@ -70,6 +70,16 @@ export type Anomaly = {
   [key: string]: unknown
 }
 
+/** Provenance of the knowledge base an attribution was reasoned against. Stamped on every published ``Attribution`` (docs/INTERFACE-SPEC.md §5.3). ``path`` is the knowledge-base file as configured (``CANOPY_KB_PATH``), ``resolved`` its absolute path and ``sha256`` the digest of the file bytes; a knowledge base built in memory has neither path and hashes the canonical JSON of its entries. ``actor_entry_count`` counts every entry other than the uncertainty anchor; when it is zero the attrib stage withholds any named actor at publish. */
+export type KBRef = {
+  path: string | null
+  resolved: string | null
+  sha256: string
+  entry_count: number
+  actor_entry_count: number
+  [key: string]: unknown
+}
+
 /** Attribution assessment for an anomaly cluster. */
 export type Attribution = {
   id: string
@@ -82,6 +92,7 @@ export type Attribution = {
   evidence: string[]
   predicted_next: string | null
   kb_citations: string[]
+  kb_ref: KBRef | null
   source_signal_ids: string[]
   verdict: 'internal_fault' | 'natural_external' | 'hostile_external' | 'unknown' | null
   physics_consistency: number | null
@@ -141,6 +152,8 @@ export type Decision = {
   recovery: RecoveryBlock | null
   withheld_recovery: WithheldRecovery | null
   revision: number
+  selectable_set: Array<'passive_defense' | 'active_defense_escort' | 'active_defense_counterattack' | 'orbital_strike_request' | 'terrestrial_strike_request' | 'space_link_interdiction_request' | 'sda_tasking' | 'threat_warning' | 'recovery_recommendation'> | null
+  selection_basis: string | null
   [key: string]: unknown
 }
 

@@ -1,6 +1,7 @@
 import { commanderSignalSummary, recoveryActionLabel, signalKindLabel, verdictCopy, verdictHeadline, withheldRecoveryLabel } from '../lib/commanderLanguage'
 import { spacecraftEnvironmentFacts } from '../lib/commanderLanguage'
 import { actionLabel } from '../lib/actionLabels'
+import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
 import { withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import type { Attribution, Decision, Signal } from '../types/canopy'
@@ -54,6 +55,7 @@ export function DecisionSummaryCard({ decision }: { decision: Decision | null })
   const clearDecisionStatus = useEventStore((s) => s.clearDecisionStatus)
   const withheld = decision?.withheld_recovery ?? null
   const recovery = decision?.recovery ?? null
+  const selection = decision ? selectionSummary(decision) : null
   const kind = !decision
     ? null
     : withheld
@@ -78,6 +80,12 @@ export function DecisionSummaryCard({ decision }: { decision: Decision | null })
             <p className="summary-card__text">
               {recoveryActionLabel(recovery.action_id)}
               {recovery.requires_approval ? ' · operator approval required' : ' · no approval required'}
+            </p>
+          ) : null}
+          {selection ? (
+            <p className="summary-card__text summary-card__text--muted summary-card__selection" data-testid="summary-selection" data-capture-hide>
+              {selectionSentence(selection, { options: false })}
+              {selection.basis ? ` · ${selection.basis}` : ''}
             </p>
           ) : null}
           {accepted || denied ? (

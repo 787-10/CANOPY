@@ -230,10 +230,16 @@ def _sample_events() -> dict[str, object]:
             reason_code="verdict/hostile_external",
         ),
         revision=1,
+        selectable_set=[
+            "passive_defense", "threat_warning", "sda_tasking",
+            "active_defense_escort", "space_link_interdiction_request",
+        ],
+        selection_basis="model-within-set",
     )
     recovery_decision = Decision(
         id="dec-2", ts=TS, attribution_id="attr-2", action="recovery_recommendation",
         target="LEO-SCIENCE-1", rationale="r", authority="local", recovery=recovery,
+        selectable_set=["recovery_recommendation"], selection_basis="recovery-routed",
     )
     ui_event = UIEvent(
         id="uievt-dec-1", ts=TS, type="recommendation_created", severity="high",
@@ -298,6 +304,10 @@ def test_serialization_schema_requires_every_declared_property(client: TestClien
     schema = client.get("/schemas/decision").json()
     assert set(schema["required"]) == set(schema["properties"])
     assert "withheld_recovery" in schema["properties"]
+    # Spec 1.4 bounded response: both nullable; the set is an array of Action.
+    selectable = schema["properties"]["selectable_set"]["anyOf"]
+    assert {member.get("type") for member in selectable} == {"array", "null"}
+    assert schema["properties"]["selection_basis"]["anyOf"] == [{"type": "string"}, {"type": "null"}]
     assert schema["properties"]["withheld_recovery"]["anyOf"] == [
         {"$ref": "#/$defs/WithheldRecovery"},
         {"type": "null"},
@@ -370,6 +380,8 @@ def test_generated_types_cover_every_kind_and_the_withheld_block() -> None:
         assert f"  {kind}: {cls.__name__}" in ts_text
     assert "export type WithheldRecovery = {" in ts_text
     assert "withheld_recovery: WithheldRecovery | null" in ts_text
+    assert "selectable_set: Array<'passive_defense'" in ts_text
+    assert "selection_basis: string | null" in ts_text
     assert "reason_code: string" in ts_text
     assert "source: 'internal-diagnosis'" in ts_text
     assert "action: 'passive_defense' | 'active_defense_escort'" in ts_text

@@ -528,3 +528,182 @@ async def test_hostile_verdict_with_a_block_is_withheld_not_gated() -> None:
     assert [t.message for t in _warn_traces(traces)] == [
         "recovery withheld: switch_redundant_amplifier: verdict/hostile_external"
     ]
+
+
+# ---- Negative cases: legitimate recoveries proceed (pre-submission C14) ----------
+
+DEFENSIVE_MENU = [
+    "passive_defense",
+    "threat_warning",
+    "sda_tasking",
+    "active_defense_escort",
+    "space_link_interdiction_request",
+]
+
+
+@pytest.mark.parametrize("verdict", ["internal_fault", "natural_external"])
+@pytest.mark.parametrize(
+    "kind", ["rf_telemetry_degradation", "satcom_degradation", "sda_catalog_match"]
+)
+async def test_real_gate_lets_a_comms_recovery_proceed_with_symptom_or_tracking_context(
+    kind: str, verdict: str
+) -> None:
+    # (a) a benign tracking update (custody-quality change -> sda_catalog_match)
+    # and (b) a downlink frame-loss report (-> rf_telemetry_degradation; the
+    # SATCOM symptom likewise) sit in the context of an amplifier swap under an
+    # internal or natural verdict. None is an emitter, so R1 does not fire and
+    # the recovery reaches the bus intact, with nothing withheld and no warning.
+    gate_pkg = pytest.importorskip("megalith.gate")
+    bus_anom = _bus_anomaly()
+    cue = _anomaly(kind, f"sig-{kind}", offset_s=-90)
+    decisions, traces = await _run(
+        StubLLMClient(KB(entries=[])),
+        cached=[bus_anom, cue],
+        attribution=_attribution([bus_anom], verdict=verdict),
+        gate=gate_pkg.threat_context_gate,
+    )
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.action == "recovery_recommendation"
+    assert decision.recovery is not None
+    assert decision.recovery.action_id == "switch_redundant_amplifier"
+    assert decision.withheld_recovery is None
+    assert not decision.rationale.startswith("[gate:")
+    assert not _warn_traces(traces)
+    assert decision.selectable_set == ["recovery_recommendation"]
+    assert decision.selection_basis == "recovery-routed"
+
+
+# ---- Bounded response: selectable_set and selection_basis (§6, spec 1.4) ---------
+
+
+async def test_routed_recovery_names_the_routed_action_as_its_set() -> None:
+    bus_anom = _bus_anomaly()
+    decisions, _ = await _run(
+        StubLLMClient(KB(entries=[])), cached=[bus_anom], attribution=_attribution([bus_anom]), gate=policy_gate
+    )
+    assert decisions[0].action == "recovery_recommendation"
+    assert decisions[0].selectable_set == ["recovery_recommendation"]
+    assert decisions[0].selection_basis == "recovery-routed"
+
+
+async def test_model_overridden_by_the_recovery_rule_is_still_recovery_routed() -> None:
+    def passive(attribution: Attribution) -> Decision:
+        return Decision(
+            attribution_id=attribution.id, action="passive_defense", target="LEO-SCIENCE-1",
+            rationale="model ignored the recovery", authority="local",
+        )
+
+    bus_anom = _bus_anomaly()
+    decisions, _ = await _run(ScriptedLLM(passive), cached=[bus_anom], attribution=_attribution([bus_anom]), gate=policy_gate)
+    assert decisions[0].action == "recovery_recommendation"
+    assert decisions[0].selectable_set == ["recovery_recommendation"]
+    assert decisions[0].selection_basis == "recovery-routed"
+
+
+async def test_model_choice_on_the_defensive_menu_is_within_set() -> None:
+    # No block in the cluster: the menu is every selectable action except the
+    # recovery. An authority repair (R4) does not change the basis.
+    bus_anom = _bus_anomaly(recommended_recovery=None)
+    decisions, _ = await _run(
+        ScriptedLLM(_escort_local), cached=[bus_anom], attribution=_attribution([bus_anom], verdict="unknown"), tools=[]
+    )
+    decision = decisions[0]
+    assert decision.action == "active_defense_escort"
+    assert decision.authority == "request"
+    assert decision.selectable_set == DEFENSIVE_MENU
+    assert "recovery_recommendation" not in decision.selectable_set
+    assert decision.selection_basis == "model-within-set"
+
+
+async def test_invented_recovery_is_outside_the_set_and_repaired() -> None:
+    def invented(attribution: Attribution) -> Decision:
+        return Decision(
+            attribution_id=attribution.id, action="recovery_recommendation", target="LEO-SCIENCE-1",
+            rationale="model invented a recovery", authority="local",
+        )
+
+    bus_anom = _bus_anomaly(recommended_recovery=None)
+    decisions, _ = await _run(ScriptedLLM(invented), cached=[bus_anom], attribution=_attribution([bus_anom]), gate=policy_gate)
+    decision = decisions[0]
+    assert decision.action == "threat_warning"
+    assert decision.selectable_set == DEFENSIVE_MENU
+    assert decision.selection_basis == "model-outside-set-repaired"
+
+
+async def test_offensive_action_blocked_by_r3_names_the_gate_replacement() -> None:
+    def strike(attribution: Attribution) -> Decision:
+        return Decision(
+            attribution_id=attribution.id, action="orbital_strike_request", target="inspector",
+            rationale="model went off the menu", authority="request", request_packet={"to": "CJFSCC"},
+        )
+
+    bus_anom = _bus_anomaly(recommended_recovery=None)
+    decisions, _ = await _run(ScriptedLLM(strike), cached=[bus_anom], attribution=_attribution([bus_anom], verdict="unknown"))
+    decision = decisions[0]
+    assert decision.action == "threat_warning"
+    assert decision.selectable_set == ["threat_warning"]
+    assert decision.selection_basis == f"gate-withheld:{REASON_UNSELECTABLE_ACTION}"
+
+
+async def test_real_gate_block_names_the_replacement_set_and_its_reason() -> None:
+    gate_pkg = pytest.importorskip("megalith.gate")
+    bus_anom = _bus_anomaly()
+    jam = _anomaly("rf_anomaly", "sig-rf-1", offset_s=300)
+    decisions, _ = await _run(
+        StubLLMClient(KB(entries=[])), cached=[bus_anom, jam], attribution=_attribution([bus_anom]),
+        gate=gate_pkg.threat_context_gate,
+    )
+    decision = decisions[0]
+    assert decision.action == "threat_warning"
+    assert decision.selectable_set == ["threat_warning"]
+    assert decision.selection_basis == f"gate-withheld:{UPLINK_JAMMING}"
+    # The withheld annotation and the selection agree on the reason.
+    assert decision.withheld_recovery is not None
+    assert decision.withheld_recovery.reason_code == UPLINK_JAMMING
+
+
+async def test_hostile_verdict_with_a_block_selects_from_the_defensive_menu() -> None:
+    bus_anom = _bus_anomaly()
+    decisions, _ = await _run(
+        StubLLMClient(KB(entries=[])), cached=[bus_anom],
+        attribution=_attribution([bus_anom], verdict="hostile_external"), gate=policy_gate,
+    )
+    decision = decisions[0]
+    assert decision.action != "recovery_recommendation"
+    assert decision.selectable_set == DEFENSIVE_MENU
+    assert decision.selection_basis in ("model-within-set", "model-outside-set-repaired")
+    assert decision.withheld_recovery is not None  # the verdict kept the recovery off
+
+
+async def test_every_published_decision_carries_both_fields_on_every_revision() -> None:
+    bus_anom = _bus_anomaly()
+    first = _attribution([bus_anom])
+    second = first.model_copy(update={"revision": 1, "provisional": False})
+    bus = InProcessBus()
+    service = DecideService(bus, StubLLMClient(KB(entries=[])), gate=policy_gate)
+    decisions: list[Decision] = []
+
+    async def sniff() -> None:
+        async for _, event in bus.subscribe("decisions.*"):
+            if isinstance(event, Decision):
+                decisions.append(event)
+
+    tasks = [asyncio.create_task(service.run()), asyncio.create_task(sniff())]
+    try:
+        for _ in range(3):
+            await asyncio.sleep(0)
+        await bus.publish("anomalies.bus_link_margin", bus_anom)
+        await bus.drain()
+        await bus.publish("attributions.none", first)
+        await bus.drain()
+        await bus.publish("attributions.none", second)
+        await bus.drain()
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        bus.close()
+    assert [d.revision for d in decisions] == [0, 1]
+    assert all(d.selectable_set and d.selection_basis for d in decisions)
+    assert {d.selection_basis for d in decisions} == {"recovery-routed"}

@@ -15,6 +15,9 @@ from canopy.services.bus import Bus
 from canopy.services.kb import KB
 from canopy.services.llm import LLMClient
 from canopy.services.llm.validation import (
+    NO_ACTOR,
+    UNKNOWN_ACTOR,
+    UNKNOWN_CAP,
     RuleVerdictLike,
     VerdictResolution,
     resolve_verdict,
@@ -138,6 +141,14 @@ def _resolve_default_rule() -> RuleVerdictFn | None:
         log.info("attrib: megalith.verdict not importable; verdict lane is off")
         return None
     return rule_verdict
+
+
+# The empty-KB rule (docs/INTERFACE-SPEC.md §5.3). A knowledge base with no
+# entry beyond the uncertainty anchor cannot support naming an adversary, so a
+# named actor is withheld at publish; these actor values are not adversaries.
+MULTI_ACTOR = "Multi-actor"
+NO_ACTOR_ENTRIES_NOTE = "knowledge base has no actor entries; actor withheld"
+_NON_ADVERSARY_ACTORS: frozenset[str] = frozenset({"", NO_ACTOR, UNKNOWN_ACTOR, MULTI_ACTOR})
 
 
 def _country_topic(actor: str) -> str:
@@ -645,6 +656,7 @@ class AttribService:
             satellite_id=rule.satellite_id or cluster.satellite_id,
             provisional=True,
             revision=cluster.revision,
+            kb_ref=self._kb.source,
         )
         if self._tracer is not None:
             self._tracer.mark(attribution.id, cluster.t0)
@@ -954,6 +966,12 @@ class AttribService:
             t0=t0,
             stage_t0=stage_t0,
         )
+        # Knowledge-base provenance (spec §5.3): the empty-KB rule, then the
+        # reference every published attribution carries.
+        attribution = await self._withhold_actor_without_kb(
+            attribution, t0=t0, stage_t0=stage_t0
+        )
+        attribution = attribution.model_copy(update={"kb_ref": self._kb.source})
         if cluster is not None:
             attribution = attribution.model_copy(
                 update={
@@ -1116,5 +1134,53 @@ class AttribService:
                     else attribution.physics_consistency
                 ),
                 "satellite_id": satellite_id or attribution.satellite_id,
+            }
+        )
+
+    async def _withhold_actor_without_kb(
+        self,
+        attribution: Attribution,
+        *,
+        t0: float | None = None,
+        stage_t0: float | None = None,
+    ) -> Attribution:
+        """Enforce spec §5.3: no named adversary from a knowledge base without actor entries.
+
+        Fires when the loaded knowledge base has ``actor_entry_count == 0``
+        (nothing beyond the uncertainty anchor) and the attribution names a
+        specific adversary: any actor other than ``Unknown``, ``Multi-actor``
+        or the ``None`` a positive finding carries. The actor becomes
+        ``Unknown``, confidence is capped at 0.49 and a note is appended to
+        ``evidence``. Positive findings and any attribution reasoned against a
+        populated knowledge base pass through untouched.
+        """
+        if self._kb.source.actor_entry_count > 0:
+            return attribution
+        if attribution.actor in _NON_ADVERSARY_ACTORS:
+            return attribution
+        confidence = min(attribution.confidence, UNKNOWN_CAP)
+        evidence = list(attribution.evidence)
+        if NO_ACTOR_ENTRIES_NOTE not in evidence:
+            evidence.append(NO_ACTOR_ENTRIES_NOTE)
+        if self._tracer is not None:
+            await self._tracer.emit(
+                "attrib_reconcile",
+                "warn",
+                f"actor {attribution.actor} withheld: knowledge base has no actor entries "
+                f"(sha256 {self._kb.source.sha256[:12]}, {self._kb.source.entry_count} entries)",
+                ref_id=attribution.id,
+                t0=t0,
+                stage_t0=stage_t0,
+                actor=attribution.actor,
+                before=attribution.confidence,
+                after=confidence,
+                kb_sha256=self._kb.source.sha256,
+                kb_entry_count=self._kb.source.entry_count,
+            )
+        return attribution.model_copy(
+            update={
+                "actor": UNKNOWN_ACTOR,
+                "confidence": round(confidence, 3),
+                "evidence": evidence,
             }
         )

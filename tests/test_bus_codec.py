@@ -93,6 +93,8 @@ def _decision() -> Decision:
         rationale="watch it",
         authority="local",
         request_packet={"why": "test"},
+        selectable_set=["passive_defense", "threat_warning"],
+        selection_basis="model-within-set",
         extra_field="kept",
     )
 

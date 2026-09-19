@@ -10,6 +10,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('useKnowledgeBase', () => {
@@ -28,6 +29,20 @@ describe('useKnowledgeBase', () => {
     )
     expect(fetchImpl).toHaveBeenCalledWith('http://gw:8000/kb')
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('sends the bearer header when the console carries a deploy-time token (C11)', async () => {
+    vi.stubEnv('VITE_CANOPY_API_TOKEN', 'deploy-secret')
+    const fetchImpl = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      json: () => Promise.resolve({ entries: [] }),
+    } as unknown as Response)
+    renderHook(() => useKnowledgeBase(fetchImpl as unknown as typeof fetch, 'http://gw:8000'))
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalled())
+    expect(fetchImpl).toHaveBeenCalledWith('http://gw:8000/kb', {
+      headers: { Authorization: 'Bearer deploy-secret' },
+    })
   })
 
   it('leaves the store untouched when the gateway is unreachable', async () => {

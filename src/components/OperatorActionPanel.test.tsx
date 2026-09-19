@@ -188,3 +188,68 @@ describe('OperatorActionPanel — gate-blocked decisions', () => {
     expect(screen.getByText('gate: not a prefix')).toBeInTheDocument()
   })
 })
+
+describe('OperatorActionPanel — bounded response (spec 1.4)', () => {
+  const menu = [
+    'passive_defense',
+    'threat_warning',
+    'sda_tasking',
+    'active_defense_escort',
+    'space_link_interdiction_request',
+  ] as const
+
+  it('shows the selectable set and the basis in muted text, hidden in capture mode', () => {
+    useEventStore.getState().ingestDecision(
+      makeDecision('d-bounded', {
+        action: 'passive_defense',
+        authority: 'local',
+        target: 'SIM-01',
+        selectable_set: [...menu],
+        selection_basis: 'model-within-set',
+      }),
+    )
+    render(<OperatorActionPanel />)
+    const line = screen.getByTestId('selection-basis')
+    expect(line).toHaveTextContent(
+      'Selected from 5 options: Passive defense, Threat warning, SDA tasking, Active defense escort, Space-link interdiction request',
+    )
+    expect(line).toHaveTextContent('model choice within the approved set')
+    expect(line).toHaveClass('operator-action__rationale')
+    expect(line).toHaveAttribute('data-capture-hide')
+  })
+
+  it('labels a gate-withheld basis with the gate reason and a routed recovery by the rule', () => {
+    useEventStore.getState().ingestDecision(
+      makeDecision('d-gated', {
+        action: 'threat_warning',
+        authority: 'local',
+        rationale: '[gate:threat/uplink_jamming_active] reset the radio',
+        selectable_set: ['threat_warning'],
+        selection_basis: 'gate-withheld:threat/uplink_jamming_active',
+      }),
+    )
+    render(<OperatorActionPanel />)
+    expect(screen.getByTestId('selection-basis')).toHaveTextContent(
+      'Selected from 1 option: Threat warning · gate withheld: Active jamming detected',
+    )
+    useEventStore.getState().reset()
+    useEventStore.getState().ingestDecision(
+      makeDecision('d-routed', {
+        action: 'recovery_recommendation',
+        authority: 'local',
+        selectable_set: ['recovery_recommendation'],
+        selection_basis: 'recovery-routed',
+      }),
+    )
+    render(<OperatorActionPanel />)
+    expect(screen.getAllByTestId('selection-basis').at(-1)).toHaveTextContent(
+      'Selected from 1 option: Recovery recommendation · recovery routed by the decision rule',
+    )
+  })
+
+  it('renders no selection line for a decision recorded before spec 1.4', () => {
+    useEventStore.getState().ingestDecision(makeDecision('d-old'))
+    render(<OperatorActionPanel />)
+    expect(screen.queryByTestId('selection-basis')).not.toBeInTheDocument()
+  })
+})

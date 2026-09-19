@@ -230,6 +230,25 @@ class Anomaly(_Event):
     payload: dict[str, Any] = Field(default_factory=dict)
 
 
+class KBRef(BaseModel):
+    """Provenance of the knowledge base an attribution was reasoned against.
+
+    Stamped on every published ``Attribution`` (docs/INTERFACE-SPEC.md §5.3).
+    ``path`` is the knowledge-base file as configured (``CANOPY_KB_PATH``),
+    ``resolved`` its absolute path and ``sha256`` the digest of the file
+    bytes; a knowledge base built in memory has neither path and hashes the
+    canonical JSON of its entries. ``actor_entry_count`` counts every entry
+    other than the uncertainty anchor; when it is zero the attrib stage
+    withholds any named actor at publish.
+    """
+
+    path: str | None = None
+    resolved: str | None = None
+    sha256: str = Field(pattern=r"^[0-9a-f]{64}$")
+    entry_count: int = Field(ge=0)
+    actor_entry_count: int = Field(ge=0)
+
+
 class Attribution(_Event):
     """Attribution assessment for an anomaly cluster."""
 
@@ -240,6 +259,9 @@ class Attribution(_Event):
     evidence: list[str] = Field(default_factory=list)
     predicted_next: str | None = None
     kb_citations: list[str] = Field(default_factory=list)
+    # Which knowledge base the citations resolve against (spec §5.3). Set by
+    # the attrib stage at publish; optional so fixtures predating it stay valid.
+    kb_ref: KBRef | None = None
     source_signal_ids: list[str] = Field(default_factory=list)
     # MEGALITH three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so
     # pre-existing scenarios and fixtures stay valid.
@@ -309,6 +331,13 @@ class Decision(_Event):
     # Mirrors the revision of the attribution the decision was made for; the
     # decision id is stable across revisions (wave 3A).
     revision: int = 0
+    # Bounded response (docs/INTERFACE-SPEC.md §6, spec 1.4): the actions this
+    # decision was legitimately drawn from and why that set applied, one of the
+    # closed vocabulary in ``canopy.services.decide.SELECTION_BASES``. Set by the
+    # decide stage on every published decision, after the gate; ``None`` only
+    # on decisions recorded before 1.4, so nothing serialises for old data.
+    selectable_set: list[Action] | None = None
+    selection_basis: str | None = None
 
 
 class Recommendation(BaseModel):

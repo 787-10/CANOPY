@@ -78,3 +78,26 @@ describe('summary cards', () => {
     expect(screen.getByRole('link', { name: /All 3 signals/ })).toHaveAttribute('href', '/signals')
   })
 })
+
+describe('DecisionSummaryCard — bounded response (spec 1.4)', () => {
+  it('shows how many options the action was selected from and the basis, hidden in capture mode', () => {
+    const decision = makeDecision('dec-sel', {
+      action: 'passive_defense',
+      authority: 'local',
+      target: 'SIM-01',
+      selectable_set: ['passive_defense', 'threat_warning', 'sda_tasking', 'active_defense_escort', 'space_link_interdiction_request'],
+      selection_basis: 'model-within-set',
+    })
+    render(<DecisionSummaryCard decision={decision} />)
+    const line = screen.getByTestId('summary-selection')
+    expect(line).toHaveTextContent('Selected from 5 options · model choice within the approved set')
+    expect(line).not.toHaveTextContent('Passive defense,')
+    expect(line).toHaveClass('summary-card__text--muted')
+    expect(line).toHaveAttribute('data-capture-hide')
+  })
+
+  it('renders no selection line when the decision carries neither field', () => {
+    render(<DecisionSummaryCard decision={makeDecision('dec-old', { action: 'threat_warning', authority: 'local' })} />)
+    expect(screen.queryByTestId('summary-selection')).not.toBeInTheDocument()
+  })
+})

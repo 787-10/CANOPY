@@ -28,6 +28,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('useCanopySocket', () => {
@@ -35,6 +36,7 @@ describe('useCanopySocket', () => {
     const { result } = renderHook(() => useCanopySocket(TEST_URL))
 
     expect(MockWebSocket.instances).toHaveLength(1)
+    // No deploy-time token: the URL is used exactly as given.
     expect(MockWebSocket.last?.url).toBe(TEST_URL)
 
     expect(result.current.isConnected).toBe(false)
@@ -45,6 +47,14 @@ describe('useCanopySocket', () => {
     expect(result.current.decisions).toEqual([])
     expect(result.current.uiEvents).toEqual([])
     expect(result.current.traces).toEqual([])
+  })
+
+  it('appends the deploy-time token, URL-encoded, when the console carries one (C11)', () => {
+    vi.stubEnv('VITE_CANOPY_API_TOKEN', 'tok en')
+    renderHook(() => useCanopySocket(TEST_URL))
+
+    expect(MockWebSocket.instances).toHaveLength(1)
+    expect(MockWebSocket.last?.url).toBe(`${TEST_URL}?token=tok%20en`)
   })
 
   it('does not construct a WebSocket when url is null', () => {

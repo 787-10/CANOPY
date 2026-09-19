@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { wsUrl, wsUrlWithToken } from '../lib/gateway'
 import { useEventStore } from '../store/eventStore'
 import type {
   Anomaly,
@@ -12,14 +13,10 @@ import type {
   UIEvent,
 } from '../types/canopy'
 
-export const MOCK_URL: string | null = null
-// Backend gateway exposes /ws (see canopy/api/__init__.py). The earlier
-// /ws/brigade URL pointed at a route that doesn't exist, so the socket
-// never connected and everything fell back to the local demo stream.
-const DEV_BRIDGE_URL = 'ws://127.0.0.1:8000/ws'
-const configuredUrl = import.meta.env.VITE_CANOPY_WS_URL?.trim()
-const DEFAULT_URL: string | null =
-  configuredUrl || (import.meta.env.DEV ? DEV_BRIDGE_URL : MOCK_URL)
+// Where the socket goes is decided in one place, src/lib/gateway.ts:
+// VITE_CANOPY_WS_URL, else the gateway's /ws on 127.0.0.1:8000 in
+// development, else no socket at all.
+const DEFAULT_URL: string | null = wsUrl()
 
 const initialState: CanopySocketState = {
   signals: [],
@@ -152,7 +149,10 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
     }
 
     setConnection('connecting')
-    const socket = new WebSocket(url)
+    // The deploy-time token rides in the query string: a browser cannot set
+    // headers on a WebSocket handshake (docs/C2-API.md section 1). With no
+    // token configured the URL is used exactly as given.
+    const socket = new WebSocket(wsUrlWithToken(url))
 
     socket.addEventListener('open', () => {
       setConnection('live')

@@ -28,6 +28,7 @@ beforeEach(() => {
 
 afterEach(() => {
   vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
 })
 
 describe('demo runs', () => {
@@ -80,6 +81,22 @@ describe('demo runs', () => {
     // A second effect run finds nothing pending and does not start the run twice.
     expect(await startPendingReplay({ fetchImpl, apiUrl: 'http://gw:8000' })).toBeNull()
     expect(fetchImpl).toHaveBeenCalledTimes(1)
+  })
+
+  it('carries the deploy-time bearer token on the reset and the replay (C11)', async () => {
+    vi.stubEnv('VITE_CANOPY_API_TOKEN', 'deploy-secret')
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse())
+    await startDemoRun('A', { fetchImpl, navigate: vi.fn(), apiUrl: 'http://gw:8000' })
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://gw:8000/reset')
+    expect(fetchImpl.mock.calls[0][1]).toMatchObject({
+      method: 'POST',
+      headers: { Authorization: 'Bearer deploy-secret' },
+    })
+    await startPendingReplay({ fetchImpl, apiUrl: 'http://gw:8000' })
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      'http://gw:8000/scenarios/megalith_link_margin_a.jsonl/replay?speed=20&max_delay_s=6',
+      { method: 'POST', headers: { Authorization: 'Bearer deploy-secret' } },
+    )
   })
 
   it('startPendingReplay throws on a non-2xx gateway response', async () => {

@@ -35,6 +35,7 @@ from canopy.services.orbit import (
 )
 from canopy.services.schemas.events import (
     ACTION_AUTHORITY,
+    SELECTABLE_ACTIONS,
     Action,
     Anomaly,
     Attribution,
@@ -48,8 +49,14 @@ from canopy.services.traces import Tracer
 log = logging.getLogger(__name__)
 
 __all__ = [
+    "DEFENSIVE_ACTIONS",
     "REASON_VERDICT_HOSTILE",
     "REASON_VERDICT_UNKNOWN",
+    "SELECTION_BASES",
+    "SELECTION_GATE_WITHHELD_PREFIX",
+    "SELECTION_MODEL_OUTSIDE_SET_REPAIRED",
+    "SELECTION_MODEL_WITHIN_SET",
+    "SELECTION_RECOVERY_ROUTED",
     "DecideService",
     "Gate",
     "GateContext",
@@ -85,6 +92,46 @@ _DECISION_ID_CACHE_SIZE = 256
 DEFAULT_GATE_LOOKBACK_S = 600.0
 
 RECOVERY_ACTION: Action = "recovery_recommendation"
+
+# ---- Bounded response (docs/INTERFACE-SPEC.md §6, spec 1.4) ------------------
+#
+# Every published decision names the set of actions it was legitimately drawn
+# from (``Decision.selectable_set``) and why that set applied
+# (``Decision.selection_basis``), so the model's choice is auditable. These
+# fields never change which action is chosen; rule-based selection is a later
+# item. The basis is one of a closed vocabulary:
+#
+#   recovery-routed              the §6 rule applied (internal or natural verdict
+#                                with a recommended_recovery): the set is the
+#                                routed action alone, whatever the model said.
+#   model-within-set             no recovery applies and the model chose from the
+#                                defensive menu (SELECTABLE_ACTIONS without
+#                                recovery_recommendation).
+#   model-outside-set-repaired   the model chose off the menu and the decide stage
+#                                repaired it without a gate block (a recovery with
+#                                no block, downgraded to threat_warning).
+#   gate-withheld:<reason_code>  the gate blocked (§7): the set is the gate's
+#                                replacement, threat_warning, and the reason is the
+#                                one in the ``[gate:…]`` rationale prefix.
+
+SELECTION_RECOVERY_ROUTED = "recovery-routed"
+SELECTION_MODEL_WITHIN_SET = "model-within-set"
+SELECTION_MODEL_OUTSIDE_SET_REPAIRED = "model-outside-set-repaired"
+SELECTION_GATE_WITHHELD_PREFIX = "gate-withheld:"
+
+SELECTION_BASES: tuple[str, ...] = (
+    SELECTION_RECOVERY_ROUTED,
+    SELECTION_MODEL_WITHIN_SET,
+    SELECTION_MODEL_OUTSIDE_SET_REPAIRED,
+    f"{SELECTION_GATE_WITHHELD_PREFIX}<reason_code>",
+)
+
+# The defensive menu: what the model may pick when no recovery is routed. A
+# recovery_recommendation is selectable only with a block (§6 invariants), so
+# it is not on this menu. Menu order is SELECTABLE_ACTIONS order.
+DEFENSIVE_ACTIONS: tuple[Action, ...] = tuple(
+    action for action in SELECTABLE_ACTIONS if action != RECOVERY_ACTION
+)
 
 # ---- Withheld recovery (docs/INTERFACE-SPEC.md §6, wave 4B) -----------------
 #
@@ -183,6 +230,9 @@ class DecideService:
        the hostile or unknown verdict) and a warn trace
        ``recovery withheld: <action_id>: <reason_code>`` is emitted. The
        block path of the gate is unchanged; this only annotates.
+    6. **Bounded response** (spec §6, 1.4). Last, ``selectable_set`` and
+       ``selection_basis`` record the menu the published action was drawn
+       from and why (:data:`SELECTION_BASES`). Never changes the action.
 
     Revisions (wave 3A). A provisional attribution and every reasoning-lane
     revision of it share an attribution id; the decisions made for them share
@@ -373,6 +423,7 @@ class DecideService:
                     event.id,
                 )
                 continue
+            model_action = decision.action
             decision = decision.model_copy(
                 update={
                     "id": self._shared_decision_id(event, decision),
@@ -384,6 +435,9 @@ class DecideService:
             decision = await self._validate_routing(decision, event)
             decision = await self._apply_gate(decision, event, cluster)
             decision = await self._annotate_withheld(decision, event, cluster)
+            decision = self._annotate_selection(
+                decision, model_action=model_action, recovery=recovery
+            )
             t0 = self._timing[0] if self._timing is not None else None
             if self._tracer is not None and t0 is not None:
                 self._tracer.mark(decision.id, t0)
@@ -664,6 +718,51 @@ class DecideService:
             context_anomaly_ids=[a.id for a in ctx.anomalies],
         )
         return annotated
+
+    # ---- Bounded response (spec §6, 1.4) ----------------------------------------
+
+    @staticmethod
+    def _gate_reason_of(decision: Decision) -> str | None:
+        """The reason code of a gate block, read from the §7 rationale prefix."""
+        rationale = decision.rationale
+        if not rationale.startswith("[gate:"):
+            return None
+        end = rationale.find("]")
+        if end <= len("[gate:"):
+            return None
+        return rationale[len("[gate:") : end].strip() or None
+
+    @staticmethod
+    def _annotate_selection(
+        decision: Decision, *, model_action: str, recovery: RecoveryContext | None
+    ) -> Decision:
+        """Set ``selectable_set`` and ``selection_basis`` (spec §6, 1.4).
+
+        Runs last, after the gate and the withheld annotation, on every
+        revision, and never changes the action. The set is the one the
+        published action was legitimately drawn from: the gate's replacement
+        when it blocked; the routed recovery when the §6 rule applied; the
+        defensive menu otherwise, the basis saying whether the model's own
+        choice (``model_action``, what the client returned) was on it.
+        """
+        gate_reason = DecideService._gate_reason_of(decision)
+        selectable: list[Action]
+        if gate_reason is not None:
+            selectable = [GATE_DOWNGRADE_ACTION]
+            basis = f"{SELECTION_GATE_WITHHELD_PREFIX}{gate_reason}"
+        elif recovery is not None:
+            selectable = [RECOVERY_ACTION]
+            basis = SELECTION_RECOVERY_ROUTED
+        else:
+            selectable = list(DEFENSIVE_ACTIONS)
+            basis = (
+                SELECTION_MODEL_WITHIN_SET
+                if model_action in DEFENSIVE_ACTIONS
+                else SELECTION_MODEL_OUTSIDE_SET_REPAIRED
+            )
+        return decision.model_copy(
+            update={"selectable_set": selectable, "selection_basis": basis}
+        )
 
     @staticmethod
     def _repair_authority(decision: Decision, expected: Authority, *, note: str) -> Decision:

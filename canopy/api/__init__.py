@@ -351,6 +351,9 @@ def create_app(
             "status": "ok",
             "llm": engine.llm.__class__.__name__ if engine else None,
             "kb_entries": len(engine.kb) if engine else 0,
+            # Which knowledge base is loaded (docs/C2-API.md §7): path as
+            # configured, absolute path, SHA-256 of the file, entry counts.
+            "kb": engine.kb.source.model_dump(mode="json") if engine else None,
             "clients": len(getattr(app.state, "clients", ())),
             "osint_cluster": osint,
         }

@@ -111,6 +111,21 @@ export type Anomaly = {
   payload: Record<string, unknown>
 }
 
+// Knowledge-base provenance (docs/INTERFACE-SPEC.md §5.3). Mirrors the
+// Python `KBRef`: the knowledge-base file an attribution's citations resolve
+// against. The same record is served by `GET /health` (`kb`).
+export type KBRef = {
+  /** `CANOPY_KB_PATH` as configured; null for a knowledge base built in memory. */
+  path: string | null
+  /** Absolute form of `path`; null for an in-memory knowledge base. */
+  resolved: string | null
+  /** Hex SHA-256 of the file bytes (of the canonical entry JSON when in memory). */
+  sha256: string
+  entry_count: number
+  /** Entries other than the uncertainty anchor; 0 means no actor may be named. */
+  actor_entry_count: number
+}
+
 export type Attribution = {
   id: string
   ts: string
@@ -121,6 +136,9 @@ export type Attribution = {
   evidence: string[]
   predicted_next: string | null
   kb_citations: string[]
+  // Knowledge-base provenance (1.4): the engine sets it on every published
+  // attribution; optional so fixtures predating it stay valid.
+  kb_ref?: KBRef | null
   source_signal_ids: string[]
   // Three-way verdict (docs/INTERFACE-SPEC.md §5). Optional so pre-existing
   // fixtures and scenarios stay valid; the engine serializes unset values as
@@ -186,6 +204,13 @@ export type Decision = {
   // Mirrors the revision of the attribution this decision was made for; the
   // decision id is stable across revisions (wave 3A).
   revision?: number
+  // Bounded response (docs/INTERFACE-SPEC.md §6, spec 1.4): the actions this
+  // decision was legitimately drawn from and why that set applied. The basis
+  // is one of `recovery-routed`, `model-within-set`,
+  // `model-outside-set-repaired`, `gate-withheld:<reason_code>`. Null or
+  // absent on decisions recorded before 1.4.
+  selectable_set?: Action[] | null
+  selection_basis?: string | null
 }
 
 export type TraceStage =
