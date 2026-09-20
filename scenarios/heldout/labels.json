@@ -588,6 +588,551 @@
         }
       ]
     },
+    "heldout-closely-spaced-hostile": {
+      "arm": "hostile",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 172.0,
+            "window_start_s": 52.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.16728972,
+            "sim_time_s": 463.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.01;external=0.96;unknown=0.03;top=uplink_interference:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.103127574,
+            "sim_time_s": 563.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.00;external=0.99;unknown=0.01;top=uplink_interference:0.98;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.100129331,
+            "sim_time_s": 702.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 8.0
+            },
+            "physics_basis": "belief:internal=0.00;external=1.00;unknown=0.00;top=uplink_interference:0.99;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.92;row=link_margin_drop;rate=step_per_interval",
+            "physics_consistency": 0.10000622,
+            "sim_time_s": 852.0,
+            "window_start_s": 394.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
+      "bus_record_ids": [
+        "heldout-closely-spaced-hostile-005",
+        "heldout-closely-spaced-hostile-006",
+        "heldout-closely-spaced-hostile-007",
+        "heldout-closely-spaced-hostile-008"
+      ],
+      "candidate_satellite_ids": [
+        "ctb://centralblue.dev/leo-science-1",
+        "ctb://centralblue.dev/leo-science-2"
+      ],
+      "cause": "uplink jamming of the primary object",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [
+        "rf_ew/rf_interference"
+      ],
+      "family": "closely_spaced",
+      "file": "heldout/closely_spaced_hostile.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": "99901",
+      "onset_note": "LEO-SCIENCE-1 onset; the sibling's onset is in sibling.onset_ts",
+      "onset_sim_time_s": 454.0,
+      "onset_ts": "2026-09-17T14:07:34Z",
+      "physics_basis": [
+        "belief:internal=0.00;external=0.99;unknown=0.01;top=uplink_interference:0.98;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.00;external=1.00;unknown=0.00;top=uplink_interference:0.99;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=0.92;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.01;external=0.96;unknown=0.03;top=uplink_interference:0.91;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval",
+        "belief:internal=0.11;external=0.79;unknown=0.10;top=uplink_interference:0.56;w_belief=0.60;shape=step;shape_support=0.25;fit_quality=1.00;row=link_margin_drop;rate=step_per_interval"
+      ],
+      "physics_consistency": [
+        0.16728972,
+        0.103127574,
+        0.100129331,
+        0.10000622
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "scoring_note": "one verdict per case (bench.scoring.select_final_attribution): the cluster covering the latest scored bus anomaly, else the unresolved attribution; per-satellite scoring is Phase 1",
+      "seed": 20260917,
+      "shape": [
+        "step"
+      ],
+      "sibling": {
+        "bus_record_ids": [],
+        "norad_cat_id": "99902",
+        "onset_ts": null,
+        "physics_consistency": [],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 185.0,
+            "window_start_s": 65.0
+          }
+        ],
+        "satellite_id": "ctb://centralblue.dev/leo-science-2",
+        "sim_identity": "ctb://sim.centralblue.dev/leo-science-2",
+        "windows": []
+      },
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": null,
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "symptomatic_satellite_ids": [
+        "ctb://centralblue.dev/leo-science-1"
+      ],
+      "unit": "dB",
+      "verdict": "hostile_external",
+      "windows": [
+        {
+          "duration_s": 400.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 450.0,
+          "role": "hostile",
+          "severity": 0.5
+        }
+      ]
+    },
+    "heldout-closely-spaced-natural": {
+      "arm": "natural",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 183.0,
+            "window_start_s": 63.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 2.5423
+            },
+            "physics_basis": "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.683340631,
+            "sim_time_s": 467.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.35;external=0.59;unknown=0.06;top=solar_radio_burst_noise:0.54;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.527865045,
+            "sim_time_s": 579.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.12;external=0.87;unknown=0.02;top=solar_radio_burst_noise:0.84;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.66;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.391016189,
+            "sim_time_s": 700.0,
+            "window_start_s": 394.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 5.5311
+            },
+            "physics_basis": "belief:internal=0.03;external=0.97;unknown=0.01;top=solar_radio_burst_noise:0.94;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.53;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.0999129826,
+            "sim_time_s": 826.0,
+            "window_start_s": 394.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
+      "bus_record_ids": [
+        "heldout-closely-spaced-natural-008",
+        "heldout-closely-spaced-natural-009",
+        "heldout-closely-spaced-natural-011",
+        "heldout-closely-spaced-natural-012"
+      ],
+      "candidate_satellite_ids": [
+        "ctb://centralblue.dev/leo-science-1",
+        "ctb://centralblue.dev/leo-science-2"
+      ],
+      "cause": "solar radio burst raising both objects' noise floors",
+      "environment_input": "rf_interference_proxy severity = radio-burst noise-floor rise",
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [
+        "rf_ew/rf_interference",
+        "space_weather/geomagnetic_storm",
+        "space_weather/solar_radio_burst"
+      ],
+      "family": "closely_spaced",
+      "file": "heldout/closely_spaced_natural.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": "99901",
+      "onset_note": "LEO-SCIENCE-1 onset; the sibling's onset is in sibling.onset_ts",
+      "onset_sim_time_s": 454.0,
+      "onset_ts": "2026-09-17T14:07:34Z",
+      "physics_basis": [
+        "belief:internal=0.03;external=0.97;unknown=0.01;top=solar_radio_burst_noise:0.94;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.53;row=link_margin_drop;rate=linear_fit",
+        "belief:internal=0.12;external=0.87;unknown=0.02;top=solar_radio_burst_noise:0.84;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.66;row=link_margin_drop;rate=slope",
+        "belief:internal=0.35;external=0.59;unknown=0.06;top=solar_radio_burst_noise:0.54;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.97;row=link_margin_drop;rate=slope",
+        "belief:internal=0.57;external=0.32;unknown=0.11;top=amplifier_degradation:0.49;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.86;row=link_margin_drop;rate=slope"
+      ],
+      "physics_consistency": [
+        0.683340631,
+        0.527865045,
+        0.391016189,
+        0.0999129826
+      ],
+      "satellite_id": "ctb://centralblue.dev/leo-science-1",
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "scoring_note": "one verdict per case (bench.scoring.select_final_attribution): the cluster covering the latest scored bus anomaly, else the unresolved attribution; per-satellite scoring is Phase 1",
+      "seed": 20260917,
+      "shape": [
+        "drift",
+        "ramp",
+        "unknown"
+      ],
+      "sibling": {
+        "bus_record_ids": [
+          "heldout-closely-spaced-natural-007",
+          "heldout-closely-spaced-natural-010"
+        ],
+        "norad_cat_id": "99902",
+        "onset_ts": "2026-09-17T14:07:19Z",
+        "physics_consistency": [
+          0.733000487,
+          0.616301455
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 168.0,
+            "window_start_s": 48.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 2.161
+            },
+            "physics_basis": "belief:internal=0.66;external=0.23;unknown=0.11;top=amplifier_degradation:0.56;w_belief=0.60;shape=drift;shape_support=0.85;fit_quality=0.82;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.733000487,
+            "sim_time_s": 446.0,
+            "window_start_s": 379.0
+          },
+          {
+            "event_type": "link_margin_drop",
+            "onboard_context": {
+              "noise_floor_delta_db": 4.7014
+            },
+            "physics_basis": "belief:internal=0.49;external=0.43;unknown=0.08;top=amplifier_degradation:0.49;w_belief=0.60;shape=ramp;shape_support=0.80;fit_quality=0.98;row=link_margin_drop;rate=slope",
+            "physics_consistency": 0.616301455,
+            "sim_time_s": 579.0,
+            "window_start_s": 379.0
+          }
+        ],
+        "satellite_id": "ctb://centralblue.dev/leo-science-2",
+        "sim_identity": "ctb://sim.centralblue.dev/leo-science-2",
+        "windows": [
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 405.0,
+            "role": "environment",
+            "severity": 0.046539
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 435.0,
+            "role": "environment",
+            "severity": 0.135062
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 465.0,
+            "role": "environment",
+            "severity": 0.210364
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 495.0,
+            "role": "environment",
+            "severity": 0.265074
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 525.0,
+            "role": "environment",
+            "severity": 0.293837
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 555.0,
+            "role": "environment",
+            "severity": 0.293837
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 585.0,
+            "role": "environment",
+            "severity": 0.265074
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 615.0,
+            "role": "environment",
+            "severity": 0.210364
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 645.0,
+            "role": "environment",
+            "severity": 0.135062
+          },
+          {
+            "duration_s": 30.0,
+            "kind": "rf_interference_proxy",
+            "onset_s": 675.0,
+            "role": "environment",
+            "severity": 0.046539
+          }
+        ]
+      },
+      "sim_identity": "ctb://sim.centralblue.dev/leo-science-1",
+      "storm_window": [
+        "2026-09-17T13:56:34Z",
+        "2026-09-17T14:14:34Z"
+      ],
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "symptomatic_satellite_ids": [
+        "ctb://centralblue.dev/leo-science-1",
+        "ctb://centralblue.dev/leo-science-2"
+      ],
+      "unit": "dB",
+      "verdict": "natural_external",
+      "windows": [
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 420.0,
+          "role": "environment",
+          "severity": 0.054752
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 450.0,
+          "role": "environment",
+          "severity": 0.158897
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 480.0,
+          "role": "environment",
+          "severity": 0.247487
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 510.0,
+          "role": "environment",
+          "severity": 0.311852
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 540.0,
+          "role": "environment",
+          "severity": 0.345691
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 570.0,
+          "role": "environment",
+          "severity": 0.345691
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 600.0,
+          "role": "environment",
+          "severity": 0.311852
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 630.0,
+          "role": "environment",
+          "severity": 0.247487
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 660.0,
+          "role": "environment",
+          "severity": 0.158897
+        },
+        {
+          "duration_s": 30.0,
+          "kind": "rf_interference_proxy",
+          "onset_s": 690.0,
+          "role": "environment",
+          "severity": 0.054752
+        }
+      ]
+    },
+    "heldout-closely-spaced-unknown": {
+      "arm": "unknown",
+      "belief": {
+        "family": "link_margin_drop",
+        "onboard_keys": [
+          "noise_floor_delta_db"
+        ],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 226.0,
+            "window_start_s": 106.0
+          }
+        ],
+        "relations": {
+          "noise_floor_delta_db": "receiver noise floor above its quiet baseline as the onboard AGC reports it; the link model's noise_floor_delta_db = 16 dB x interference severity, zero under amplifier degradation"
+        },
+        "threaded": true
+      },
+      "bus_record_ids": [],
+      "candidate_satellite_ids": [
+        "ctb://centralblue.dev/leo-science-1",
+        "ctb://centralblue.dev/leo-science-2"
+      ],
+      "cause": "unresolved emitter bearing: neither object symptomatic",
+      "environment_input": null,
+      "epoch_utc": "2026-09-17T14:00:00Z",
+      "event_type": "link_margin_drop",
+      "external_signals": [
+        "rf_ew/rf_interference"
+      ],
+      "family": "closely_spaced",
+      "file": "heldout/closely_spaced_unknown.jsonl",
+      "measurement": "link_margin_db",
+      "model": "rf_link",
+      "norad_cat_id": null,
+      "onset_note": "no bus onset; the cue time anchors the episode",
+      "onset_sim_time_s": 479.0,
+      "onset_ts": "2026-09-17T14:07:59Z",
+      "physics_basis": [],
+      "physics_consistency": [],
+      "satellite_id": null,
+      "scorer": "megalith.diagnosis.scorer:BeliefShapeScorer",
+      "scoring_note": "one verdict per case (bench.scoring.select_final_attribution): the cluster covering the latest scored bus anomaly, else the unresolved attribution; per-satellite scoring is Phase 1",
+      "seed": 20260917,
+      "shape": [],
+      "sibling": {
+        "bus_record_ids": [],
+        "norad_cat_id": "99902",
+        "onset_ts": null,
+        "physics_consistency": [],
+        "records": [
+          {
+            "event_type": "nominal",
+            "onboard_context": {
+              "noise_floor_delta_db": 0.0
+            },
+            "physics_basis": "belief:internal=0.59;external=0.26;unknown=0.15;top=amplifier_degradation:0.47;w_belief=0.85;shape=unknown;shape_support=0.50;fit_quality=0.00;row=link_margin_drop;rate=linear_fit",
+            "physics_consistency": 0.577153846,
+            "sim_time_s": 186.0,
+            "window_start_s": 66.0
+          }
+        ],
+        "satellite_id": "ctb://centralblue.dev/leo-science-2",
+        "sim_identity": "ctb://sim.centralblue.dev/leo-science-2",
+        "windows": []
+      },
+      "sim_identity": null,
+      "storm_window": null,
+      "subsystem": "comms",
+      "symptom": "link_margin_db_drop",
+      "symptomatic_satellite_ids": [],
+      "unit": "dB",
+      "verdict": "unknown",
+      "windows": []
+    },
     "heldout-link-margin-hostile": {
       "arm": "hostile",
       "belief": {

@@ -217,6 +217,18 @@
           "maxLength": 160,
           "description": "Spacecraft identity, ctb://<authority>/<spacecraft-id>. Primary correlation key when present."
         },
+        "candidate_satellite_ids": {
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          },
+          "description": "Closely-spaced objects: the identities a cue could belong to when the sensor cannot resolve one. Consulted only when satellite_id is absent (docs/INTERFACE-SPEC.md 5.4)."
+        },
         "summary": {
           "type": "string",
           "minLength": 1,

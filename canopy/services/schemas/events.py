@@ -263,6 +263,12 @@ class Payload(BaseModel):
     beat: str | None = None
     asset: str | None = None
     satellite_id: str | None = None
+    # Closely-spaced objects (docs/INTERFACE-SPEC.md §5.4, spec 1.4): the
+    # flight identities a cue could belong to when the sensor cannot resolve
+    # one (an emitter bearing consistent with two objects on the same pass).
+    # Consulted only when ``satellite_id`` is absent; ``None`` for every
+    # publisher that does not use it, so nothing serialises for existing data.
+    candidate_satellite_ids: list[str] | None = None
     observables: dict[str, Any] | None = None
 
 
@@ -355,6 +361,10 @@ class Attribution(_Event):
     verdict_basis: VerdictBasis | None = None
     verdict_evidence: list[str] = Field(default_factory=list)
     satellite_id: str | None = None
+    # Closely-spaced objects (spec §5.4, 1.4): set only on an attribution the
+    # engine could not key to one satellite, from the candidate sets of the
+    # cues in its batch; ``None`` on every keyed attribution.
+    candidate_satellite_ids: list[str] | None = None
     # Fast lane (wave 3A): a provisional attribution is the rule lane's call,
     # published before any LLM runs; the reasoning lane republishes the same
     # id with ``provisional=False`` and ``revision`` incremented.

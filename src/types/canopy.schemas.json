@@ -171,6 +171,21 @@
             "default": null,
             "title": "Satellite Id"
           },
+          "candidate_satellite_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Candidate Satellite Ids"
+          },
           "observables": {
             "anyOf": [
               {
@@ -191,6 +206,7 @@
           "beat",
           "asset",
           "satellite_id",
+          "candidate_satellite_ids",
           "observables"
         ],
         "title": "Payload",
@@ -649,6 +665,21 @@
         "default": null,
         "title": "Satellite Id"
       },
+      "candidate_satellite_ids": {
+        "anyOf": [
+          {
+            "items": {
+              "type": "string"
+            },
+            "type": "array"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Candidate Satellite Ids"
+      },
       "provisional": {
         "default": false,
         "title": "Provisional",
@@ -678,6 +709,7 @@
       "verdict_basis",
       "verdict_evidence",
       "satellite_id",
+      "candidate_satellite_ids",
       "provisional",
       "revision"
     ],

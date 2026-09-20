@@ -63,6 +63,17 @@
     "mitre_technique": {
       "type": "string",
       "pattern": "^T[0-9]{4}(\\.[0-9]{3})?$"
+    },
+    "candidate_satellite_ids": {
+      "description": "Closely-spaced objects: the flight identities a cue is consistent with when it cannot be resolved to one satellite_id (INTERFACE-SPEC 5.4). Null or absent when the cue is resolved.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string",
+        "pattern": "^ctb://[a-z0-9.-]+/[a-z0-9-]+(?:/component/[a-z0-9-]+)?$"
+      }
     }
   }
 }

@@ -206,6 +206,48 @@ describe('VerdictPanel — absent verdict and empty states', () => {
     expect(screen.getByLabelText('KB citations')).toHaveTextContent('unresolved')
   })
 
+  it('names the candidate objects of an unresolved attribution (spec §5.4)', () => {
+    const { container } = render(
+      <VerdictPanel
+        attribution={makeAttribution('att-cs', {
+          actor: 'Unknown',
+          confidence: 0.45,
+          verdict: 'unknown',
+          physics_consistency: null,
+          verdict_basis: 'rule',
+          verdict_evidence: [],
+          evidence: ['Verdict (rule): unknown. rule 6: unknown confidence=0.30 (candidate cue unresolved among [...])'],
+          satellite_id: null,
+          candidate_satellite_ids: [SAT, 'ctb://centralblue.dev/leo-science-2'],
+        })}
+      />,
+    )
+    const chips = screen.getByTestId('verdict-candidates')
+    expect(chips).toHaveTextContent('LEO-SCIENCE-1 or LEO-SCIENCE-2, unresolved')
+    expect(
+      Array.from(chips.querySelectorAll('.verdict-panel__candidate')).map((c) => c.textContent),
+    ).toEqual(['LEO-SCIENCE-1', 'LEO-SCIENCE-2'])
+    // Hidden from captures so the layout does not shift; the subject slot says why.
+    expect(chips).toHaveAttribute('data-capture-hide')
+    expect(container.querySelector('.verdict-panel__subject')).toHaveTextContent('unresolved')
+    expect(snapshotOf(container).badge).toBe('Unknown')
+    expect(snapshotOf(container).headline).toBe('Unknown on the affected spacecraft')
+  })
+
+  it('shows no candidate row for a keyed attribution, whatever it lists', () => {
+    render(
+      <VerdictPanel
+        attribution={makeAttribution('att-keyed', {
+          verdict: 'hostile_external',
+          satellite_id: SAT,
+          candidate_satellite_ids: [SAT, 'ctb://centralblue.dev/leo-science-2'],
+        })}
+      />,
+    )
+    expect(screen.queryByTestId('verdict-candidates')).not.toBeInTheDocument()
+    expect(screen.getByText('LEO-SCIENCE-1')).toBeInTheDocument()
+  })
+
   it('treats an explicit null verdict the same as a missing one', () => {
     const { container } = render(
       <VerdictPanel

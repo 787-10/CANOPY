@@ -74,6 +74,8 @@ export type SignalPayload = {
   asset?: string
   /** `ctb://<authority>/<spacecraft-id>` (docs/INTERFACE-SPEC.md §1). */
   satellite_id?: string | null
+  /** Closely-spaced objects (§5.4): the identities a cue could belong to when it names no satellite. */
+  candidate_satellite_ids?: string[] | null
   observables?: Record<string, unknown>
   [key: string]: unknown
 }
@@ -158,6 +160,11 @@ export type Attribution = {
   verdict_basis?: VerdictBasis | null
   verdict_evidence?: string[]
   satellite_id?: string | null
+  // Closely-spaced objects (docs/INTERFACE-SPEC.md §5.4, spec 1.4): set only
+  // on an attribution the engine could not key to one satellite, from the
+  // candidate sets of the cues in its batch; the panel reads "A or B,
+  // unresolved" from it. Optional so fixtures predating it stay valid.
+  candidate_satellite_ids?: string[] | null
   // Fast lane (wave 3A). A provisional attribution is the rule lane's call,
   // published before any LLM ran; the reasoning lane republishes the SAME id
   // with `provisional: false` and a higher `revision`. The store replaces an

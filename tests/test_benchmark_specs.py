@@ -20,7 +20,7 @@ def test_registry_is_the_complete_demo_and_seed_source() -> None:
     # neither public evaluation cases nor held-out.
     demo_only = [case for case in registry.cases if case.visibility == ["demo"]]
     assert len(public) == 11
-    assert len(heldout) == 18
+    assert len(heldout) == 21
     assert len(demo_only) == 3
     assert {case.id for case in demo_only} == {
         "demo-link-margin-a",
@@ -125,7 +125,7 @@ def test_heldout_suite_selection_returns_exactly_the_heldout_ids() -> None:
     heldout = registry.suite_cases("heldout")
 
     assert {case.id for case in heldout} == expected
-    assert len(heldout) == 18
+    assert len(heldout) == 21
     assert [case.id for case in heldout] == sorted(case.id for case in heldout)
     assert all(case.expected.verdict is not None for case in heldout)
     assert registry.heldout_cases() == heldout

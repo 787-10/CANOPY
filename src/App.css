@@ -1711,6 +1711,38 @@
   gap: 10px;
 }
 
+/* Closely-spaced objects (spec §5.4): "A or B, unresolved" chips under the
+   header when the attribution has no satellite. Hidden in capture mode. */
+.verdict-panel__candidates {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+}
+
+.verdict-panel__candidate-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.verdict-panel__candidate {
+  border: 1px dashed var(--verdict-line, var(--border-strong));
+  border-radius: 2px;
+  padding: 2px 8px;
+  color: var(--text-primary);
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdict-panel__candidate-join,
+.verdict-panel__candidate-note {
+  letter-spacing: 0.04em;
+}
+
 .verdict-panel__badge {
   border: 1px solid var(--verdict-line);
   border-radius: 2px;

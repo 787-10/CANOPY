@@ -19,6 +19,10 @@ ROOT = Path(__file__).resolve().parent.parent
 HELDOUT_DIR = ROOT / "scenarios" / "heldout"
 ORACLE_SOURCE = "megalith-scenario-oracle"
 ARMS = ("internal", "natural", "hostile")
+# The closely-spaced row (MEGALITH pre-submission C10, spec 1.4 §5.4) has its
+# own three arms: two objects on one pass and a cue that fits either.
+CLOSELY_SPACED_FAMILY = "closely_spaced"
+CLOSELY_SPACED_ARMS = ("hostile", "unknown", "natural")
 
 
 def _heldout_cases():
@@ -26,10 +30,10 @@ def _heldout_cases():
     return [case for case in registry.cases if "heldout" in case.visibility]
 
 
-def test_registry_loads_eighteen_heldout_cases_outside_demo_and_benchmark() -> None:
+def test_registry_loads_twenty_one_heldout_cases_outside_demo_and_benchmark() -> None:
     registry = load_scenario_registry()
     heldout = _heldout_cases()
-    assert len(heldout) == 18
+    assert len(heldout) == 21
     assert {case.file for case in heldout} == {
         f"heldout/{path.name}" for path in HELDOUT_DIR.glob("*.jsonl")
     }
@@ -43,12 +47,13 @@ def test_registry_loads_eighteen_heldout_cases_outside_demo_and_benchmark() -> N
         assert case.expected.verdict is not None
         assert case.scenario_path.exists()
         assert case.scenario_path.parent == HELDOUT_DIR.resolve()
-    # Six families, three arms each.
+    # Six symptom families with three arms each, plus the closely-spaced row.
     families = {case.family for case in heldout}
-    assert len(families) == 6
+    assert len(families) == 7 and CLOSELY_SPACED_FAMILY in families
     for family in families:
-        arms = {next(tag for tag in case.tags if tag in ARMS) for case in heldout if case.family == family}
-        assert arms == set(ARMS), family
+        wanted = CLOSELY_SPACED_ARMS if family == CLOSELY_SPACED_FAMILY else ARMS
+        arms = {next(tag for tag in case.tags if tag in wanted) for case in heldout if case.family == family}
+        assert arms == set(wanted), family
 
 
 def test_oracle_records_are_never_model_inputs() -> None:
@@ -70,9 +75,14 @@ def test_heldout_scenario_replays_through_engine_with_stub(case) -> None:
     assert not trial.errors, trial.errors
     assert trial.signals
     assert all(signal.source != ORACLE_SOURCE for signal in trial.signals)
-    assert any(anomaly.kind.startswith("bus_") for anomaly in trial.anomalies), [
-        anomaly.kind for anomaly in trial.anomalies
-    ]
+    if case.expected.verdict == "unknown":
+        # The closely-spaced row's unresolved arm (spec 1.4 §5.4): two nominal
+        # buses and one cue that fits either, so no bus anomaly by design.
+        assert [anomaly.kind for anomaly in trial.anomalies] == ["rf_anomaly"]
+    else:
+        assert any(anomaly.kind.startswith("bus_") for anomaly in trial.anomalies), [
+            anomaly.kind for anomaly in trial.anomalies
+        ]
     assert trial.attributions
     assert trial.decisions
     satellite = trial.signals[0].payload.satellite_id or next(

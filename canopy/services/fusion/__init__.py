@@ -262,6 +262,10 @@ class _Correlation:
     # The remembered signal's marking (spec §1.1): an anomaly that correlates
     # with this signal carries at least this marking.
     marking: str = MARKING_UNCLASSIFIED
+    # Closely-spaced objects (spec §5.4): the identities a cue without a
+    # ``satellite_id`` could belong to. A bus-health signal on any of them is
+    # keyed to this cue, in either arrival order. Empty for every other signal.
+    candidates: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -319,6 +323,17 @@ def _clamp01(x: float) -> float:
 
 def _ts_seconds(signal: Signal) -> float:
     return signal.ts.timestamp()
+
+
+def _candidates(signal: Signal) -> tuple[str, ...]:
+    """The candidate identities of a cue that names no satellite (spec §5.4).
+
+    Empty when ``payload.satellite_id`` is set: a resolved cue is keyed on it
+    and the candidate list, if any, is informational only.
+    """
+    if signal.payload.satellite_id:
+        return ()
+    return tuple(dict.fromkeys(c for c in signal.payload.candidate_satellite_ids or () if c))
 
 
 def _satellite_name(signal: Signal) -> str:
@@ -380,6 +395,11 @@ def _payload_enrichment(signal: Signal, kind: str) -> dict[str, Any]:
     out: dict[str, Any] = {}
     if signal.payload.satellite_id:
         out["satellite_id"] = signal.payload.satellite_id
+    candidates = _candidates(signal)
+    if candidates:
+        # Spec §5.4: the attrib stage and the rule lane resolve the cue among
+        # these; copied so no stage joins back to the signal.
+        out["candidate_satellite_ids"] = list(candidates)
     if kind.startswith("bus_"):
         names: tuple[str, ...] = _BUS_PAYLOAD_FIELDS
     elif kind.startswith("space_weather_"):
@@ -444,6 +464,14 @@ class FusionService:
     global: a ``space_weather_*`` signal correlates with any ``bus_*`` signal
     inside the window regardless of satellite key, in either order, and is
     listed the same way but never boosts severity.
+
+    **Closely-spaced objects** (spec §5.4). A hostile-domain cue with no
+    ``satellite_id`` but a ``payload.candidate_satellite_ids`` list is keyed
+    to a ``bus_*`` signal on *any* candidate, in either arrival order, and
+    the candidate list is copied to its anomaly payload. Which candidate the
+    cue counts for is the attrib stage's and the rule lane's call, not
+    fusion's. A cue that names neither a satellite nor candidates behaves
+    exactly as before.
 
     **Window rule** (``windows``: ``domain -> (look-back s, look-ahead s)``,
     spec §2; overrides merge over ``DEFAULT_WINDOWS``). A new signal at time
@@ -597,6 +625,7 @@ class FusionService:
             satellite=sat,
             cue=cue,
             marking=signal.marking,
+            candidates=_candidates(signal),
         )
 
     def _window_for(self, domain: str) -> tuple[int, int]:
@@ -641,8 +670,14 @@ class FusionService:
     def _cross_domain_matches(
         self, signal: Signal, *, now: float, sat: str
     ) -> list[_Match]:
-        """Bus-health correlates for a new signal (see the class docstring)."""
+        """Bus-health correlates for a new signal (see the class docstring).
+
+        A hostile-domain cue that names no satellite but a candidate set
+        (spec §5.4) is keyed to a bus-health signal on any candidate, in
+        either arrival order; a cue with neither behaves as before.
+        """
         domain = signal.domain
+        candidates = _candidates(signal)
         matches: list[_Match] = []
         for c in self._state.recent_correlations:
             if c.signal_id == signal.id:
@@ -650,7 +685,9 @@ class FusionService:
             if domain == "bus_health":
                 if c.domain == "space_weather":
                     keyed = False
-                elif c.domain in BUS_CORRELATION_DOMAINS and c.satellite == sat:
+                elif c.domain in BUS_CORRELATION_DOMAINS and (
+                    c.satellite == sat or sat in c.candidates
+                ):
                     keyed = True
                 else:
                     continue
@@ -659,7 +696,9 @@ class FusionService:
                     continue
                 keyed = False
             elif domain in BUS_CORRELATION_DOMAINS:
-                if c.domain != "bus_health" or c.satellite != sat:
+                if c.domain != "bus_health" or (
+                    c.satellite != sat and c.satellite not in candidates
+                ):
                     continue
                 keyed = True
             else:

@@ -87,7 +87,7 @@ def test_benchmark_provenance_hashes_the_suite_it_is_given() -> None:
     public = benchmark_provenance()
     provenance = benchmark_provenance(heldout)
 
-    assert len(provenance["scenario_hashes"]) == 18
+    assert len(provenance["scenario_hashes"]) == 21
     assert all(name.startswith("scenarios/heldout/") for name in provenance["scenario_hashes"])
     assert provenance["suite_hash"] != public["suite_hash"]
     assert benchmark_provenance(registry.benchmark_cases())["suite_hash"] == public["suite_hash"]

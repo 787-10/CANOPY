@@ -43,6 +43,9 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
   const evidence = attribution?.evidence ?? []
   const citations = attribution?.kb_citations ?? []
   const satelliteId = attribution?.satellite_id ?? null
+  // Closely-spaced objects (docs/INTERFACE-SPEC.md §5.4): an attribution the
+  // engine could not key to one satellite names the objects it could belong to.
+  const candidates = satelliteId ? [] : (attribution?.candidate_satellite_ids ?? [])
   const provisional = attribution?.provisional === true
   const revision = attribution?.revision ?? 0
 
@@ -67,10 +70,32 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
           {satelliteId
             ? spacecraftDisplayName(satelliteId)
             : attribution
-              ? 'attribution lock'
+              ? candidates.length
+                ? 'unresolved'
+                : 'attribution lock'
               : 'standing by'}
         </span>
       </div>
+
+      {candidates.length ? (
+        <div
+          className="verdict-panel__candidates"
+          data-testid="verdict-candidates"
+          data-capture-hide
+          aria-label="Candidate objects"
+          title="The cue fits more than one object and no bus symptom singled one out; the verdict is not keyed to a satellite."
+        >
+          {candidates.map((id, index) => (
+            <span key={id} className="verdict-panel__candidate-group">
+              {index > 0 ? (
+                <span className="verdict-panel__candidate-join">{' or '}</span>
+              ) : null}
+              <span className="verdict-panel__candidate">{spacecraftDisplayName(id)}</span>
+            </span>
+          ))}
+          <span className="verdict-panel__candidate-note">, unresolved</span>
+        </div>
+      ) : null}
 
       <div className="verdict-panel__badge-row">
         <span

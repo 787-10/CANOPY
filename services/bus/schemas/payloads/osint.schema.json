@@ -48,6 +48,17 @@
         "maxLength": 80
       },
       "uniqueItems": true
+    },
+    "candidate_satellite_ids": {
+      "description": "Closely-spaced objects: the flight identities a cue is consistent with when it cannot be resolved to one satellite_id (INTERFACE-SPEC 5.4). Null or absent when the cue is resolved.",
+      "type": [
+        "array",
+        "null"
+      ],
+      "items": {
+        "type": "string",
+        "pattern": "^ctb://[a-z0-9.-]+/[a-z0-9-]+(?:/component/[a-z0-9-]+)?$"
+      }
     }
   }
 }

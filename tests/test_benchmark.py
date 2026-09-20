@@ -243,13 +243,18 @@ def test_heldout_labels_cover_the_paired_suite_and_stay_out_of_public():
     from bench.run import _heldout_labels, suite_labels
 
     heldout = _heldout_labels()
-    assert len(heldout) == 18
+    assert len(heldout) == 21
     assert all(label["case_id"].startswith("heldout-") for label in heldout)
+    # The closely-spaced row's middle arm labels ``unknown`` (spec 1.4 §5.4).
     assert {label["expected_verdict"] for label in heldout} == {
         "internal_fault",
         "natural_external",
         "hostile_external",
+        "unknown",
     }
+    assert [label["case_id"] for label in heldout if label["expected_verdict"] == "unknown"] == [
+        "heldout-closely-spaced-unknown"
+    ]
     assert [label["case_id"] for label in heldout] == sorted(
         label["case_id"] for label in heldout
     )

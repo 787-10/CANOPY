@@ -177,6 +177,30 @@ def _satellite_of(anomaly: Anomaly) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def _candidates_of(anomaly: Anomaly) -> tuple[str, ...]:
+    """The candidate identities of a cue that names no satellite (spec §5.4).
+
+    Empty when the anomaly carries a ``satellite_id``: a keyed anomaly is
+    resolved and its candidate list, if any, is informational only.
+    """
+    if _satellite_of(anomaly) is not None:
+        return ()
+    value = anomaly.payload.get("candidate_satellite_ids")
+    if not isinstance(value, (list, tuple)):
+        return ()
+    return tuple(dict.fromkeys(c for c in value if isinstance(c, str) and c))
+
+
+def _batch_candidates(anomalies: Sequence[Anomaly]) -> list[str] | None:
+    """The candidate set an unresolved batch's attribution carries (spec §5.4).
+
+    The sorted union of the candidate sets of the batch's cues; ``None`` when
+    no cue names any, so nothing serialises for batches predating the field.
+    """
+    union = {c for a in anomalies for c in _candidates_of(a)}
+    return sorted(union) if union else None
+
+
 def _context_end(anomaly: Anomaly) -> datetime:
     """When an anomaly stops being recent context.
 
@@ -310,6 +334,13 @@ class AttribService:
     revision; one reasoning task per satellite is in flight at any time.
     Batches without a ``satellite_id``, without a bus anomaly, or with the
     rule lane off keep the windowed, synchronous behaviour unchanged.
+
+    Closely-spaced objects (spec §5.4). A cue that names no satellite but a
+    ``candidate_satellite_ids`` set stays on the legacy path (it opens no
+    cluster and joins none); :meth:`recent_context` hands the rule lane the
+    other candidates' bus anomalies, and the attribution of an unresolved
+    batch carries the candidate set. Which candidate a cue counts for is the
+    rule lane's decision (unique symptomatic candidate in the window).
 
     ``bus_health_registry`` names the satellites that have internal-diagnosis
     telemetry. A batch on one of them with no bus anomaly in the batch or in
@@ -737,10 +768,26 @@ class AttribService:
         The identity-less bucket carries space weather (global, no
         ``satellite_id``) and legacy signals without identity; the rule
         lane decides which of those may bear on a given satellite.
+
+        Closely-spaced objects (spec §5.4): when that bucket holds a cue
+        whose candidate set names ``satellite_id`` (or any cue with
+        candidates, for an identity-less batch), the ``bus_*`` anomalies of
+        the *other* candidates are appended too. They sit in other buckets,
+        and the rule lane needs them to tell "only this candidate is
+        symptomatic" from "both are". Without such a cue the result is
+        exactly what it was before.
         """
         out = list(self._recent.get(satellite_id, ()))
         if satellite_id is not None:
             out.extend(self._recent.get(None, ()))
+        others: set[str] = set()
+        for anomaly in out:
+            candidates = _candidates_of(anomaly)
+            if candidates and (satellite_id is None or satellite_id in candidates):
+                others.update(candidates)
+        others.discard(satellite_id)  # type: ignore[arg-type]
+        for other in sorted(others):
+            out.extend(a for a in self._recent.get(other, ()) if _is_bus_kind(a.kind))
         return out
 
     # ---- Verdict lane helpers ---------------------------------------------
@@ -979,6 +1026,15 @@ class AttribService:
             attribution, t0=t0, stage_t0=stage_t0
         )
         attribution = attribution.model_copy(update={"kb_ref": self._kb.source})
+        # Closely-spaced objects (spec §5.4): a batch the engine could not key
+        # to one satellite carries the candidate set of its cues, so the
+        # console can say "A or B, unresolved" instead of nothing.
+        if attribution.satellite_id is None:
+            candidates = _batch_candidates(anomalies)
+            if candidates is not None:
+                attribution = attribution.model_copy(
+                    update={"candidate_satellite_ids": candidates}
+                )
         # Marking (spec §1.1): the reasoning lane's output is never marked lower
         # than the anomalies it read, whatever the client returned.
         attribution = attribution.model_copy(

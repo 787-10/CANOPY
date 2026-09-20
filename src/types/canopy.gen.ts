@@ -4,7 +4,7 @@
 //   is present on the wire, null when unset, so nothing here is optional.
 // Regenerate: cd external/canopy && uv run --no-sync python scripts/gen_ts_types.py
 // Fixture: src/types/canopy.schemas.json (the schemas this file was generated from).
-// Schema digest: sha256:b1f88dc7aa3f18c9975d963668d127824be1ab516e11701c1142128c40cc9222
+// Schema digest: sha256:e3adfdeef2e5f4ac5051c534e8b8005086bb41a4596d0ce8cb99431b864c6ffa
 
 /** Where the signal applies. Must include at least one localizer. */
 export type Location = {
@@ -26,6 +26,7 @@ export type Payload = {
   beat: string | null
   asset: string | null
   satellite_id: string | null
+  candidate_satellite_ids: string[] | null
   observables: Record<string, unknown> | null
   [key: string]: unknown
 }
@@ -105,6 +106,7 @@ export type Attribution = {
   verdict_basis: 'rule' | 'reasoning' | null
   verdict_evidence: string[]
   satellite_id: string | null
+  candidate_satellite_ids: string[] | null
   provisional: boolean
   revision: number
   [key: string]: unknown
