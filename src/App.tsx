@@ -1,3 +1,4 @@
+import { Hotkeys } from './components/Hotkeys'
 import { Brigade } from './pages/Brigade'
 import { DemoLauncher } from './pages/DemoLauncher'
 import { ReasoningPage } from './pages/ReasoningPage'
@@ -14,9 +15,7 @@ import './App.css'
 // sessionStorage before the first render.
 initialiseCaptureMode()
 
-function App() {
-  const route = resolveRoute(window.location.pathname, window.location.search)
-
+function pageFor(route: ReturnType<typeof resolveRoute>) {
   switch (route.page) {
     case 'verdict':
       return <VerdictPage />
@@ -35,6 +34,16 @@ function App() {
     default:
       return <Brigade />
   }
+}
+
+function App() {
+  const route = resolveRoute(window.location.pathname, window.location.search)
+  return (
+    <>
+      <Hotkeys />
+      {pageFor(route)}
+    </>
+  )
 }
 
 export default App

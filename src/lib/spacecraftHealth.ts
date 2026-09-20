@@ -216,7 +216,14 @@ export function buildSymptomSeries(records: BusHealthRecord[]): SymptomSeries {
   }
 }
 
-export type RecoveryPhase = 'none' | 'recommended' | 'routed' | 'withheld' | 'blocked'
+export type RecoveryPhase =
+  | 'none'
+  | 'recommended'
+  | 'routed'
+  | 'withheld'
+  | 'blocked'
+  | 'approved'
+  | 'denied'
 
 export type RecoveryState = {
   phase: RecoveryPhase
@@ -236,6 +243,8 @@ export type RecoveryState = {
 export function recoveryState(
   records: BusHealthRecord[],
   decision: Decision | null,
+  /** The operator's call on the routed decision, from the console store. */
+  operatorStatus: 'accepted' | 'denied' | null = null,
 ): RecoveryState {
   const recommended =
     records
@@ -269,14 +278,22 @@ export function recoveryState(
       }
     }
     if (decision.action === 'recovery_recommendation' && decision.recovery) {
+      const what = `${decision.recovery.action_id.replaceAll('_', ' ')} on ${decision.recovery.target_subsystem}`
+      const phase: RecoveryPhase =
+        operatorStatus === 'accepted' ? 'approved' : operatorStatus === 'denied' ? 'denied' : 'routed'
       return {
-        phase: 'routed',
+        phase,
         actionId: decision.recovery.action_id,
         targetSubsystem: decision.recovery.target_subsystem,
         reasonCode: null,
         requiresApproval: decision.recovery.requires_approval,
         rationale: decision.recovery.rationale,
-        headline: `Routed as a decision: ${decision.recovery.action_id.replaceAll('_', ' ')} on ${decision.recovery.target_subsystem}`,
+        headline:
+          phase === 'approved'
+            ? `Approved by the operator: ${what}`
+            : phase === 'denied'
+              ? `Denied by the operator: ${what}`
+              : `Routed as a decision: ${what}`,
       }
     }
   }

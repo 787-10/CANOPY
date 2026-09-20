@@ -5,6 +5,7 @@ const STEPS: Array<{ phase: RecoveryPhase; label: string }> = [
   { phase: 'recommended', label: 'Recommended' },
   { phase: 'routed', label: 'Routed as decision' },
   { phase: 'withheld', label: 'Withheld' },
+  { phase: 'approved', label: 'Operator' },
 ]
 
 const PHASE_COPY: Record<RecoveryPhase, string> = {
@@ -16,17 +17,26 @@ const PHASE_COPY: Record<RecoveryPhase, string> = {
   withheld:
     'The internal diagnosis recommended this action; the decide stage withheld it for the reason shown.',
   blocked: 'The threat-context gate blocked the routed recovery for the reason shown.',
+  approved: 'The operator approved the routed recovery; it is cleared for the spacecraft bus.',
+  denied: 'The operator denied the routed recovery; it is held for review.',
 }
 
 /** Recovery life-cycle: recommended by the internal diagnosis, routed as a
  *  decision, or withheld / blocked with the reason. */
 export function RecoveryStatePanel({ state }: { state: RecoveryState }) {
+  const decided = state.phase === 'approved' || state.phase === 'denied'
   const reached = (phase: RecoveryPhase) => {
     if (state.phase === 'none') return false
     if (phase === 'recommended') return true
-    if (phase === 'routed') return state.phase === 'routed' || state.phase === 'blocked'
+    if (phase === 'routed') return state.phase === 'routed' || state.phase === 'blocked' || decided
     if (phase === 'withheld') return state.phase === 'withheld' || state.phase === 'blocked'
+    if (phase === 'approved') return decided
     return false
+  }
+  const stepLabel = (step: { phase: RecoveryPhase; label: string }) => {
+    if (step.phase === 'withheld' && state.phase === 'blocked') return 'Blocked by gate'
+    if (step.phase === 'approved') return state.phase === 'denied' ? 'Denied' : decided ? 'Approved' : step.label
+    return step.label
   }
 
   return (
@@ -41,12 +51,14 @@ export function RecoveryStatePanel({ state }: { state: RecoveryState }) {
           <li
             key={step.phase}
             className={`recovery-state__step${reached(step.phase) ? ' recovery-state__step--on' : ''}${
-              state.phase === step.phase || (step.phase === 'withheld' && state.phase === 'blocked')
+              state.phase === step.phase ||
+              (step.phase === 'withheld' && state.phase === 'blocked') ||
+              (step.phase === 'approved' && decided)
                 ? ' recovery-state__step--current'
                 : ''
             }`}
           >
-            {step.phase === 'withheld' && state.phase === 'blocked' ? 'Blocked by gate' : step.label}
+            {stepLabel(step)}
           </li>
         ))}
       </ol>

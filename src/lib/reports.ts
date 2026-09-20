@@ -1,7 +1,9 @@
-// The overview's Reports strip: every signal as a report card and every bus
-// anomaly or hostile-kind external anomaly as an alert card, oldest on the
-// left and newest on the right. Pure over the store's buffers so the order,
-// the cap and the alert classification each have a unit test.
+// The overview's Reports strip: one card per signal, newest on the left so
+// a new card always enters at the same place. A bus anomaly or hostile-kind
+// external anomaly raised on a signal turns that signal's card into an
+// alert; it does not add a twin card at the same timestamp. Pure over the
+// store's buffers so the order, the cap and the alert classification each
+// have a unit test.
 import type { Anomaly, Domain, Signal } from '../types/canopy'
 import {
   commanderSignalSummary,
@@ -85,7 +87,9 @@ const signalItem = (signal: Signal): ReportItem => ({
   ts: signal.ts,
   domain: signal.domain,
   label: signalKindLabel(signal),
-  source: commanderSignalSummary(signal).sourceLabel,
+  // A bus record is the internal diagnosis module's report; its source id
+  // would otherwise echo the spacecraft name.
+  source: signal.domain === 'bus_health' ? 'internal diagnosis' : commanderSignalSummary(signal).sourceLabel,
   satellite: signal.payload.satellite_id
     ? spacecraftDisplayName(signal.payload.satellite_id)
     : null,
@@ -108,10 +112,10 @@ const anomalyItem = (anomaly: Anomaly, source: Signal | undefined): ReportItem =
   }
 }
 
-/** The strip's items, oldest first, capped to the newest `limit`. Signals
- *  keep their arrival order (the store holds them newest first); an alert
- *  is placed right after the signal it came from, or at the end when that
- *  signal is no longer in the buffer. */
+/** The strip's items, newest first, capped to the newest `limit`. A signal
+ *  with an alert anomaly on it is one alert card carrying the anomaly's
+ *  severity; an alert whose source signal left the buffer stands alone at
+ *  the front. */
 export function buildReportItems(
   signals: readonly Signal[],
   anomalies: readonly Anomaly[],
@@ -135,13 +139,17 @@ export function buildReportItems(
 
   const items: ReportItem[] = []
   for (const signal of [...signals].reverse()) {
-    items.push(signalItem(signal))
-    for (const anomaly of alertsBySignal.get(signal.id) ?? []) {
-      items.push(anomalyItem(anomaly, signal))
+    const item = signalItem(signal)
+    const alerts = alertsBySignal.get(signal.id) ?? []
+    if (alerts.length) {
+      item.kind = 'alert'
+      item.severity = Math.max(...alerts.map((anomaly) => anomaly.severity))
     }
+    items.push(item)
   }
   for (const anomaly of orphans) {
     items.push(anomalyItem(anomaly, signalsById.get(anomaly.source_signal)))
   }
-  return items.length > limit ? items.slice(items.length - limit) : items
+  const newestFirst = items.reverse()
+  return newestFirst.length > limit ? newestFirst.slice(0, limit) : newestFirst
 }

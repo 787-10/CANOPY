@@ -45,7 +45,19 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
     [records, attribution, decision],
   )
   const series = useMemo(() => buildSymptomSeries(records), [records])
-  const recovery = useMemo(() => recoveryState(records, decision), [records, decision])
+  const acceptedIds = useEventStore((s) => s.acceptedDecisionIds)
+  const deferredIds = useEventStore((s) => s.deferredDecisionIds)
+  const operatorStatus = decision
+    ? acceptedIds.has(decision.id)
+      ? 'accepted'
+      : deferredIds.has(decision.id)
+        ? 'denied'
+        : null
+    : null
+  const recovery = useMemo(
+    () => recoveryState(records, decision, operatorStatus),
+    [records, decision, operatorStatus],
+  )
   const latest = records[records.length - 1] ?? null
   const latestSymptom = [...records].reverse().find((record) => !record.isNominal) ?? latest
   const latestSignal = latest

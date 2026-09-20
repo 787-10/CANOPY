@@ -82,15 +82,19 @@ export function StressMode({ fetchImpl = fetch }: { fetchImpl?: typeof fetch } =
   return (
     <section className="stress-mode" aria-labelledby="stress-mode-title">
       <div className="panel__header">
-        <h2 id="stress-mode-title">Stress mode</h2>
-        <span>{blocked.size} blocked</span>
+        <h2 id="stress-mode-title">Stress mode · deny inputs</h2>
+        <span>{blocked.size ? `${blocked.size} denied` : 'none denied'}</span>
       </div>
+      <p className="stress-mode__hint">
+        A tick denies that input: the engine drops it on the next replay, as if the source had gone
+        dark. Untick and Apply to restore it.
+      </p>
       {blocked.size ? (
         <p className="stress-mode__banner" role="status" data-testid="stress-banner">
-          <strong>Domain denied:</strong>{' '}
-          {[...blocked].map((domain) => LABELS[domain]).join(', ')}. Confidence on
-          anomalies that depend on {blocked.size === 1 ? 'it' : 'them'} is lowered
-          and the reason is written to the trace.
+          <strong>Denied {blocked.size === 1 ? 'input' : 'inputs'}:</strong>{' '}
+          {[...blocked].map((domain) => LABELS[domain]).join(', ')}. The engine ignores{' '}
+          {blocked.size === 1 ? 'it' : 'them'} on the next run; confidence on anomalies that needed{' '}
+          {blocked.size === 1 ? 'it' : 'them'} is lowered and the trace records the dropped input.
         </p>
       ) : null}
       <div className="stress-mode__grid">

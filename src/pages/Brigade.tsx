@@ -10,6 +10,7 @@ import { useCanopyMissionState } from '../hooks/useCanopyMissionState'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { useEpisode } from '../hooks/useEpisode'
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase'
+import { spacecraftDisplayName } from '../lib/commanderLanguage'
 import { startPendingReplay } from '../lib/demoRuns'
 import { OVERVIEW_RAIL_WIDTH, useColumnExpanded } from '../lib/overviewLayout'
 import { useCaptureStore } from '../store/captureStore'
@@ -49,6 +50,11 @@ export function Brigade() {
   }, [socket.isConnected])
 
   const satelliteId = attribution?.satellite_id ?? pinnedSatelliteId
+  // A pinned spacecraft takes the globe's focus: its newest report is the
+  // focus mark and the camera flies to it; "Follow latest" hands it back.
+  const pinnedFocusId = pinnedSatelliteId
+    ? signals.find((signal) => signal.payload.satellite_id === pinnedSatelliteId)?.id ?? null
+    : null
 
   return (
     <main className="brigade-shell">
@@ -69,9 +75,10 @@ export function Brigade() {
         </SideColumn>
         <MapStage
           correlatedSignalIds={missionState.correlatedSignalIds}
-          focusSignalId={missionState.mapFocusSignalId}
+          focusSignalId={pinnedFocusId ?? missionState.mapFocusSignalId}
           signals={signals}
           report={report}
+          pinnedSatellite={pinnedSatelliteId ? spacecraftDisplayName(pinnedSatelliteId) : null}
         />
         <SideColumn side="right" label="Response" expanded={rightExpanded} onToggle={toggleRight} capture={capture}>
           <ResponseColumn attribution={attribution} decision={decision} />

@@ -41,6 +41,8 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
   const basis = attribution?.verdict_basis ?? null
   const verdictEvidence = attribution?.verdict_evidence ?? []
   const evidence = attribution?.evidence ?? []
+  const ruleEvidence = evidence.filter((line) => line.startsWith('Verdict (rule):'))
+  const humanEvidence = evidence.filter((line) => !line.startsWith('Verdict (rule):'))
   const citations = attribution?.kb_citations ?? []
   const satelliteId = attribution?.satellite_id ?? null
   // Closely-spaced objects (docs/INTERFACE-SPEC.md §5.4): an attribution the
@@ -129,11 +131,11 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
       {attribution ? (
         <p className="verdict-panel__headline">{verdictHeadline(attribution)}</p>
       ) : null}
-      <p className="verdict-panel__meaning">
-        {attribution
-          ? copy.meaning
-          : 'MEGALITH is correlating multi-domain activity. No attribution package is ready.'}
-      </p>
+      {attribution ? null : (
+        <p className="verdict-panel__meaning">
+          MEGALITH is correlating multi-domain activity. No attribution package is ready.
+        </p>
+      )}
 
       {attribution ? <VerdictTiming attribution={attribution} /> : null}
 
@@ -179,10 +181,9 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
           <dl className="verdict-panel__facts">
             <div>
               <dt>Basis</dt>
-              <dd data-testid="verdict-basis">
+              <dd data-testid="verdict-basis" title={basis ? verdictBasisCopy[basis].meaning : undefined}>
                 {basis ? verdictBasisCopy[basis].label : 'no lane recorded'}
               </dd>
-              {basis ? <small>{verdictBasisCopy[basis].meaning}</small> : null}
             </div>
             <div>
               <dt>Actor</dt>
@@ -200,8 +201,11 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
           </dl>
 
           {state !== 'absent' ? (
-            <section className="verdict-panel__section" aria-label="Verdict evidence">
-              <h3>Verdict evidence</h3>
+            <section
+              className={`verdict-panel__section${verdictEvidence.length ? '' : ' verdict-panel__section--empty'}`}
+              aria-label="Verdict evidence"
+            >
+              <h3>Cited for the verdict</h3>
               {verdictEvidence.length ? (
                 <ul
                   className="verdict-panel__list verdict-panel__list--verdict"
@@ -221,14 +225,33 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
             </section>
           ) : null}
 
-          <section className="verdict-panel__section" aria-label="Evidence">
+          <section
+            className={`verdict-panel__section${evidence.length ? '' : ' verdict-panel__section--empty'}`}
+            aria-label="Evidence"
+          >
             <h3>Evidence</h3>
             {evidence.length ? (
-              <ul className="verdict-panel__list" data-testid="evidence">
-                {evidence.map((line, index) => (
-                  <li key={`${index}-${line}`}>{line}</li>
-                ))}
-              </ul>
+              <>
+                {humanEvidence.length ? (
+                  <ul className="verdict-panel__list" data-testid="evidence">
+                    {humanEvidence.map((line, index) => (
+                      <li key={`${index}-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                ) : null}
+                {ruleEvidence.length ? (
+                  // The rule lane's own basis line is a key=value dump; it is
+                  // the record, not the read, so it opens on demand.
+                  <details className="verdict-panel__more" data-testid="rule-basis">
+                    <summary>Rule basis</summary>
+                    <ul className="verdict-panel__list verdict-panel__list--rule">
+                      {ruleEvidence.map((line, index) => (
+                        <li key={`${index}-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  </details>
+                ) : null}
+              </>
             ) : (
               <p className="verdict-panel__empty">No evidence strings attached.</p>
             )}
@@ -306,7 +329,7 @@ export function VerdictTiming({ attribution }: { attribution: Attribution }) {
           {timings.finalRevision !== null ? <small> rev {timings.finalRevision}</small> : null}
         </dd>
       </div>
-      <div>
+      <div data-empty={displayMs === null ? 'true' : undefined}>
         <dt>Arrival to display</dt>
         <dd data-testid="timing-display">
           {displayMs === null ? 'not measured' : `+${displayMs.toFixed(1)} ms`}

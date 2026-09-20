@@ -9,7 +9,7 @@ beforeEach(() => {
 })
 
 describe('ReportsStrip', () => {
-  it('lays the reports out oldest to newest with alerts after their source, and links each card to its signal', () => {
+  it('lays the reports out newest to oldest, one card per signal with the alert on its own card, and links each card to its signal', () => {
     const signals = [
       makeSignal('s3', { domain: 'space_weather', payload: { event_type: 'geomagnetic_storm', summary: 'storm', observables: { kp: 7 } } }),
       makeBusHealthSignal('s2'),
@@ -22,13 +22,14 @@ describe('ReportsStrip', () => {
     render(<ReportsStrip signals={signals} anomalies={anomalies} />)
     const track = screen.getByTestId('reports-track')
     const cards = within(track).getAllByRole('listitem')
-    expect(cards.map((card) => card.getAttribute('data-kind'))).toEqual(['report', 'report', 'alert', 'report'])
-    expect(cards[0]).toHaveTextContent('RF interference')
-    expect(cards[2]).toHaveTextContent('Alert')
-    expect(cards[2]).toHaveTextContent('Link margin drop')
-    expect(cards[2]).toHaveTextContent('SIM-01')
-    expect(cards[3]).toHaveTextContent('Space weather')
-    expect(within(cards[2]).getByRole('link')).toHaveAttribute('href', '/signal?id=s2')
+    expect(cards.map((card) => card.getAttribute('data-kind'))).toEqual(['report', 'alert', 'report'])
+    expect(cards[0]).toHaveTextContent('Space weather')
+    expect(cards[1]).toHaveTextContent('Alert')
+    expect(cards[1]).toHaveTextContent('Link margin drop')
+    expect(cards[1]).toHaveTextContent('SIM-01')
+    expect(cards[1]).not.toHaveTextContent('SIM 01')
+    expect(cards[2]).toHaveTextContent('RF interference')
+    expect(within(cards[1]).getByRole('link')).toHaveAttribute('href', '/signal?id=s2')
     expect(screen.getByTestId('reports-count')).toHaveTextContent('3')
     expect(screen.getByTestId('alerts-count')).toHaveTextContent('1 alert')
     expect(screen.getByRole('link', { name: /All signals/ })).toHaveAttribute('href', '/signals')
@@ -44,14 +45,15 @@ describe('ReportsStrip', () => {
     expect(screen.getByTestId('reports-strip')).toHaveAttribute('data-newest', 'signal:s29')
   })
 
-  it('animates only cards that arrive after the first paint', () => {
+  it('animates only the card that arrives after the first paint, and it enters at the left', () => {
     const { rerender } = render(<ReportsStrip signals={[makeSignal('s1')]} anomalies={[]} />)
     const first = within(screen.getByTestId('reports-track')).getAllByRole('listitem')
     expect(first[0]).not.toHaveClass('report-card--enter')
     rerender(<ReportsStrip signals={[makeSignal('s2'), makeSignal('s1')]} anomalies={[]} />)
     const cards = within(screen.getByTestId('reports-track')).getAllByRole('listitem')
-    expect(cards[0]).not.toHaveClass('report-card--enter')
-    expect(cards[1]).toHaveClass('report-card--enter')
+    expect(cards[0]).toHaveClass('report-card--enter')
+    expect(cards[1]).not.toHaveClass('report-card--enter')
+    expect(screen.getByTestId('reports-strip')).toHaveAttribute('data-newest', 'signal:s2')
   })
 
   it('carries capture=1 on its links in capture mode and says so when empty', () => {

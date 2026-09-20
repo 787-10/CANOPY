@@ -72,7 +72,7 @@ export function TheatersSection({ open, onToggle }: TheatersSectionProps) {
         <p className="side-column__empty">No incident yet</p>
       )}
       {pinned ? (
-        <button type="button" className="side-column__quiet" onClick={() => pinEpisode(null)} data-testid="follow-latest">
+        <button type="button" className="side-column__quiet" onClick={() => pinEpisode(null)} data-testid="follow-latest" data-key="F" title="Key F">
           Follow latest
         </button>
       ) : null}

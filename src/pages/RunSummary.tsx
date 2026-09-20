@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { TopBar } from '../components/TopBar'
 import { useCanopySocket } from '../hooks/useCanopySocket'
+import { actionLabel } from '../lib/actionLabels'
 import { spacecraftDisplayName, verdictLabel, withheldRecoveryLabel } from '../lib/commanderLanguage'
 import { fetchGateway } from '../lib/gateway'
 import {
@@ -164,7 +165,7 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             <div>
               <dt>Decision</dt>
               <dd>
-                {decision ? `${decision.action.replaceAll('_', ' ')} · ${decision.authority}` : 'none yet'}
+                {decision ? `${actionLabel(decision.action)} · ${decision.authority} authority` : 'none yet'}
               </dd>
             </div>
             {decision?.withheld_recovery ? (
@@ -183,10 +184,6 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             <div>
               <dt>Knowledge base</dt>
               <dd>{health?.kbEntries !== null && health?.kbEntries !== undefined ? `${health.kbEntries} entries` : 'n/a'}</dd>
-            </div>
-            <div>
-              <dt>Model digest</dt>
-              <dd>recorded in the run bundle on disk</dd>
             </div>
             <div>
               <dt>Console</dt>
@@ -231,11 +228,14 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
               ))}
             </tbody>
           </table>
-          <p className="run-note">
-            Wall-clock milliseconds stamped by the engine on each trace: the time since the
-            cluster's first anomaly arrived and the emitting stage's own duration. Current
-            prototype timings; nothing is rounded to a target.
-          </p>
+          <details className="run-more">
+            <summary>About these numbers</summary>
+            <p className="run-note">
+              Wall-clock milliseconds stamped by the engine on each trace: the time since the
+              cluster's first anomaly arrived and the emitting stage's own duration. Current
+              prototype timings; nothing is rounded to a target.
+            </p>
+          </details>
         </section>
 
         {!capture ? (

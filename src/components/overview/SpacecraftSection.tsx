@@ -12,25 +12,22 @@ type SpacecraftSectionProps = {
   onToggle: () => void
 }
 
-/** The episode's spacecraft in four lines: the latest bus symptom, its
- *  subsystem, the physics-consistency score and its recent trend. */
+/** The episode's spacecraft: its name in the section header, the latest
+ *  bus symptom with its subsystem, and the physics-consistency score with
+ *  its recent trend. */
 export function SpacecraftSection({ satelliteId, open, onToggle }: SpacecraftSectionProps) {
   const anomalies = useEventStore((s) => s.anomalies)
   const facts = spacecraftFacts(anomalies, satelliteId)
   const name = facts.satelliteId ? spacecraftDisplayName(facts.satelliteId) : null
   const href = withCapture(name ? `/spacecraft?sat=${encodeURIComponent(name)}` : '/spacecraft')
   return (
-    <Disclosure id="spacecraft" label="Spacecraft" count={facts.trend.length} open={open} onToggle={onToggle}>
+    <Disclosure id="spacecraft" label="Spacecraft" count={name ?? '—'} open={open} onToggle={onToggle}>
       {facts.latest ? (
         <dl className="facts" data-testid="spacecraft-facts">
           <div>
-            <dt>Spacecraft</dt>
-            <dd>{name}</dd>
-          </div>
-          <div>
             <dt>Symptom</dt>
             <dd>
-              {facts.kindLabel} · {facts.subsystem} · {facts.symptom}
+              {facts.kindLabel} · {facts.subsystem}
             </dd>
           </div>
           <div>

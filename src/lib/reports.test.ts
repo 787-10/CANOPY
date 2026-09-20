@@ -24,7 +24,7 @@ describe('anomalyKindLabel', () => {
 })
 
 describe('buildReportItems', () => {
-  it('orders oldest to newest with each alert right after the signal it came from', () => {
+  it('orders newest to oldest, one card per signal, an alert marking its own signal', () => {
     // Store order is newest first.
     const signals = [
       makeSignal('s3', { domain: 'space_weather', payload: { event_type: 'quiet', summary: 'quiet' } }),
@@ -37,38 +37,33 @@ describe('buildReportItems', () => {
       makeAnomaly('an-rf', { kind: 'rf_anomaly', source_signal: 's1', source_signal_ids: ['s1'] }),
     ]
     const items = buildReportItems(signals, anomalies)
-    expect(items.map((item) => item.key)).toEqual([
-      'signal:s1',
-      'anomaly:an-rf',
-      'signal:s2',
-      'anomaly:an-bus',
-      'signal:s3',
-    ])
-    expect(items.map((item) => item.kind)).toEqual(['report', 'alert', 'report', 'alert', 'report'])
-    const bus = items.find((item) => item.key === 'anomaly:an-bus')
+    expect(items.map((item) => item.key)).toEqual(['signal:s3', 'signal:s2', 'signal:s1'])
+    expect(items.map((item) => item.kind)).toEqual(['report', 'alert', 'alert'])
+    const bus = items.find((item) => item.key === 'signal:s2')
     expect(bus).toMatchObject({ label: 'Link margin drop', satellite: 'SIM-01', signalId: 's2', domain: 'bus_health', source: 'internal diagnosis' })
-    const rf = items.find((item) => item.key === 'anomaly:an-rf')
-    expect(rf).toMatchObject({ label: 'RF interference', domain: 'rf_ew', source: 'fusion' })
-    const report = items.find((item) => item.key === 'signal:s2')
-    expect(report).toMatchObject({ label: 'Link margin drop', satellite: 'SIM-01', severity: null })
+    expect(bus?.severity).not.toBeNull()
+    const rf = items.find((item) => item.key === 'signal:s1')
+    expect(rf).toMatchObject({ label: 'RF interference', domain: 'rf_ew', kind: 'alert' })
+    const storm = items.find((item) => item.key === 'signal:s3')
+    expect(storm).toMatchObject({ kind: 'report', severity: null })
   })
 
-  it('appends an alert whose source signal left the buffer, at the end', () => {
+  it('puts an alert whose source signal left the buffer at the front', () => {
     const items = buildReportItems(
       [makeSignal('s1')],
       [makeAnomaly('orphan', { kind: 'bus_link_margin', source_signal: 'gone', source_signal_ids: ['gone'] })],
     )
-    expect(items.map((item) => item.key)).toEqual(['signal:s1', 'anomaly:orphan'])
-    expect(items[1].signalId).toBe('gone')
+    expect(items.map((item) => item.key)).toEqual(['anomaly:orphan', 'signal:s1'])
+    expect(items[0].signalId).toBe('gone')
   })
 
   it('keeps the newest N items', () => {
     const signals = Array.from({ length: 40 }, (_, index) => makeSignal(`s${39 - index}`))
     const items = buildReportItems(signals, [])
     expect(items).toHaveLength(REPORTS_STRIP_LIMIT)
-    expect(items[0].key).toBe('signal:s16')
-    expect(items.at(-1)?.key).toBe('signal:s39')
-    expect(buildReportItems(signals, [], 5).map((item) => item.key)).toEqual(['signal:s35', 'signal:s36', 'signal:s37', 'signal:s38', 'signal:s39'])
+    expect(items[0].key).toBe('signal:s39')
+    expect(items.at(-1)?.key).toBe('signal:s16')
+    expect(buildReportItems(signals, [], 5).map((item) => item.key)).toEqual(['signal:s39', 'signal:s38', 'signal:s37', 'signal:s36', 'signal:s35'])
   })
 
   it('is empty with nothing received', () => {

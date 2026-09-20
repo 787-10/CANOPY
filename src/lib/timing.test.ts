@@ -118,3 +118,31 @@ describe('stageTimings', () => {
     expect(formatMs(12_500)).toBe('12.5 s')
   })
 })
+
+describe('stageTimings on a tab that holds more than one run', () => {
+  it('spans only the newest anomaly trace per id, not an earlier replay of the same scenario', () => {
+    // Newest first, as the store keeps them: the current run's two anomaly
+    // traces, then the same two ids from a replay an hour earlier.
+    const replayed = [
+      makeTrace('f-now-2', { stage: 'fusion', ref_id: 'anom-2', ts: '2026-09-20T15:10:20.000Z', message: 'new anomaly: bus_link_margin @ severity 0.9' }),
+      makeTrace('f-now-1', { stage: 'fusion', ref_id: 'anom-1', ts: '2026-09-20T15:10:00.000Z', message: 'new anomaly: bus_link_margin @ severity 0.8' }),
+      makeTrace('f-old-2', { stage: 'fusion', ref_id: 'anom-2', ts: '2026-09-20T14:10:20.000Z', message: 'new anomaly: bus_link_margin @ severity 0.9' }),
+      makeTrace('f-old-1', { stage: 'fusion', ref_id: 'anom-1', ts: '2026-09-20T14:10:00.000Z', message: 'new anomaly: bus_link_margin @ severity 0.8' }),
+    ]
+    const fusion = stageTimings(replayed, makeAttribution('att-1', { anomaly_ids: ['anom-1', 'anom-2'] }), null)[0]
+    expect(fusion.traceIds).toEqual(['f-now-2', 'f-now-1'])
+    expect(fusion.stageMs).toBe(20_000)
+  })
+
+  it("reads the decide stage's own line, not the operator's Accept on the same decision", () => {
+    const decided = [
+      makeTrace('op', { stage: 'decide', level: 'decision', ref_id: 'dec-1', message: 'operator accepted: threat_warning → brigade-c2', payload: { status: 'accepted' } }),
+      makeTrace('d-1', { stage: 'decide', level: 'decision', ref_id: 'dec-1', message: 'action=threat_warning authority=local target=brigade-c2', payload: { latency_ms: 4602, stage_ms: 120, revision: 1 } }),
+      makeTrace('d-0', { stage: 'decide', level: 'decision', ref_id: 'dec-1', message: 'action=threat_warning authority=local target=brigade-c2', payload: { latency_ms: 900, stage_ms: 80, revision: 0 } }),
+    ]
+    const decide = stageTimings(decided, null, makeDecision('dec-1', { revision: 1 })).find((row) => row.stage === 'decide')!
+    expect(decide.traceIds).toEqual(['d-1'])
+    expect(decide.latencyMs).toBe(4602)
+    expect(decide.note).toBe('revision 1')
+  })
+})

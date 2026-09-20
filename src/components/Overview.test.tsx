@@ -46,26 +46,25 @@ describe('StatusBanner', () => {
 })
 
 describe('summary cards', () => {
-  it('the verdict card shows the badge, a confidence bar, the revision, the timing and the actor, and links to the verdict page', () => {
+  it('the verdict card shows the badge, a confidence bar, the headline and the actor, and links to the verdict page; the timing stays on the status line', () => {
     ingestTimingTraces()
     render(<VerdictSummaryCard attribution={hostile()} />)
     const card = screen.getByTestId('verdict-summary')
     expect(card).toHaveTextContent('Hostile external')
     expect(card).toHaveTextContent('80% confidence')
-    expect(card).toHaveTextContent('Actor-1')
+    expect(screen.getByTestId('summary-actor')).toHaveTextContent('Actor-1')
     const bar = screen.getByTestId('summary-confidence-bar')
     expect(bar).toHaveAttribute('aria-valuenow', '80')
     expect(bar.querySelector('.summary-card__bar-fill')).toHaveStyle({ width: '80%' })
-    expect(screen.getByTestId('summary-timing')).toHaveTextContent('rev 1 · final')
-    expect(screen.getByTestId('summary-timing')).toHaveTextContent('provisional in 500 ms · final in 46.0 s')
+    expect(card).not.toHaveTextContent('provisional in')
     expect(screen.getByRole('link', { name: /Full verdict/ })).toHaveAttribute('href', '/verdict')
   })
 
-  it('the verdict card reads "pending" for timings the traces do not carry yet', () => {
-    render(<VerdictSummaryCard attribution={{ ...hostile(), provisional: true, revision: 0 }} />)
-    expect(screen.getByTestId('summary-timing')).toHaveTextContent('rev 0 · provisional')
-    expect(screen.getByTestId('summary-timing')).toHaveTextContent('provisional pending · final pending')
+  it('the verdict card flags a provisional verdict and names no actor while none is attributed', () => {
+    render(<VerdictSummaryCard attribution={{ ...hostile(), actor: 'Unknown', provisional: true, revision: 0 }} />)
+    expect(screen.getByTestId('verdict-summary')).toHaveTextContent('provisional')
     expect(screen.getByTestId('verdict-summary')).toHaveAttribute('data-provisional', 'true')
+    expect(screen.queryByTestId('summary-actor')).not.toBeInTheDocument()
   })
 
   it('the decision card shows the action, authority, the gate state, the withheld recovery, and Accept / Deny that record in the store', () => {
@@ -140,14 +139,13 @@ describe('DecisionSummaryCard — bounded response (spec 1.4)', () => {
 })
 
 describe('ResponseColumn', () => {
-  it('stacks the compact action panel over the verdict and decision cards, with one Accept / Deny pair', () => {
+  it('stacks the verdict card over the decision card, which carries the one Accept / Deny pair', () => {
     const decision = makeDecision('dec-b', { attribution_id: 'att-b', action: 'threat_warning', authority: 'local', target: 'SIM-01' })
     useEventStore.getState().ingestDecision(decision)
     render(<ResponseColumn attribution={hostile()} decision={decision} />)
     const column = screen.getByTestId('response-column')
-    expect(column.firstElementChild).toHaveClass('operator-action--compact')
-    expect(screen.getByTestId('verdict-summary')).toBeInTheDocument()
-    expect(screen.getByTestId('decision-summary')).toBeInTheDocument()
+    expect([...column.children].map((child) => child.getAttribute('data-testid'))).toEqual(['verdict-summary', 'decision-summary'])
+    expect(column.querySelector('.operator-action')).toBeNull()
     expect(screen.getAllByRole('button', { name: 'Accept' })).toHaveLength(1)
     expect(screen.getAllByRole('button', { name: 'Deny' })).toHaveLength(1)
   })

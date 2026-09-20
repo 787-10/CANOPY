@@ -1,4 +1,6 @@
 import { BusHealthCard } from '../components/BusHealthCard'
+import { EpisodeReports } from '../components/EpisodeReports'
+import { DecisionSummaryCard, VerdictSummaryCard } from '../components/SummaryCards'
 import { TopBar } from '../components/TopBar'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName } from '../lib/commanderLanguage'
@@ -10,7 +12,10 @@ type SignalZoomProps = {
   signalId?: string | null
 }
 
-/** Capture S2: one bus-health signal card filling the frame. */
+/** One bus-health signal in full (capture S2), laid out like the console:
+ *  the card on the left, and on the right the episode it belongs to, the
+ *  verdict and decision summaries and the other reports on the same
+ *  spacecraft, each a click away. */
 export function SignalZoom({ signalId = null }: SignalZoomProps) {
   useCanopySocket()
   const signals = useEventStore((s) => s.signals)
@@ -33,15 +38,21 @@ export function SignalZoom({ signalId = null }: SignalZoomProps) {
 
   return (
     <main className="signal-shell" data-testid="signal-zoom">
-      <TopBar
-        title={signal ? `Bus-health signal · ${name}` : 'Bus-health signal'}
-        current="signal"
-       
-      />
-      <section className="signal-zoom" aria-label="Zoomed signal card">
-        {signal ? (
-          <BusHealthCard signal={signal} zoomed decision={decision} />
-        ) : (
+      <TopBar title={signal ? `Bus-health signal · ${name}` : 'Bus-health signal'} current="signal" />
+      {signal ? (
+        <section className="signal-page">
+          <div className="signal-page__card">
+            <BusHealthCard signal={signal} zoomed decision={decision} />
+          </div>
+          <aside className="signal-page__context" aria-label="Episode context" data-testid="signal-context">
+            <VerdictSummaryCard attribution={attribution} />
+            <DecisionSummaryCard decision={decision} actions={false} />
+            <EpisodeReports satelliteId={satelliteId} currentSignalId={signal.id} />
+            <a className="side-column__link" href={withCapture('/brigade')}>← Back to the console</a>
+          </aside>
+        </section>
+      ) : (
+        <section className="signal-zoom">
           <div className="panel signal-zoom__empty">
             <h2>No bus-health signal to show</h2>
             <p>
@@ -50,8 +61,8 @@ export function SignalZoom({ signalId = null }: SignalZoomProps) {
             </p>
             <a href={withCapture('/brigade')}>Back to the Brigade view</a>
           </div>
-        )}
-      </section>
+        </section>
+      )}
     </main>
   )
 }

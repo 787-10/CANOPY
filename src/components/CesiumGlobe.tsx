@@ -171,7 +171,15 @@ type CesiumGlobeProps = {
   displayMode?: 'nav' | 'globe'
   focusSignalId?: string | null
   signals?: Signal[]
+  /** Display name of the pinned spacecraft; the globe selects its track and
+   *  flies to it, and flies home when the pin is cleared. */
+  pinnedSatellite?: string | null
 }
+
+// Camera height over a pinned spacecraft's ground point: the same 1,400 km
+// the Site A anchor uses, so the pinned mark, the station and an RF emitter
+// estimate read as separate marks.
+const PIN_CAMERA_HEIGHT_M = 1_400_000
 
 type MapPoint = {
   lon: number
@@ -278,6 +286,7 @@ export function CesiumGlobe({
   displayMode = 'nav',
   focusSignalId = null,
   signals = [],
+  pinnedSatellite = null,
 }: CesiumGlobeProps) {
   const containerRef = useRef<HTMLDivElement | null>(null)
   const creditRef = useRef<HTMLDivElement | null>(null)
@@ -287,6 +296,8 @@ export function CesiumGlobe({
   const n2yoLayersRef = useRef<N2YOLayerState[]>([])
   const loadedN2yoSatelliteIdsRef = useRef<Set<number>>(new Set())
   const selectedN2yoLayerRef = useRef<N2YOLayerState | null>(null)
+  const homeDestinationRef = useRef<Cartesian3 | null>(null)
+  const wasPinnedRef = useRef(false)
   const [, setActiveLayer] = useState('baseline')
   const [, setImageryMode] = useState('Loading imagery')
   const [, setRealSatelliteStatus] = useState('Satellites')
@@ -883,10 +894,43 @@ export function CesiumGlobe({
           // emitter estimate ~180 km away read as separate marks (demo capture S1).
           Cartesian3.fromDegrees(station.lng, station.lat, 1_400_000)
         : RESET_CAMERA_DESTINATION
+      homeDestinationRef.current = anchor
       viewer.camera.flyTo({ destination: anchor, duration: 0.9 })
     })
     // Loads once per stream that carries a synthetic spacecraft.
   }, [displayMode, syntheticInStream, ensureN2YOSatellitesLoaded, signals])
+
+  // The operator's pin: select the pinned spacecraft's track (label and
+  // orbit on) and fly to it; on "Follow latest" deselect and fly home.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed() || displayMode !== 'globe') return
+    const layer = pinnedSatellite
+      ? n2yoLayersRef.current.find((candidate) => candidate.satelliteName === pinnedSatellite) ?? null
+      : null
+    if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
+      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+      selectedN2yoLayerRef.current = null
+      setSelectedSatellite(null)
+    }
+    if (layer) {
+      selectedN2yoLayerRef.current = layer
+      selectN2YOSatellite(viewer, layer)
+      setSelectedSatellite(layer)
+      const point = currentN2YODisplayPoint(layer)
+      viewer.camera.flyTo({
+        destination: Cartesian3.fromDegrees(point.lng, point.lat, PIN_CAMERA_HEIGHT_M),
+        duration: 0.9,
+      })
+      wasPinnedRef.current = true
+    } else if (wasPinnedRef.current) {
+      wasPinnedRef.current = false
+      if (homeDestinationRef.current) {
+        viewer.camera.flyTo({ destination: homeDestinationRef.current, duration: 0.9 })
+      }
+    }
+    viewer.scene.requestRender()
+  }, [pinnedSatellite, displayMode])
 
   useEffect(() => {
     resetDynamicSources()

@@ -11,12 +11,15 @@ export function ReasoningPage() {
   return (
     <main className="page-shell reasoning-shell" data-testid="reasoning-page">
       <TopBar title="Reasoning trace" current="reasoning" />
-      <p className="page-intro">
-        Every step the engine took, in order: the rule lane's provisional verdict, the
-        primary attribution, the red-team challenge, the reconciled final verdict and the
-        decision. Knowledge-base citations resolve to cards on the{' '}
-        <a href={withCapture('/verdict')}>Verdict page</a>.
-      </p>
+      <details className="page-intro">
+        <summary>What this page shows</summary>
+        <p>
+          Every step the engine took, in order: the rule lane's provisional verdict, the
+          primary attribution, the red-team challenge, the reconciled final verdict and the
+          decision. Knowledge-base citations resolve to cards on the{' '}
+          <a href={withCapture('/verdict')}>Verdict page</a>.
+        </p>
+      </details>
       <section className="reasoning-page">
         <ReasoningPanel />
       </section>

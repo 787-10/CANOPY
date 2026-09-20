@@ -1,4 +1,3 @@
-import { useMemo } from 'react'
 import {
   gateReasonLabel,
   parseGateRationale,
@@ -8,29 +7,25 @@ import {
   withheldRecoveryLabel,
 } from '../lib/commanderLanguage'
 import { actionLabel } from '../lib/actionLabels'
+import { operatorOutcome, operatorStamp, recordOperatorDecision } from '../lib/operatorDecisions'
 import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
-import { attributionTimings, formatMs } from '../lib/timing'
+import { targetLabel } from '../lib/targetLabel'
 import { withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import type { Attribution, Decision } from '../types/canopy'
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
 
-/** Verdict in a few lines: the badge, a confidence bar, the revision, the
- *  provisional-versus-final timing and the headline, with a link to the
- *  full page. */
+/** Verdict in a few lines: the badge, a confidence bar, the headline and
+ *  the actor when one is named, with a link to the full page. The revision
+ *  and the timing are on the status line above; the card does not repeat
+ *  them. */
 export function VerdictSummaryCard({ attribution }: { attribution: Attribution | null }) {
-  const traces = useEventStore((s) => s.traces)
-  const timings = useMemo(
-    () => (attribution ? attributionTimings(traces, attribution.id) : null),
-    [traces, attribution],
-  )
   const verdict = attribution?.verdict ?? null
   const copy = verdict ? verdictCopy[verdict] : null
   const actor = attribution?.actor
   const showActor = actor && actor !== 'None' && actor !== 'Unknown'
   const confidence = attribution ? Math.round(clamp01(attribution.confidence) * 100) : 0
-  const revision = attribution?.revision ?? 0
   return (
     <section
       className={`summary-card summary-card--verdict${verdict ? ` summary-card--${verdict}` : ''}`}
@@ -62,29 +57,12 @@ export function VerdictSummaryCard({ attribution }: { attribution: Attribution |
             <span className="summary-card__bar-fill" style={{ width: `${confidence}%` }} />
           </div>
           <p className="summary-card__text">{verdictHeadline(attribution)}</p>
-          <p className="summary-card__kv summary-card__kv--wide" data-testid="summary-timing">
-            <span>Revision</span>
-            <strong>
-              rev {revision}
-              {attribution.provisional ? ' · provisional' : ' · final'}
-            </strong>
-            <span>Timing</span>
-            <strong>
-              {timings?.provisionalMs !== null && timings?.provisionalMs !== undefined
-                ? `provisional in ${formatMs(timings.provisionalMs)}`
-                : 'provisional pending'}
-              {' · '}
-              {timings?.finalMs !== null && timings?.finalMs !== undefined
-                ? `final in ${formatMs(timings.finalMs)}`
-                : 'final pending'}
-            </strong>
-            {showActor ? (
-              <>
-                <span>Actor</span>
-                <strong>{actor}</strong>
-              </>
-            ) : null}
-          </p>
+          {showActor ? (
+            <p className="summary-card__kv summary-card__kv--wide" data-testid="summary-actor">
+              <span>Actor</span>
+              <strong>{actor}</strong>
+            </p>
+          ) : null}
         </>
       ) : (
         <p className="summary-card__text summary-card__text--muted">The fast lane publishes a provisional verdict at the first anomalous report.</p>
@@ -106,9 +84,7 @@ type DecisionSummaryCardProps = {
 export function DecisionSummaryCard({ decision, actions = true }: DecisionSummaryCardProps) {
   const accepted = useEventStore((s) => (decision ? s.acceptedDecisionIds.has(decision.id) : false))
   const denied = useEventStore((s) => (decision ? s.deferredDecisionIds.has(decision.id) : false))
-  const acceptDecision = useEventStore((s) => s.acceptDecision)
-  const deferDecision = useEventStore((s) => s.deferDecision)
-  const clearDecisionStatus = useEventStore((s) => s.clearDecisionStatus)
+  const statusAt = useEventStore((s) => (decision ? s.decisionStatusAt[decision.id] : undefined))
   const withheld = decision?.withheld_recovery ?? null
   const recovery = decision?.recovery ?? null
   const selection = decision ? selectionSummary(decision) : null
@@ -142,7 +118,7 @@ export function DecisionSummaryCard({ decision, actions = true }: DecisionSummar
         <>
           <p className="summary-card__eyebrow">{kind}</p>
           <p className="summary-card__lead"><strong className="summary-card__action">{actionLabel(decision.action)}</strong></p>
-          <p className="summary-card__kv"><span>Authority</span><strong>{decision.authority}</strong><span>Target</span><strong>{decision.target}</strong></p>
+          <p className="summary-card__kv"><span>Authority</span><strong>{decision.authority}</strong><span>Target</span><strong title={decision.target}>{targetLabel(decision.target)}</strong></p>
           <p className="summary-card__text summary-card__gate" data-testid="summary-gate">
             {gateState}
             {basis ? ` · ${basis}` : ''}
@@ -163,12 +139,16 @@ export function DecisionSummaryCard({ decision, actions = true }: DecisionSummar
           {!actions ? null : accepted || denied ? (
             <p className="summary-card__resolved">
               <span>{accepted ? 'Accepted' : 'Denied'}</span>
-              <button type="button" className="summary-card__button summary-card__button--quiet" onClick={() => clearDecisionStatus(decision.id)}>Reconsider</button>
+              <small className="summary-card__outcome" data-testid="summary-outcome">
+                {operatorStamp(statusAt) ? `${operatorStamp(statusAt)} · ` : ''}
+                {operatorOutcome(decision, accepted ? 'accepted' : 'denied')}
+              </small>
+              <button type="button" className="summary-card__button summary-card__button--quiet" onClick={() => void recordOperatorDecision(decision, 'reconsidered')} data-key="R">Reconsider</button>
             </p>
           ) : (
             <p className="summary-card__buttons">
-              <button type="button" className="summary-card__button summary-card__button--accept" onClick={() => acceptDecision(decision.id)}>Accept</button>
-              <button type="button" className="summary-card__button summary-card__button--deny" onClick={() => deferDecision(decision.id)}>Deny</button>
+              <button type="button" className="summary-card__button summary-card__button--accept" onClick={() => void recordOperatorDecision(decision, 'accepted')} data-key="A">Accept</button>
+              <button type="button" className="summary-card__button summary-card__button--deny" onClick={() => void recordOperatorDecision(decision, 'denied')} data-key="D">Deny</button>
             </p>
           )}
         </>

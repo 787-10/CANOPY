@@ -6,6 +6,7 @@ import {
   verdictLabel,
   withheldTraceReasonCode,
 } from '../lib/commanderLanguage'
+import { traceCategory, traceHeadline } from '../lib/traceCopy'
 import type { ReasoningTrace, TraceStage } from '../types/canopy'
 
 const STAGE_COLORS: Record<TraceStage, string> = {
@@ -18,28 +19,10 @@ const STAGE_COLORS: Record<TraceStage, string> = {
   stress: 'var(--red)',
 }
 
-const STAGE_LABEL: Record<TraceStage, string> = {
-  fusion: 'fusion',
-  attrib_primary: 'attrib.primary',
-  attrib_redteam: 'attrib.redteam',
-  attrib_reconcile: 'attrib.reconcile',
-  decide: 'decide',
-  tools: 'tools',
-  stress: 'stress',
-}
-
+// Engine wall clock, UTC with a Z, the same style as the report times.
 function formatTime(ts: string): string {
-  try {
-    const d = new Date(ts)
-    return d.toLocaleTimeString('en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: false,
-    })
-  } catch {
-    return '--:--:--'
-  }
+  const d = new Date(ts)
+  return Number.isNaN(d.getTime()) ? '--:--:--' : `${d.toISOString().slice(11, 19)}Z`
 }
 
 interface Props {
@@ -86,6 +69,11 @@ function TraceLine({ trace }: { trace: ReasoningTrace }) {
   const withheld = withheldReasonCode !== null
   const hasChips =
     blocked || withheld || verdict !== null || physicsConsistency !== null
+  // The stage in words with the engine's code beside it, a sentence saying
+  // what happened, and the raw log line underneath as the record.
+  const category = traceCategory(trace.stage)
+  const headline = traceHeadline(trace)
+  const showRaw = headline.trim() !== trace.message.trim()
 
   return (
     <div
@@ -97,10 +85,19 @@ function TraceLine({ trace }: { trace: ReasoningTrace }) {
       data-withheld={withheld ? 'true' : undefined}
     >
       <span className="reasoning-line__time">{formatTime(trace.ts)}</span>
-      <span className="reasoning-line__stage" style={{ color }}>
-        [{STAGE_LABEL[trace.stage] ?? trace.stage}]
+      <span className="reasoning-line__stage" style={{ color }} title={category.code} data-testid="trace-stage">
+        {category.label}
+        <small className="reasoning-line__stage-code">{category.code}</small>
       </span>
-      <span className="reasoning-line__msg">{trace.message}</span>
+      <span className="reasoning-line__msg" data-testid="trace-headline">{headline}</span>
+      {showRaw ? (
+        <details className="reasoning-line__details">
+          <summary>raw</summary>
+          <span className="reasoning-line__raw" data-testid="trace-raw">
+            {trace.message}
+          </span>
+        </details>
+      ) : null}
       {hasChips ? (
         <span className="reasoning-line__chips">
           {blocked ? (

@@ -226,6 +226,9 @@ async def _lifespan(app: FastAPI):
     log.info("CORS allow-list: %s", ", ".join(app.state.cors_origins))
 
     app.state.blocked_domains: set[str] = set()
+    # The operator's latest call per decision (accepted / denied /
+    # reconsidered), posted by the console; cleared by ``POST /reset``.
+    app.state.operator_decisions: dict[str, dict[str, Any]] = {}
     # CANOPY_KB_PATH selects the knowledge base; the MEGALITH demo points it at
     # the demo-only file so no entry naming a real actor can reach the model.
     kb_path = os.environ.get("CANOPY_KB_PATH") or DEFAULT_KB_PATH
@@ -453,6 +456,8 @@ def create_app(
             cancelled = await cancel_replay(app.state.replay_task)
             app.state.replay_task = None
             cleared = await reset_engine(app.state.engine)
+            cleared["operator"] = {"decisions": len(app.state.operator_decisions)}
+            app.state.operator_decisions.clear()
         log.info("engine reset (replay_cancelled=%s): %s", cancelled, cleared)
         return {"status": "reset", "replay_cancelled": cancelled, "cleared": cleared}
 
@@ -489,6 +494,8 @@ def create_app(
                 detail=f"unknown event kind {kind!r}; known: {sorted(codec.registered_kinds())}",
             )
 
+    OPERATOR_STATUSES = ("accepted", "denied", "reconsidered")
+
     @app.get("/stress")
     async def get_stress() -> dict[str, Any]:
         return {"blocked_domains": sorted(app.state.blocked_domains)}
@@ -507,6 +514,57 @@ def create_app(
             )
         app.state.blocked_domains = set(raw)
         return {"blocked_domains": sorted(app.state.blocked_domains)}
+
+    @app.get("/decisions/operator")
+    async def get_operator_decisions() -> dict[str, Any]:
+        """The operator's latest call on each decision this run."""
+        return {"decisions": list(app.state.operator_decisions.values())}
+
+    @app.post("/decisions/{decision_id}/operator")
+    async def post_operator_decision(
+        decision_id: str, payload: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Record the operator's call on a decision and write it to the trace.
+
+        The console's Accept, Deny and Reconsider post here. The gateway keeps
+        the latest call per decision and emits a decide-stage trace line
+        (``operator accepted: threat_warning → brigade-c2``) so the call is
+        part of the run's record and reaches every connected console.
+        """
+        status = payload.get("status")
+        if status not in OPERATOR_STATUSES:
+            raise HTTPException(
+                status_code=400,
+                detail=f"status must be one of {list(OPERATOR_STATUSES)}",
+            )
+        from datetime import datetime, timezone
+
+        action = str(payload.get("action") or "decision")
+        target = payload.get("target")
+        record: dict[str, Any] = {
+            "decision_id": decision_id,
+            "status": status,
+            "action": action,
+            "authority": payload.get("authority"),
+            "target": target,
+            "satellite_id": payload.get("satellite_id"),
+            "attribution_id": payload.get("attribution_id"),
+            "operator": "console",
+            "ts": datetime.now(timezone.utc).isoformat(),
+        }
+        app.state.operator_decisions[decision_id] = record
+        arrow = f" → {target}" if target and status != "reconsidered" else ""
+        message = f"operator {status}: {action}{arrow}"
+        tracer = app.state.engine.tracer
+        await tracer.emit(
+            "decide",
+            "decision" if status == "accepted" else "info",
+            message,
+            ref_id=decision_id,
+            t0=tracer.t0_for(decision_id, payload.get("attribution_id")),
+            **{key: value for key, value in record.items() if key != "ts"},
+        )
+        return {"status": "recorded", "trace": message, "record": record}
 
     @app.websocket("/ws")
     async def ws(websocket: WebSocket) -> None:

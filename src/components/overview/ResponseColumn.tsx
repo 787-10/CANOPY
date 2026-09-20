@@ -1,5 +1,4 @@
 import type { Attribution, Decision } from '../../types/canopy'
-import { OperatorActionPanel } from '../OperatorActionPanel'
 import { DecisionSummaryCard, VerdictSummaryCard } from '../SummaryCards'
 
 type ResponseColumnProps = {
@@ -7,15 +6,15 @@ type ResponseColumnProps = {
   decision: Decision | null
 }
 
-/** The right column: the approve/deny box on top (the operator action panel
- *  in its compact form), the verdict and decision summaries under it. The
- *  panel renders nothing until a decision exists; the cards say so. */
+/** The right column: the verdict card, then the decision card with Accept
+ *  and Deny. One place for each thing; the full operator panel with the
+ *  authority, target and rationale is on the Verdict page. The cards say so
+ *  until the engine has produced a verdict or a decision. */
 export function ResponseColumn({ attribution, decision }: ResponseColumnProps) {
   return (
     <div className="response" data-testid="response-column">
-      <OperatorActionPanel decision={decision} compact />
       <VerdictSummaryCard attribution={attribution} />
-      <DecisionSummaryCard decision={decision} actions={false} />
+      <DecisionSummaryCard decision={decision} />
     </div>
   )
 }

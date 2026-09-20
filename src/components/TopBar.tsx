@@ -14,7 +14,7 @@ export type ConsolePage =
   | 'signal'
   | 'demo'
 
-const PAGES: Array<{ page: ConsolePage; label: string; href: string }> = [
+export const PAGES: Array<{ page: ConsolePage; label: string; href: string }> = [
   { page: 'brigade', label: 'Console', href: '/brigade' },
   { page: 'verdict', label: 'Verdict', href: '/verdict' },
   { page: 'reasoning', label: 'Reasoning', href: '/reasoning' },
@@ -73,13 +73,13 @@ export function TopBar({ title, current, right }: TopBarProps) {
           {marking}
         </span>
         <nav className="app-header__nav" aria-label="Console pages">
-          {PAGES.map(({ page, label, href }) =>
+          {PAGES.map(({ page, label, href }, index) =>
             page === current ? (
-              <span key={page} className="app-header__nav-current" aria-current="page">
+              <span key={page} className="app-header__nav-current" aria-current="page" data-key={index + 1}>
                 {label}
               </span>
             ) : (
-              <a key={page} href={withCapture(href, capture)}>
+              <a key={page} href={withCapture(href, capture)} data-key={index + 1} title={`Key ${index + 1}`}>
                 {label}
               </a>
             ),

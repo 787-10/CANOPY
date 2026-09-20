@@ -94,13 +94,23 @@ export function stageTimings(
 ): StageTiming[] {
   const timings = attributionTimings(traces, attribution?.id)
   const anomalyIds = new Set(attribution?.anomaly_ids ?? [])
-  const fusion = traces.filter(
-    (trace) =>
-      trace.stage === 'fusion' &&
-      trace.ref_id !== null &&
-      anomalyIds.has(trace.ref_id) &&
-      trace.message.startsWith('new anomaly'),
-  )
+  // Anomaly ids are deterministic per scenario, so a tab that replayed the
+  // same run twice holds two `new anomaly` traces per id; the store is
+  // newest first, so the first trace seen per id is the current run's.
+  const seenAnomaly = new Set<string>()
+  const fusion = traces.filter((trace) => {
+    if (
+      trace.stage !== 'fusion' ||
+      trace.ref_id === null ||
+      !anomalyIds.has(trace.ref_id) ||
+      !trace.message.startsWith('new anomaly') ||
+      seenAnomaly.has(trace.ref_id)
+    ) {
+      return false
+    }
+    seenAnomaly.add(trace.ref_id)
+    return true
+  })
   const fusionTimes = fusion
     .map((trace) => Date.parse(trace.ts))
     .filter((time) => Number.isFinite(time))
@@ -124,16 +134,25 @@ export function stageTimings(
       !isProvisionalTrace(trace) &&
       revisionOf(trace) > 0,
   )
-  const decideTrace = decision
-    ? traces
-        .filter(
-          (trace) =>
-            trace.stage === 'decide' &&
-            trace.ref_id === decision.id &&
-            trace.level === 'decision',
-        )
-        .at(-1) ?? null
-    : null
+  // The decide stage's own line for this decision: not the operator's
+  // Accept (also a decide-stage decision line on the same id), and the
+  // revision the decision carries when the traces say which they are.
+  const decideCandidates = decision
+    ? traces.filter(
+        (trace) =>
+          trace.stage === 'decide' &&
+          trace.ref_id === decision.id &&
+          trace.level === 'decision' &&
+          !trace.message.startsWith('operator '),
+      )
+    : []
+  const decideTrace =
+    decideCandidates.find(
+      (trace) => decision?.revision !== undefined && numberOf(trace.payload.revision) === decision.revision,
+    ) ??
+    decideCandidates.find((trace) => numberOf(trace.payload.latency_ms) !== null) ??
+    decideCandidates.at(-1) ??
+    null
   const uiTrace = decision
     ? traces
         .filter(

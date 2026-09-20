@@ -5185,3 +5185,2127 @@ html[data-capture="1"] .side-column__body {
     display: block;
   }
 }
+
+/* ---- 2026-09-20 operator feedback ----------------------------------------
+   Six changes, appended so each overrides the rule it replaces:
+   1. Reports strip: newest card at the left, fades in with a short glow.
+   2. Status line: one row per side, the confidence stated once.
+   3. Clickable cards, rows and links glow on hover.
+   4. Signal card page laid out like the console, with the episode beside it.
+   5. The same treatment on the detail pages (fade-in, glow, density).
+   6. Accept in a soft green, Deny in grey. */
+
+/* 2. Status line: shorter, one row per side. */
+.status-banner {
+  grid-template-columns: minmax(0, 1.6fr) auto;
+  gap: 20px;
+  padding: 8px 16px;
+}
+
+.status-banner__report {
+  gap: 2px;
+}
+
+.status-banner__subject {
+  font-size: 0.72rem;
+}
+
+.status-banner__headline {
+  font-size: 1.08rem;
+  line-height: 1.3;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-banner__verdict {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.status-banner__badge {
+  padding: 6px 12px;
+  font-size: 0.95rem;
+}
+
+.status-banner__line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  font-size: 0.95rem;
+}
+
+.status-banner__confidence {
+  font-size: 0.95rem;
+}
+
+.status-banner__actor {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.status-banner__actor::before,
+.status-banner__timing::before {
+  content: '·';
+  margin-right: 8px;
+  color: var(--text-subtle);
+}
+
+.status-banner__timing {
+  font-size: 0.86rem;
+}
+
+/* 1. Reports strip: the newest card enters at the left and glows briefly. */
+@keyframes report-enter {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes report-glow {
+  0%,
+  35% {
+    border-color: var(--brand-bright);
+    box-shadow:
+      0 0 0 1px rgba(123, 150, 255, 0.7),
+      0 0 18px rgba(123, 150, 255, 0.55);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(123, 150, 255, 0),
+      0 0 0 rgba(123, 150, 255, 0);
+  }
+}
+
+@keyframes report-glow-alert {
+  0%,
+  35% {
+    border-color: var(--amber);
+    box-shadow:
+      0 0 0 1px rgba(201, 164, 87, 0.7),
+      0 0 18px rgba(201, 164, 87, 0.55);
+  }
+
+  100% {
+    box-shadow:
+      0 0 0 0 rgba(201, 164, 87, 0),
+      0 0 0 rgba(201, 164, 87, 0);
+  }
+}
+
+.report-card--enter {
+  animation:
+    report-enter 600ms ease-out both,
+    report-glow 2600ms ease-out both;
+}
+
+.report-card--alert.report-card--enter {
+  animation-name: report-enter, report-glow-alert;
+}
+
+/* Capture mode zeroes every animation (and an earlier rule set the strip's
+   to `animation: none`); the arrival cue is the point of the strip, so it
+   keeps its name and timing there. Same specificity as the reset, later in
+   the file, so this wins. */
+html[data-capture="1"] .report-card--enter {
+  animation-name: report-enter, report-glow !important;
+  animation-duration: 600ms, 2600ms !important;
+  animation-timing-function: ease-out !important;
+  animation-fill-mode: both !important;
+}
+
+html[data-capture="1"] .report-card--alert.report-card--enter {
+  animation-name: report-enter, report-glow-alert !important;
+}
+
+/* 3. Clickable things glow on hover (and on keyboard focus). */
+.report-card,
+.theater,
+.episode-report {
+  cursor: pointer;
+  transition:
+    border-color 0.16s ease,
+    box-shadow 0.16s ease,
+    background 0.16s ease;
+}
+
+.report-card:hover,
+.report-card:focus-within,
+.theater:hover:not(:disabled),
+.theater:focus-visible,
+.episode-report:hover,
+.episode-report:focus-within {
+  border-color: var(--brand-bright);
+  background: rgba(29, 63, 168, 0.14);
+  box-shadow:
+    0 0 0 1px rgba(123, 150, 255, 0.35),
+    0 0 16px rgba(123, 150, 255, 0.3);
+}
+
+.report-card--alert:hover,
+.report-card--alert:focus-within,
+.episode-report--alert:hover,
+.episode-report--alert:focus-within {
+  border-color: var(--amber);
+  background: rgba(201, 164, 87, 0.12);
+  box-shadow:
+    0 0 0 1px rgba(201, 164, 87, 0.35),
+    0 0 16px rgba(201, 164, 87, 0.3);
+}
+
+.report-card__link:focus-visible,
+.episode-report__link:focus-visible {
+  outline: none;
+}
+
+.summary-card__link,
+.side-column__link,
+.bus-health-card__zoom,
+.page-intro a,
+.signals-table__kind a {
+  transition:
+    text-shadow 0.16s ease,
+    color 0.16s ease;
+}
+
+.summary-card__link:hover,
+.side-column__link:hover,
+.bus-health-card__zoom:hover,
+.page-intro a:hover {
+  color: #a9bbff;
+  text-shadow: 0 0 10px rgba(123, 150, 255, 0.6);
+}
+
+.app-header a:hover,
+.app-header__right a:hover {
+  box-shadow: 0 0 12px rgba(123, 150, 255, 0.28);
+}
+
+.signals-table__row td {
+  transition: background 0.16s ease;
+}
+
+.signals-table__row:hover td {
+  background: rgba(29, 63, 168, 0.12);
+}
+
+.signals-table__row:hover .signals-table__kind a {
+  text-shadow: 0 0 10px rgba(123, 150, 255, 0.6);
+}
+
+/* 5. New rows and trace lines fade in; the newest table row glows briefly. */
+@keyframes line-enter {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes row-glow {
+  0%,
+  35% {
+    background: rgba(123, 150, 255, 0.16);
+  }
+
+  100% {
+    background: transparent;
+  }
+}
+
+.reasoning-line {
+  animation: line-enter 400ms ease-out both;
+}
+
+.signals-table__row[data-newest='true'] td {
+  animation: row-glow 2600ms ease-out both;
+}
+
+html[data-capture="1"] .reasoning-line {
+  animation-duration: 400ms !important;
+}
+
+/* 6. Accept in a soft green, Deny in grey: a recommendation to approve,
+   not an alarm. */
+.operator-action__btn--accept {
+  border: 1.5px solid #8fd6ad;
+  background: linear-gradient(180deg, #b9ead0 0%, #93d9b0 100%);
+  color: #0b1f13;
+  box-shadow: none;
+}
+
+.operator-action__btn--accept:hover {
+  border-color: #a3e2bd;
+  background: linear-gradient(180deg, #c9f1dc 0%, #a3e2bd 100%);
+  box-shadow: 0 0 14px rgba(143, 214, 173, 0.35);
+}
+
+.operator-action__btn--deny {
+  border: 1.5px solid var(--line-bright);
+  background: rgba(245, 247, 240, 0.08);
+  color: var(--text-primary);
+  box-shadow: none;
+}
+
+.operator-action__btn--deny:hover {
+  border-color: rgba(245, 247, 240, 0.4);
+  background: rgba(245, 247, 240, 0.14);
+  box-shadow: 0 0 12px rgba(245, 247, 240, 0.14);
+}
+
+.summary-card__button--accept {
+  background: #a6e0bf;
+  color: #0b1f13;
+}
+
+.summary-card__button--deny {
+  border-color: var(--line-bright);
+  background: rgba(245, 247, 240, 0.1);
+  color: var(--text-primary);
+}
+
+/* 4. Signal card page: the card on the left, the episode on the right. */
+.signal-page {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 12px;
+  align-items: start;
+  min-height: 0;
+  overflow: auto;
+}
+
+.signal-page__card {
+  min-width: 0;
+}
+
+.signal-page__context {
+  display: grid;
+  gap: 10px;
+  align-content: start;
+  min-width: 0;
+}
+
+.signal-page__context .side-column__link {
+  margin-top: 0;
+}
+
+.bus-health-card--zoomed {
+  width: 100%;
+  gap: 14px;
+  padding: 20px 24px 20px 28px;
+}
+
+.bus-health-card--zoomed .bus-health-card__title {
+  font-size: 1.7rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__event {
+  font-size: 1.2rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__facts dd {
+  font-size: 1.25rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__facts div {
+  padding: 10px 12px;
+}
+
+.bus-health-card--zoomed .bus-health-card__meter {
+  height: 16px;
+}
+
+.bus-health-card--zoomed .bus-health-card__meter-value {
+  font-size: 1.4rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__masses {
+  height: 12px;
+}
+
+.bus-health-card--zoomed .bus-health-card__legend dd,
+.bus-health-card--zoomed .bus-health-card__top-mass {
+  font-size: 1.05rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__cause {
+  font-size: 1rem;
+  padding: 3px 10px;
+}
+
+.bus-health-card--zoomed .bus-health-card__recovery strong {
+  font-size: 1.15rem;
+}
+
+.bus-health-card--zoomed .bus-health-card__recovery p,
+.bus-health-card--zoomed .bus-health-card__summary {
+  font-size: 1rem;
+}
+
+.bus-health-card__facts--basis dt {
+  text-transform: uppercase;
+}
+
+.bus-health-card--zoomed .bus-health-card__facts--basis dd {
+  font-size: 1.05rem;
+}
+
+/* The episode's reports as a short list on the detail pages. */
+.episode-reports {
+  padding: 12px 14px 14px;
+}
+
+.episode-reports__list {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.episode-reports__empty {
+  margin: 8px 0 0;
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.episode-report {
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.episode-report--alert {
+  border-color: rgba(201, 164, 87, 0.55);
+  border-left: 3px solid var(--amber);
+  background: rgba(201, 164, 87, 0.06);
+}
+
+.episode-report--current {
+  border-color: var(--brand-bright);
+  background: rgba(29, 63, 168, 0.22);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.episode-report__link {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: baseline;
+  padding: 6px 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.episode-report__time {
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.episode-report__label {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  min-width: 0;
+  font-size: 0.92rem;
+  font-weight: 700;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.episode-report__alert {
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.episode-report__meta {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.verdict-page__decision {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-card--enter,
+  .reasoning-line,
+  .signals-table__row[data-newest='true'] td {
+    animation: none;
+  }
+}
+
+/* ---- 2026-09-20 operator feedback, second pass -------------------------- */
+
+/* Reasoning trace: each entry segmented by a visible rule, the stage in
+   words as a badge, a sentence as the headline, the raw line beneath. */
+.reasoning-line {
+  grid-template-areas:
+    "time stage spacer"
+    "msg msg msg"
+    "raw raw raw"
+    "chips chips chips";
+  row-gap: 3px;
+  padding: 10px 0 11px;
+  border-bottom: 1px solid rgba(220, 227, 213, 0.16);
+}
+
+.reasoning-line:last-child {
+  border-bottom: 0;
+}
+
+.reasoning-line__time {
+  align-self: center;
+  font-size: 0.74rem;
+}
+
+.reasoning-line__stage {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 1px 8px;
+  border: 1px solid currentColor;
+  border-radius: 2px;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.reasoning-line__stage-code {
+  color: var(--text-subtle);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 0.64rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.reasoning-line__msg {
+  font-size: 0.98rem;
+  line-height: 1.4;
+}
+
+.reasoning-line__raw {
+  grid-area: raw;
+  color: var(--text-subtle);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 0.72rem;
+  line-height: 1.4;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.reasoning-line__raw::before {
+  content: 'raw · ';
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.reasoning-line--warn .reasoning-line__msg {
+  color: #ff9d92;
+}
+
+.reasoning-line--tool .reasoning-line__msg {
+  color: var(--text-primary);
+}
+
+.reasoning-panel--compact .reasoning-line__msg {
+  font-size: 0.82rem;
+}
+
+.reasoning-panel--compact .reasoning-line__raw {
+  display: none;
+}
+
+/* Stress mode: say what a tick does. */
+.stress-mode__hint {
+  margin: 0 0 8px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
+  line-height: 1.4;
+}
+
+/* Spacecraft page: recovery under the topology on the left; the bus-health
+   card takes the whole lower right so it fits without scrolling. */
+.spacecraft-grid {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
+  grid-template-areas:
+    "topology symptom belief"
+    "recovery latest latest";
+}
+
+/* A new alert card glows harder than a report so the amber reads through
+   its own amber border. */
+@keyframes report-glow-alert {
+  0%,
+  35% {
+    border-color: #f0c36b;
+    background: rgba(240, 195, 107, 0.22);
+    box-shadow:
+      0 0 0 2px rgba(240, 195, 107, 0.85),
+      0 0 26px rgba(240, 195, 107, 0.65);
+  }
+
+  100% {
+    background: rgba(201, 164, 87, 0.06);
+    box-shadow:
+      0 0 0 0 rgba(240, 195, 107, 0),
+      0 0 0 rgba(240, 195, 107, 0);
+  }
+}
+
+@keyframes report-glow {
+  0%,
+  35% {
+    border-color: var(--brand-bright);
+    background: rgba(123, 150, 255, 0.18);
+    box-shadow:
+      0 0 0 2px rgba(123, 150, 255, 0.8),
+      0 0 24px rgba(123, 150, 255, 0.6);
+  }
+
+  100% {
+    background: rgba(255, 255, 255, 0.03);
+    box-shadow:
+      0 0 0 0 rgba(123, 150, 255, 0),
+      0 0 0 rgba(123, 150, 255, 0);
+  }
+}
+
+/* The headline reads as prose; the raw line stays in the log face. */
+.reasoning-line__msg {
+  font-family: var(--font-sans);
+}
+
+.reasoning-line__time {
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+}
+
+/* Equal rows: the topology gets its height back and the card still fits. */
+.spacecraft-grid {
+  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+}
+
+/* Stress mode cells say what a tick does, so the grid cannot be read as a
+   filter: "Orbit · deny" unticked, "Orbit · denied" ticked. Pseudo-element
+   text, so the accessible label stays the domain name. */
+.stress-mode__cell span::after {
+  content: ' · deny';
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.stress-mode__cell--blocked span::after {
+  content: ' · denied';
+  color: var(--red);
+  font-weight: 700;
+}
+
+/* ---- btop skin (2026-09-20) ------------------------------------------------
+   The console laid out like a terminal monitor: flat black panels with a thin
+   frame, the panel title sitting in the top border line between ┤ ├, labels
+   joined to their values by dotted leaders, segmented block meters, numbers
+   in a monospace face. Colours are the existing palette; only the chrome
+   changes. Appended last so it overrides the earlier rules. */
+:root {
+  --font-mono: 'JetBrains Mono', 'SF Mono', Menlo, ui-monospace, monospace;
+  --frame: var(--line-bright);
+  --frame-bg: #060a0a;
+  --title-lift: -0.68em;
+}
+
+.brigade-shell,
+.page-shell,
+.signal-shell,
+.spacecraft-shell,
+.run-shell,
+.demo-shell {
+  background: var(--black);
+}
+
+.brigade-shell::before {
+  display: none;
+}
+
+/* Frames: one thin line, small radius, flat black. */
+.panel,
+.summary-card,
+.side-column,
+.reports-strip,
+.status-banner,
+.operator-action,
+.bus-health-card,
+.map-stage,
+.stress-mode,
+.reasoning-panel {
+  border: 1px solid var(--frame);
+  border-radius: 6px;
+  background: var(--frame-bg);
+  box-shadow: none;
+}
+
+.panel {
+  overflow: visible;
+  clip-path: none;
+  backdrop-filter: none;
+  padding: 20px 12px 12px;
+}
+
+.panel::before,
+.panel::after {
+  display: none;
+}
+
+.map-stage {
+  overflow: hidden;
+}
+
+/* Titles in the border line: the header is lifted onto the frame and each
+   of its parts carries the panel background so the line breaks around it. */
+.panel__header,
+.summary-card__head {
+  position: absolute;
+  top: var(--title-lift);
+  left: 10px;
+  right: 10px;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0;
+  line-height: 1.25;
+  pointer-events: none;
+}
+
+.panel__header > *,
+.summary-card__head > * {
+  padding: 0 6px;
+  background: var(--frame-bg);
+  pointer-events: auto;
+}
+
+.panel__header h2,
+.summary-card__head h2 {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.panel__header h2::before,
+.summary-card__head h2::before {
+  content: '┤';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.panel__header h2::after,
+.summary-card__head h2::after {
+  content: '├';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.panel__header span,
+.panel__header a,
+.summary-card__head a {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.summary-card {
+  position: relative;
+  min-height: 0;
+  padding: 20px 14px 14px;
+}
+
+.summary-card__link,
+.panel__header a {
+  color: var(--brand-bright);
+  font-weight: 700;
+}
+
+/* Wrappers that scroll must leave room for the lifted title. */
+.verdict-page > *,
+.signal-page,
+.run-grid {
+  padding-top: 10px;
+}
+
+.spacecraft-panel,
+.run-panel,
+.reasoning-panel {
+  overflow: visible;
+}
+
+.reasoning-panel {
+  position: relative;
+  padding-top: 20px;
+}
+
+.reasoning-panel__stream {
+  border-radius: 0 0 6px 6px;
+  background: transparent;
+}
+
+.signals-page__table {
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  overflow: visible;
+}
+
+.signals-page__scroll {
+  min-height: 0;
+  overflow: auto;
+}
+
+.stress-mode {
+  position: relative;
+  padding: 20px 12px 12px;
+}
+
+/* Reports strip: the title and the link ride in the top border; the track
+   takes the full width beneath. */
+.reports-strip {
+  position: relative;
+  grid-template-columns: minmax(0, 1fr);
+  padding: 18px 12px 8px;
+}
+
+.reports-strip__edge {
+  position: absolute;
+  top: var(--title-lift);
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 6px;
+  background: var(--frame-bg);
+  line-height: 1.25;
+}
+
+.reports-strip__edge--left {
+  left: 10px;
+}
+
+.reports-strip__edge--right {
+  right: 10px;
+}
+
+.reports-strip__title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-primary);
+  font-size: 0.82rem;
+  letter-spacing: 0.1em;
+}
+
+.reports-strip__title::before {
+  content: '┤';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.reports-strip__title::after {
+  content: '├';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.reports-strip__alerts {
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  letter-spacing: 0;
+}
+
+/* Status line: the subject rides in the border, the headline sits inside. */
+.status-banner {
+  position: relative;
+  padding: 12px 16px 9px;
+}
+
+.status-banner__subject {
+  position: absolute;
+  top: var(--title-lift);
+  left: 10px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  background: var(--frame-bg);
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 0.78rem;
+  letter-spacing: 0.1em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.status-banner__subject::before {
+  content: '┤';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.status-banner__subject::after {
+  content: '├';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.status-banner__line,
+.status-banner__confidence,
+.status-banner__timing {
+  font-family: var(--font-mono);
+}
+
+/* Operator action box and bus-health card: the eyebrow rides in the border. */
+.operator-action {
+  position: relative;
+  padding-top: 18px;
+  border-left-width: 4px;
+}
+
+.operator-action__eyebrow,
+.bus-health-card__eyebrow {
+  position: absolute;
+  top: var(--title-lift);
+  left: 10px;
+  z-index: 1;
+  padding: 0 6px;
+  background: var(--frame-bg);
+  font-family: var(--font-display);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  line-height: 1.25;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.bus-health-card {
+  position: relative;
+  padding-top: 20px;
+}
+
+/* Situation sections: each a small frame with its label in the border and
+   the count on the right of the same line. */
+.side-column__body {
+  padding: 14px 10px 12px;
+}
+
+.disclosure {
+  position: relative;
+  margin: 0 0 14px;
+  padding: 14px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+
+.disclosure:last-child {
+  margin-bottom: 0;
+}
+
+.disclosure__head {
+  position: absolute;
+  top: var(--title-lift);
+  left: 8px;
+  right: 8px;
+  z-index: 1;
+  margin: 0;
+  line-height: 1.25;
+}
+
+.disclosure__toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  background: transparent;
+}
+
+.disclosure__toggle:hover,
+.disclosure__toggle:focus-visible {
+  background: transparent;
+}
+
+.disclosure__chevron {
+  display: none;
+}
+
+.disclosure__label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  background: var(--frame-bg);
+  color: var(--text-primary);
+  font-size: 0.76rem;
+}
+
+.disclosure__label::before {
+  content: '┤';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.disclosure__label::after {
+  content: '├';
+  color: var(--frame);
+  font-family: var(--font-mono);
+  font-weight: 400;
+  letter-spacing: 0;
+}
+
+.disclosure__count {
+  min-width: 0;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 0;
+  background: var(--frame-bg);
+  color: var(--brand-bright);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0;
+}
+
+.disclosure__body {
+  padding-top: 2px;
+}
+
+.disclosure--open .disclosure__toggle::after {
+  content: none;
+}
+
+/* Dotted leaders: label ...... value, as btop draws its fields. */
+.facts div,
+.operator-action__meta div,
+.run-facts div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.facts div::before,
+.operator-action__meta div::before,
+.run-facts div::before {
+  content: '';
+  order: 2;
+  flex: 1 1 16px;
+  align-self: center;
+  border-bottom: 1px dotted var(--frame);
+  transform: translateY(1px);
+}
+
+.facts dt,
+.operator-action__meta dt,
+.run-facts dt {
+  order: 1;
+  flex: 0 0 auto;
+  color: var(--text-subtle);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.facts dd,
+.operator-action__meta dd,
+.run-facts dd {
+  order: 3;
+  flex: 0 1 auto;
+  margin: 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+  text-align: right;
+}
+
+.run-facts {
+  display: grid;
+  gap: 8px;
+}
+
+.run-facts__wide {
+  grid-column: 1 / -1;
+}
+
+.summary-card__kv {
+  gap: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+.summary-card__kv > span {
+  color: var(--text-subtle);
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  align-self: center;
+}
+
+.summary-card__kv > strong {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 8px;
+  text-align: right;
+}
+
+.summary-card__kv > strong::before {
+  content: '';
+  flex: 1 1 12px;
+  align-self: center;
+  border-bottom: 1px dotted var(--frame);
+  transform: translateY(1px);
+}
+
+/* Numbers in the log face. */
+.summary-card__confidence,
+.report-card__time,
+.report-card__meta,
+.theater__meta,
+.episode-report__time,
+.episode-report__meta,
+.signals-table__time,
+.signals-table .num,
+.signals-table__facts,
+.run-timings td,
+.run-timings th,
+.verdict-panel__timing dd,
+.verdict-panel__confidence,
+.verdict-panel__revision,
+.verdict-panel__meter-value,
+.bus-health-card__facts dd,
+.bus-health-card__meter-value,
+.bus-health-card__legend dd,
+.bus-health-card__confidence,
+.belief__row strong,
+.belief__facts dd,
+.stress-mode__cell span,
+.connection-dot {
+  font-family: var(--font-mono);
+}
+
+/* Segmented block meters. */
+.summary-card__bar,
+.bus-health-card__meter,
+.verdict-panel__meter,
+.belief__row-bar {
+  height: 10px;
+  border: 0;
+  border-radius: 1px;
+  background:
+    repeating-linear-gradient(90deg, rgba(220, 227, 213, 0.16) 0 6px, transparent 6px 9px);
+  overflow: hidden;
+}
+
+.summary-card__bar-fill,
+.bus-health-card__meter-fill,
+.verdict-panel__meter-fill,
+.belief__row-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 0;
+  background-color: transparent;
+  background-image: repeating-linear-gradient(90deg, currentColor 0 6px, transparent 6px 9px);
+  color: var(--brand-bright);
+}
+
+.summary-card--hostile_external .summary-card__bar-fill {
+  color: var(--verdict-hostile, #ff7b6d);
+}
+
+.summary-card--natural_external .summary-card__bar-fill {
+  color: var(--verdict-natural, #8fe3b5);
+}
+
+.summary-card--unknown .summary-card__bar-fill {
+  color: var(--verdict-unknown, #b8c2d9);
+}
+
+.belief__row--external .belief__row-bar i {
+  color: var(--amber);
+}
+
+.belief__row--unknown .belief__row-bar i {
+  color: var(--text-subtle);
+}
+
+/* Cards in the strip and the lists: thin frames, mono meta. */
+.report-card,
+.theater,
+.episode-report {
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.025);
+}
+
+/* Header links as key hints. */
+.app-header a,
+.app-header__right a,
+.app-header__nav-current {
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 0.84rem;
+  letter-spacing: 0;
+}
+
+html[data-capture="1"] .panel {
+  background: var(--frame-bg);
+}
+
+/* btop skin, corrections after the first screenshots. */
+.status-banner {
+  overflow: visible;
+}
+
+.brigade-shell,
+.page-shell,
+.signal-shell,
+.spacecraft-shell,
+.run-shell {
+  row-gap: 18px;
+}
+
+.response,
+.verdict-page__decision,
+.signal-page__context {
+  gap: 20px;
+}
+
+.run-grid,
+.spacecraft-grid {
+  gap: 16px;
+}
+
+.signals-page__inputs .stress-mode {
+  margin-top: 16px;
+}
+
+/* Leaders stay on one line: label, dotted rule, value; a long value wraps
+   inside its own box, right-aligned, the way btop wraps nothing but numbers. */
+.facts div,
+.operator-action__meta div,
+.run-facts div {
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.facts div::before,
+.operator-action__meta div::before,
+.run-facts div::before {
+  flex: 1 1 12px;
+  min-width: 12px;
+}
+
+.facts dd,
+.operator-action__meta dd,
+.run-facts dd {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.facts dd small,
+.run-facts dd small {
+  display: block;
+}
+
+.operator-action__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px 18px;
+}
+
+/* Stress cells: the domain in the text face so three columns fit. */
+.stress-mode__cell span {
+  font-family: var(--font-sans);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.stress-mode__cell span::after {
+  font-size: 0.6rem;
+}
+
+/* Episode report rows: the label gets the room, the meta yields. */
+.episode-report__link {
+  grid-template-columns: auto minmax(0, 3fr) minmax(0, 2fr);
+}
+
+.episode-report__meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: right;
+}
+
+/* The reasoning panel's old header band is not wanted under a border title. */
+.reasoning-panel .panel__header {
+  padding: 0;
+  border-bottom: 0;
+  background: transparent;
+}
+
+/* Signal-card page: a wider context column so a report row fits on one line. */
+.signal-page {
+  grid-template-columns: minmax(0, 1fr) 440px;
+}
+
+.episode-report__label {
+  font-size: 0.86rem;
+}
+
+.episode-report__time,
+.episode-report__meta {
+  font-size: 0.72rem;
+}
+
+/* Situation sections back to accordion rows: a chevron, the label, a dotted
+   leader and the count on one clickable line, sections parted by a rule.
+   Same skin language, no boxes that read as empty panels when closed. */
+.side-column__body {
+  padding: 6px 10px 12px;
+}
+
+.disclosure {
+  position: static;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+}
+
+.disclosure:last-child {
+  border-bottom: 0;
+}
+
+.disclosure__head {
+  position: static;
+  margin: 0;
+  line-height: 1.3;
+}
+
+.disclosure__toggle {
+  display: grid;
+  grid-template-columns: 14px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 9px 4px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+
+.disclosure__toggle::after {
+  content: '';
+  grid-column: 3;
+  align-self: center;
+  border-bottom: 1px dotted var(--frame);
+  transform: translateY(1px);
+}
+
+.disclosure__toggle:hover,
+.disclosure__toggle:focus-visible {
+  background: rgba(29, 63, 168, 0.12);
+  outline: none;
+}
+
+.disclosure__toggle:hover .disclosure__label,
+.disclosure__toggle:focus-visible .disclosure__label {
+  text-shadow: 0 0 10px rgba(123, 150, 255, 0.55);
+}
+
+.disclosure__chevron {
+  display: inline-block;
+  grid-column: 1;
+  width: 7px;
+  height: 7px;
+  margin-left: 2px;
+  border-right: 1.5px solid var(--brand-bright);
+  border-bottom: 1.5px solid var(--brand-bright);
+  transform: rotate(-45deg);
+  transition: transform 0.16s ease;
+}
+
+.disclosure--open .disclosure__chevron {
+  transform: rotate(45deg);
+}
+
+.disclosure__label {
+  grid-column: 2;
+  padding: 0;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.disclosure__label::before,
+.disclosure__label::after {
+  content: none;
+}
+
+.disclosure__count {
+  grid-column: 4;
+  min-width: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--brand-soft);
+  border-radius: 3px;
+  background: rgba(29, 63, 168, 0.18);
+  color: var(--brand-bright);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  text-align: center;
+}
+
+.disclosure__body {
+  padding: 2px 4px 12px 24px;
+}
+
+.disclosure__toggle > *,
+.disclosure__toggle::after {
+  grid-row: 1;
+}
+
+/* Situation column facts: the column is too narrow for leaders, so the
+   label sits above its value and the value takes the full width. The
+   physics score keeps its sparkline beside it on one line. */
+.side-column .facts {
+  gap: 10px;
+}
+
+.side-column .facts div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 2px;
+}
+
+.side-column .facts div::before {
+  display: none;
+}
+
+.side-column .facts dt,
+.side-column .facts dd {
+  order: 0;
+}
+
+.side-column .facts dd {
+  flex: none;
+  min-width: 0;
+  text-align: left;
+  font-size: 0.9rem;
+  line-height: 1.35;
+  overflow-wrap: normal;
+  word-break: normal;
+}
+
+.side-column .facts dd.facts__trend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.side-column .facts dd.facts__trend b {
+  flex: 0 0 auto;
+  font-size: 1rem;
+}
+
+.side-column .facts dd.facts__trend svg {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 160px;
+}
+
+/* ---- Density pass (2026-09-20): larger type, long text behind toggles ------ */
+:root {
+  font-size: 17px;
+}
+
+/* Labels and values one step up from the terminal sizes. */
+.panel__header h2,
+.summary-card__head h2,
+.disclosure__label,
+.status-banner__subject,
+.reports-strip__title,
+.operator-action__eyebrow,
+.bus-health-card__eyebrow {
+  font-size: 0.86rem;
+}
+
+.panel__header span,
+.panel__header a,
+.summary-card__head a,
+.reports-strip__alerts,
+.disclosure__count {
+  font-size: 0.8rem;
+}
+
+.facts dt,
+.operator-action__meta dt,
+.run-facts dt,
+.summary-card__kv > span,
+.bus-health-card__facts dt,
+.verdict-panel__timing dt {
+  font-size: 0.76rem;
+}
+
+.facts dd,
+.operator-action__meta dd,
+.run-facts dd,
+.summary-card__kv,
+.side-column .facts dd {
+  font-size: 0.98rem;
+}
+
+.status-banner__headline {
+  font-size: 1.22rem;
+}
+
+.status-banner__badge {
+  font-size: 1.02rem;
+  padding: 7px 14px;
+}
+
+.status-banner__line,
+.status-banner__confidence {
+  font-size: 1.02rem;
+}
+
+.status-banner__timing {
+  font-size: 0.9rem;
+}
+
+.report-card {
+  flex-basis: 224px;
+}
+
+.report-card__label {
+  font-size: 1.04rem;
+}
+
+.report-card__time,
+.report-card__meta,
+.theater__meta,
+.episode-report__time,
+.episode-report__meta {
+  font-size: 0.82rem;
+}
+
+.theater__name {
+  font-size: 1.1rem;
+}
+
+.episode-report__label {
+  font-size: 0.96rem;
+}
+
+.reasoning-line__msg {
+  font-size: 1.08rem;
+  line-height: 1.45;
+}
+
+.reasoning-line__time {
+  font-size: 0.82rem;
+}
+
+.reasoning-line__stage {
+  font-size: 0.76rem;
+}
+
+.signals-table {
+  font-size: 1.05rem;
+}
+
+.signals-table__time,
+.signals-table .num {
+  font-size: 0.98rem;
+}
+
+.stress-mode__cell {
+  font-size: 0.9rem;
+  padding: 6px 10px;
+}
+
+.stress-mode__hint {
+  font-size: 0.92rem;
+}
+
+.verdict-page .verdict-panel__list li,
+.verdict-page .verdict-panel__facts dd {
+  font-size: 1.05rem;
+}
+
+/* Toggles: one small mono word; the long text opens beneath it. */
+details.reasoning-line__details,
+details.bus-health-card__more,
+details.run-more,
+details.page-intro {
+  min-width: 0;
+}
+
+details.reasoning-line__details {
+  grid-area: raw;
+}
+
+details.reasoning-line__details > summary,
+details.bus-health-card__more > summary,
+details.run-more > summary,
+details.page-intro > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  list-style: none;
+  cursor: pointer;
+  transition:
+    color 0.16s ease,
+    border-color 0.16s ease,
+    box-shadow 0.16s ease;
+}
+
+details.reasoning-line__details > summary::-webkit-details-marker,
+details.bus-health-card__more > summary::-webkit-details-marker,
+details.run-more > summary::-webkit-details-marker,
+details.page-intro > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.reasoning-line__details > summary::before,
+details.bus-health-card__more > summary::before,
+details.run-more > summary::before,
+details.page-intro > summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+}
+
+details[open].reasoning-line__details > summary::before,
+details[open].bus-health-card__more > summary::before,
+details[open].run-more > summary::before,
+details[open].page-intro > summary::before {
+  content: '▾';
+}
+
+details.reasoning-line__details > summary:hover,
+details.bus-health-card__more > summary:hover,
+details.run-more > summary:hover,
+details.page-intro > summary:hover {
+  color: var(--brand-bright);
+  border-color: var(--brand-bright);
+  box-shadow: 0 0 10px rgba(123, 150, 255, 0.3);
+}
+
+details.reasoning-line__details .reasoning-line__raw {
+  display: block;
+  margin-top: 6px;
+}
+
+details.reasoning-line__details .reasoning-line__raw::before {
+  content: none;
+}
+
+details.bus-health-card__more > summary {
+  margin-top: 2px;
+}
+
+details.bus-health-card__more[open] > .bus-health-card__summary,
+details.run-more[open] > .run-note {
+  margin-top: 8px;
+}
+
+details.page-intro {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 1rem;
+  line-height: 1.45;
+}
+
+details.page-intro > p {
+  max-width: 1100px;
+  margin-top: 8px;
+}
+
+.page-shell:has(.page-intro) {
+  grid-template-rows: auto auto minmax(0, 1fr);
+}
+
+/* The signals table loses the repeated one-line explainer under each kind;
+   it lives on in the link's tooltip. */
+.signals-table__kind small {
+  display: none;
+}
+
+details.verdict-panel__more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  list-style: none;
+  cursor: pointer;
+}
+
+details.verdict-panel__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.verdict-panel__more > summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+}
+
+details[open].verdict-panel__more > summary::before {
+  content: '▾';
+}
+
+details.verdict-panel__more > summary:hover {
+  color: var(--brand-bright);
+  border-color: var(--brand-bright);
+  box-shadow: 0 0 10px rgba(123, 150, 255, 0.3);
+}
+
+.verdict-panel__list--rule {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82rem !important;
+}
+
+/* Density pass, corrections. */
+.signals-table__kind {
+  min-width: 190px;
+}
+
+.signals-table__kind a {
+  white-space: nowrap;
+}
+
+.stress-mode__cell span {
+  font-size: 0.84rem;
+}
+
+.stress-mode__cell span::after {
+  font-size: 0.56rem;
+}
+
+details.kb-card__more > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  margin-top: 6px;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  list-style: none;
+  cursor: pointer;
+}
+
+details.kb-card__more > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.kb-card__more > summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+}
+
+details[open].kb-card__more > summary::before {
+  content: '▾';
+}
+
+details.kb-card__more > summary:hover {
+  color: var(--brand-bright);
+  border-color: var(--brand-bright);
+  box-shadow: 0 0 10px rgba(123, 150, 255, 0.3);
+}
+
+details.kb-card__more[open] > .kb-card__summary {
+  margin-top: 8px;
+}
+
+.kb-card__title {
+  font-size: 1rem;
+}
+
+/* ---- Streamlining pass (2026-09-20 evening) --------------------------------
+   Say each thing once: the strip has one card per signal, the Response
+   column one verdict card and one decision card, the Verdict page no
+   generic explainers, and chips that restate the sentence beside them go. */
+
+/* Verdict page: sections with nothing in them do not take a heading. */
+.verdict-panel__section--empty {
+  display: none;
+}
+
+/* One timing line instead of three boxes; the arrival cell appears only
+   once it has a measurement. */
+.verdict-panel__timing {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 22px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.verdict-panel__timing div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+}
+
+.verdict-panel__timing div[data-empty] {
+  display: none;
+}
+
+.verdict-panel__timing dt {
+  margin: 0;
+}
+
+.verdict-panel__timing dd {
+  margin: 0;
+}
+
+/* Basis and actor as two short facts, no boxes. */
+.verdict-panel__facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+}
+
+.verdict-panel__facts div {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+}
+
+.verdict-panel__facts dt {
+  margin: 0;
+}
+
+.verdict-panel__facts dd {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.verdict-panel__facts small {
+  display: block;
+  flex-basis: 100%;
+  color: var(--text-muted);
+}
+
+/* The signals table: the sentence already says subsystem, symptom and
+   physics; the chips restated it. */
+.signals-table__facts {
+  display: none;
+}
+
+/* The trace: the headline says the verdict and the physics score; the two
+   chips restated them. The blocked and withheld flags stay. */
+.reasoning-line__chip--verdict,
+.reasoning-line__chip--physics {
+  display: none;
+}
+
+/* Spacecraft page: the Cause belief and Recovery panels carry the belief
+   and the recovery; the card beside them keeps the record's facts only. */
+.spacecraft-shell .bus-health-card__basis,
+.spacecraft-shell .bus-health-card__recovery {
+  display: none;
+}
+
+/* Response column: the decision card is the one place to act. */
+.summary-card__buttons {
+  margin-top: 8px;
+}
+
+.summary-card__button {
+  padding: 13px 14px;
+  font-size: 0.95rem;
+  letter-spacing: 0.12em;
+}
+
+.summary-card__button--accept {
+  border: 1.5px solid #8fd6ad;
+  background: linear-gradient(180deg, #b9ead0 0%, #93d9b0 100%);
+  color: #0b1f13;
+}
+
+.summary-card__button--accept:hover {
+  background: linear-gradient(180deg, #c9f1dc 0%, #a3e2bd 100%);
+  box-shadow: 0 0 14px rgba(143, 214, 173, 0.35);
+}
+
+.summary-card__button--deny {
+  border: 1.5px solid var(--line-bright);
+  background: rgba(245, 247, 240, 0.08);
+  color: var(--text-primary);
+}
+
+.summary-card__button--deny:hover {
+  background: rgba(245, 247, 240, 0.14);
+  box-shadow: 0 0 12px rgba(245, 247, 240, 0.14);
+}
+
+.summary-card__gate {
+  color: var(--text-subtle);
+  font-size: 0.86rem;
+}
+
+/* Spacecraft page: the Cause belief rows name the top cause and the card
+   below carries the physics score; the four fact boxes repeated both and
+   added the scorer's internals. */
+.spacecraft-shell .belief__facts {
+  display: none;
+}
+
+/* Strip cards wide enough for "SIM-01 · internal diagnosis". */
+.report-card {
+  flex-basis: 250px;
+}
+
+/* ---- Interactivity (2026-09-20 evening) --------------------------------------
+   Hotkey hints as btop draws them, the operator's outcome under Accepted /
+   Denied, the operator step on the recovery track. */
+[data-key]::after {
+  content: attr(data-key);
+  display: inline-block;
+  margin-left: 8px;
+  padding: 0 5px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  opacity: 0.55;
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  line-height: 1.4;
+  vertical-align: 1px;
+}
+
+.app-header__nav [data-key]::after {
+  margin-left: 6px;
+  opacity: 0.45;
+}
+
+[data-key]:hover::after,
+[data-key]:focus-visible::after {
+  opacity: 1;
+}
+
+html[data-capture="1"] .app-header__nav [data-key]::after {
+  opacity: 0.35;
+}
+
+.operator-action__resolved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.operator-action__resolved-detail,
+.summary-card__outcome {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.86rem;
+}
+
+.summary-card__resolved {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 12px;
+}
+
+.summary-card__resolved > span:first-child {
+  color: var(--status-live-bright);
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.recovery-state--approved .recovery-state__step--current {
+  border-color: #8fd6ad;
+  color: #b9ead0;
+}
+
+.recovery-state--denied .recovery-state__step--current {
+  border-color: var(--line-bright);
+  color: var(--text-muted);
+}
+
+.recovery-state--approved .recovery-state__headline strong {
+  color: #b9ead0;
+}
+
+.theater--pinned {
+  box-shadow:
+    inset 3px 0 0 var(--brand),
+    0 0 14px rgba(123, 150, 255, 0.28);
+}
+
+/* ---- Run scorecard (2026-09-20 evening) --------------------------------------
+   One column of stacked facts on the left (labels over values, no leaders
+   to wrap), the timings table on the right with room for its numbers. */
+.run-grid {
+  grid-template-columns: minmax(300px, 0.8fr) minmax(0, 1.6fr);
+  gap: 16px;
+}
+
+.run-facts {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+}
+
+.run-facts div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 3px;
+}
+
+.run-facts div::before {
+  display: none;
+}
+
+.run-facts dt,
+.run-facts dd {
+  order: 0;
+}
+
+.run-facts dd {
+  flex: none;
+  min-width: 0;
+  text-align: left;
+  font-size: 1.02rem;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.run-facts dd small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: 0.78rem;
+}
+
+.run-timings th,
+.run-timings td {
+  padding: 12px 10px;
+  vertical-align: middle;
+}
+
+.run-timings tbody th {
+  font-size: 1rem;
+}
+
+.run-timings td.num {
+  font-size: 1.15rem;
+  white-space: nowrap;
+}
+
+.run-timings thead th {
+  white-space: nowrap;
+}

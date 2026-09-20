@@ -102,6 +102,8 @@ interface EventState {
   acceptedDecisionIds: Set<string>;
   /** Decision ids the operator denied in the left-rail action panel. */
   deferredDecisionIds: Set<string>;
+  /** When the operator last accepted or denied each decision (ISO). */
+  decisionStatusAt: Record<string, string>;
   /** Live maneuver-demo overlay state. When set, the Cesium globe runs
    *  the accept-action visualization (hostile approach → friendly burn
    *  → miss). Cleared automatically when the animation finishes. */
@@ -186,6 +188,7 @@ const initialState = (): Omit<
   approvedEventIds: new Set(),
   acceptedDecisionIds: new Set(),
   deferredDecisionIds: new Set(),
+  decisionStatusAt: {},
   maneuverDemo: null,
   takeoverEvent: null,
   pinnedSatelliteId: null,
@@ -301,7 +304,11 @@ export const useEventStore = create<EventState>()(
       acceptedDecisionIds.add(id);
       const deferredDecisionIds = new Set(state.deferredDecisionIds);
       deferredDecisionIds.delete(id);
-      return { acceptedDecisionIds, deferredDecisionIds };
+      return {
+        acceptedDecisionIds,
+        deferredDecisionIds,
+        decisionStatusAt: { ...state.decisionStatusAt, [id]: new Date().toISOString() },
+      };
     }),
   deferDecision: (id) =>
     set((state) => {
@@ -309,7 +316,11 @@ export const useEventStore = create<EventState>()(
       deferredDecisionIds.add(id);
       const acceptedDecisionIds = new Set(state.acceptedDecisionIds);
       acceptedDecisionIds.delete(id);
-      return { deferredDecisionIds, acceptedDecisionIds };
+      return {
+        deferredDecisionIds,
+        acceptedDecisionIds,
+        decisionStatusAt: { ...state.decisionStatusAt, [id]: new Date().toISOString() },
+      };
     }),
   clearDecisionStatus: (id) =>
     set((state) => {
@@ -317,7 +328,9 @@ export const useEventStore = create<EventState>()(
       const deferredDecisionIds = new Set(state.deferredDecisionIds);
       acceptedDecisionIds.delete(id);
       deferredDecisionIds.delete(id);
-      return { acceptedDecisionIds, deferredDecisionIds };
+      const decisionStatusAt = { ...state.decisionStatusAt };
+      delete decisionStatusAt[id];
+      return { acceptedDecisionIds, deferredDecisionIds, decisionStatusAt };
     }),
   startManeuverDemo: (demo) => set({ maneuverDemo: demo }),
   endManeuverDemo: () => set({ maneuverDemo: null }),
@@ -353,7 +366,27 @@ export const useEventStore = create<EventState>()(
         attributionsById: state.attributionsById,
         decisionsById: state.decisionsById,
         pinnedSatelliteId: state.pinnedSatelliteId,
+        // The operator's calls follow the operator from page to page; the
+        // Sets travel as arrays and come back as Sets in `merge`.
+        acceptedDecisionIds: [...state.acceptedDecisionIds],
+        deferredDecisionIds: [...state.deferredDecisionIds],
+        decisionStatusAt: state.decisionStatusAt,
       }),
+      merge: (persisted, current) => {
+        const stored = (persisted ?? {}) as Partial<Omit<EventState, "acceptedDecisionIds" | "deferredDecisionIds">> & {
+          acceptedDecisionIds?: unknown;
+          deferredDecisionIds?: unknown;
+        };
+        const ids = (value: unknown) =>
+          new Set(Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : []);
+        return {
+          ...current,
+          ...stored,
+          acceptedDecisionIds: ids(stored.acceptedDecisionIds),
+          deferredDecisionIds: ids(stored.deferredDecisionIds),
+          decisionStatusAt: stored.decisionStatusAt ?? {},
+        };
+      },
     },
   ),
 );

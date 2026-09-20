@@ -112,7 +112,10 @@ export function BusHealthCard({
       <RecoveryBlock record={record} decision={decision} />
 
       {zoomed && record.summary ? (
-        <p className="bus-health-card__summary">{record.summary}</p>
+        <details className="bus-health-card__more">
+          <summary>Record summary</summary>
+          <p className="bus-health-card__summary">{record.summary}</p>
+        </details>
       ) : null}
 
       {!capture ? (
@@ -174,11 +177,6 @@ function BasisBlock({ record, zoomed }: { record: BusHealthRecord; zoomed: boole
       </p>
     )
   }
-  const internal = basis.internal ?? 0
-  const external = basis.external ?? 0
-  const unknown = basis.unknown ?? Math.max(0, 1 - internal - external)
-  const total = internal + external + unknown || 1
-
   return (
     <section
       className="bus-health-card__basis"
@@ -188,25 +186,10 @@ function BasisBlock({ record, zoomed }: { record: BusHealthRecord; zoomed: boole
     >
       {basis.kind === 'belief' ? (
         <>
-          <div
-            className="bus-health-card__masses"
-            role="img"
+          <dl
+            className="bus-health-card__legend"
             aria-label={`internal ${pct(basis.internal)}, external ${pct(basis.external)}, unknown ${pct(basis.unknown)}`}
           >
-            <span
-              className="bus-health-card__mass bus-health-card__mass--internal"
-              style={{ width: `${(internal / total) * 100}%` }}
-            />
-            <span
-              className="bus-health-card__mass bus-health-card__mass--external"
-              style={{ width: `${(external / total) * 100}%` }}
-            />
-            <span
-              className="bus-health-card__mass bus-health-card__mass--unknown"
-              style={{ width: `${(unknown / total) * 100}%` }}
-            />
-          </div>
-          <dl className="bus-health-card__legend">
             <div className="bus-health-card__legend--internal">
               <dt>Internal</dt>
               <dd data-testid="basis-internal">{pct(basis.internal)}</dd>
@@ -235,14 +218,46 @@ function BasisBlock({ record, zoomed }: { record: BusHealthRecord; zoomed: boole
           <span className="bus-health-card__top-label">top cause</span>
         </p>
       ) : null}
-      <p className="bus-health-card__shape-row">
-        {basis.shape ? <span>shape {basis.shape}</span> : null}
-        {basis.shapeSupport !== null ? <span>support {basis.shapeSupport.toFixed(2)}</span> : null}
-        {basis.fitQuality !== null ? <span>fit {basis.fitQuality.toFixed(2)}</span> : null}
-        {zoomed && basis.wBelief !== null ? <span>belief weight {basis.wBelief.toFixed(2)}</span> : null}
-        {zoomed && basis.rate ? <span>rate {rateMethodLabel(basis.rate)}</span> : null}
-        {zoomed && basis.row ? <span>row {basis.row.replaceAll('_', ' ')}</span> : null}
-      </p>
+      {zoomed ? (
+        // The scorer's details, folded: they are the record behind the score,
+        // not the read.
+        <details className="bus-health-card__more">
+          <summary>Scorer details</summary>
+        <dl className="bus-health-card__facts bus-health-card__facts--basis" data-testid="basis-facts">
+          <div>
+            <dt>shape</dt> <dd>{basis.shape ?? 'n/a'}</dd>
+            {basis.shapeSupport !== null || basis.fitQuality !== null ? (
+              <small>
+                {basis.shapeSupport !== null ? `support ${basis.shapeSupport.toFixed(2)}` : ''}
+                {basis.shapeSupport !== null && basis.fitQuality !== null ? ' · ' : ''}
+                {basis.fitQuality !== null ? `fit ${basis.fitQuality.toFixed(2)}` : ''}
+              </small>
+            ) : null}
+          </div>
+          {basis.wBelief !== null ? (
+            <div>
+              <dt>belief weight</dt> <dd>{basis.wBelief.toFixed(2)}</dd>
+            </div>
+          ) : null}
+          {basis.rate ? (
+            <div>
+              <dt>rate</dt> <dd>{rateMethodLabel(basis.rate)}</dd>
+            </div>
+          ) : null}
+          {basis.row ? (
+            <div>
+              <dt>catalog row</dt> <dd>{basis.row.replaceAll('_', ' ')}</dd>
+            </div>
+          ) : null}
+        </dl>
+        </details>
+      ) : (
+        <p className="bus-health-card__shape-row">
+          {basis.shape ? <span>shape {basis.shape}</span> : null}
+          {basis.shapeSupport !== null ? <span>support {basis.shapeSupport.toFixed(2)}</span> : null}
+          {basis.fitQuality !== null ? <span>fit {basis.fitQuality.toFixed(2)}</span> : null}
+        </p>
+      )}
     </section>
   )
 }

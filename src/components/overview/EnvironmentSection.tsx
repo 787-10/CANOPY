@@ -1,6 +1,5 @@
 import { useStressDomains } from '../../hooks/useStressDomains'
 import { domainLabel } from '../../lib/commanderLanguage'
-import { relativeTime } from '../../lib/incidents'
 import { environmentFacts } from '../../lib/situation'
 import { withCapture } from '../../store/captureStore'
 import { useEventStore } from '../../store/eventStore'
@@ -25,7 +24,6 @@ export function EnvironmentSection({ open, onToggle }: EnvironmentSectionProps) 
           <dd data-testid="environment-weather">
             {facts.eventLabel}
             {facts.kp !== null ? ` · Kp ${facts.kp.toFixed(1)}` : ''}
-            {facts.signal ? ` · ${relativeTime(facts.signal.ts)}` : ''}
           </dd>
         </div>
         <div>

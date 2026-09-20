@@ -398,7 +398,8 @@ def test_reset_reports_what_it_cleared_and_empties_the_caches(client: TestClient
     body = response.json()
     assert body["status"] == "reset"
     assert body["replay_cancelled"] is False  # the replay had already finished
-    assert set(body["cleared"]) == {"attrib", "fusion", "decide", "ui_events", "tracer", "attrib_late"}
+    assert set(body["cleared"]) == {"attrib", "fusion", "decide", "ui_events", "tracer", "attrib_late", "operator"}
+    assert body["cleared"]["operator"] == {"decisions": 0}  # no operator call was posted this run
     assert body["cleared"]["tracer"]["marks"] >= 1  # the replayed anomalies were marked
     assert client.app.state.engine.tracer.t0_for("anything") is None
     assert body["cleared"]["decide"]["anomaly_cache"] > 0

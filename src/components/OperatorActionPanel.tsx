@@ -6,7 +6,9 @@ import {
   subsystemLabel,
 } from '../lib/commanderLanguage'
 import { actionLabel } from '../lib/actionLabels'
+import { operatorOutcome, operatorStamp, recordOperatorDecision } from '../lib/operatorDecisions'
 import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
+import { targetLabel } from '../lib/targetLabel'
 import type { Decision } from '../types/canopy'
 import { WithheldRecoveryChip } from './WithheldRecoveryChip'
 
@@ -40,9 +42,7 @@ export function OperatorActionPanel({
   const deferred = useEventStore((s) =>
     decision ? s.deferredDecisionIds.has(decision.id) : false,
   )
-  const acceptDecision = useEventStore((s) => s.acceptDecision)
-  const deferDecision = useEventStore((s) => s.deferDecision)
-  const clearDecisionStatus = useEventStore((s) => s.clearDecisionStatus)
+  const statusAt = useEventStore((s) => (decision ? s.decisionStatusAt[decision.id] : undefined))
 
   // Render nothing until the engine produces a decision. The empty
   // space stays empty rather than carrying placeholder chrome — the
@@ -71,7 +71,7 @@ export function OperatorActionPanel({
         ? 'Recovery withheld'
         : 'Engine recommendation'
 
-  const accept = () => acceptDecision(decision.id)
+  const accept = () => void recordOperatorDecision(decision, 'accepted')
 
   return (
     <section
@@ -114,7 +114,7 @@ export function OperatorActionPanel({
           </div>
           <div>
             <dt>Target</dt>
-            <dd>{decision.target}</dd>
+            <dd title={decision.target}>{targetLabel(decision.target)}</dd>
           </div>
         </dl>
       )}
@@ -183,13 +183,15 @@ export function OperatorActionPanel({
             type="button"
             className="operator-action__btn operator-action__btn--accept"
             onClick={accept}
+            data-key="A"
           >
             Accept
           </button>
           <button
             type="button"
             className="operator-action__btn operator-action__btn--deny"
-            onClick={() => deferDecision(decision.id)}
+            onClick={() => void recordOperatorDecision(decision, 'denied')}
+            data-key="D"
           >
             Deny
           </button>
@@ -199,10 +201,15 @@ export function OperatorActionPanel({
           <span className="operator-action__resolved-tag">
             {status === 'accepted' ? 'Accepted' : 'Denied'}
           </span>
+          <span className="operator-action__resolved-detail" data-testid="operator-outcome">
+            {operatorStamp(statusAt) ? `${operatorStamp(statusAt)} · ` : ''}
+            {operatorOutcome(decision, status)}
+          </span>
           <button
             type="button"
             className="operator-action__btn operator-action__btn--undo"
-            onClick={() => clearDecisionStatus(decision.id)}
+            onClick={() => void recordOperatorDecision(decision, 'reconsidered')}
+            data-key="R"
           >
             Reconsider
           </button>

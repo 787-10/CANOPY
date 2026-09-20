@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
 import { domainLabel } from '../../lib/commanderLanguage'
-import { relativeTime } from '../../lib/incidents'
 import { buildReportItems, REPORTS_STRIP_LIMIT } from '../../lib/reports'
 import { withCapture } from '../../store/captureStore'
 import type { Anomaly, Signal } from '../../types/canopy'
@@ -12,12 +11,19 @@ type ReportsStripProps = {
   limit?: number
 }
 
-// Within this many px of the right edge the strip counts as "at the end"
-// and follows new cards; further left the operator is reading history.
+// Within this many px of the left edge the strip counts as "at the start"
+// and stays on new cards; further right the operator is reading history.
 const STICK_TOLERANCE_PX = 12
 
-const formatTime = (ts: string) =>
-  new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+const formatTime = (ts: string) => {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ts
+  return `${d.toISOString().slice(11, 19)}Z`
+}
+
+// `SIM-01` and `SIM 01` are the same name; the meta line says it once.
+const sameName = (a: string, b: string) =>
+  a.toLowerCase().replaceAll(/[^a-z0-9]/g, '') === b.toLowerCase().replaceAll(/[^a-z0-9]/g, '')
 
 type EnterMarks = {
   /** Every key that has been on screen. */
@@ -27,16 +33,18 @@ type EnterMarks = {
   entering: Set<string>
 }
 
-/** The bottom row: the last reports as cards from left (oldest) to right
- *  (newest), alerts with an accent border. Scrolls horizontally and follows
- *  the newest card unless the operator has scrolled back. */
+/** The bottom row: the last reports as cards from left (newest) to right
+ *  (oldest), alerts with an accent border. A new card fades in at the left
+ *  edge with a short glow so it is obvious which one just arrived. Scrolls
+ *  horizontally and stays on the newest card unless the operator has
+ *  scrolled into the history. */
 export function ReportsStrip({ signals, anomalies, limit = REPORTS_STRIP_LIMIT }: ReportsStripProps) {
   const items = buildReportItems(signals, anomalies, limit)
   const alerts = items.filter((item) => item.kind === 'alert').length
   const stripRef = useRef<HTMLOListElement | null>(null)
-  const stuckToEnd = useRef(true)
+  const stuckToStart = useRef(true)
   const [marks, setMarks] = useState<EnterMarks | null>(null)
-  const newestKey = items.at(-1)?.key ?? null
+  const newestKey = items[0]?.key ?? null
   const keyList = items.map((item) => item.key).join('|')
 
   // The initial batch (a page load, a restored session) does not animate;
@@ -54,18 +62,18 @@ export function ReportsStrip({ signals, anomalies, limit = REPORTS_STRIP_LIMIT }
     })
   }, [keyList])
 
-  // Follow the newest card while the operator has not scrolled back.
+  // Stay on the newest card while the operator has not scrolled into history.
   useEffect(() => {
     const el = stripRef.current
-    if (el && stuckToEnd.current && el.scrollWidth > el.clientWidth) {
-      el.scrollLeft = el.scrollWidth
+    if (el && stuckToStart.current && el.scrollLeft > 0) {
+      el.scrollLeft = 0
     }
   }, [newestKey])
 
   const onScroll = () => {
     const el = stripRef.current
     if (!el) return
-    stuckToEnd.current = el.scrollLeft + el.clientWidth >= el.scrollWidth - STICK_TOLERANCE_PX
+    stuckToStart.current = el.scrollLeft <= STICK_TOLERANCE_PX
   }
 
   return (
@@ -85,20 +93,20 @@ export function ReportsStrip({ signals, anomalies, limit = REPORTS_STRIP_LIMIT }
               data-kind={item.kind}
               data-domain={item.domain ?? undefined}
             >
-              <a className="report-card__link" href={withCapture(`/signal?id=${encodeURIComponent(item.signalId)}`)} title={`${item.label} · ${formatTime(item.ts)}`}>
+              <a className="report-card__link" href={withCapture(`/signal?id=${encodeURIComponent(item.signalId)}`)} title={`${item.label} · ${formatTime(item.ts)} · open the report`}>
                 <span className="report-card__top">
                   {item.kind === 'alert' ? (
                     <span className="report-card__alert">Alert</span>
                   ) : item.domain ? (
                     <span className={`report-card__domain report-card__domain--${item.domain}`}>{domainLabel(item.domain)}</span>
                   ) : null}
-                  <span className="report-card__time">{relativeTime(item.ts)}</span>
+                  <span className="report-card__time" title="Report time, scenario clock (UTC)">{formatTime(item.ts)}</span>
                 </span>
                 <span className="report-card__label">{item.label}</span>
                 <span className="report-card__meta">
                   {item.satellite ? <b>{item.satellite}</b> : null}
-                  {item.satellite ? ' · ' : ''}
-                  {item.source}
+                  {item.satellite && item.source && !sameName(item.satellite, item.source) ? ' · ' : ''}
+                  {!item.satellite || !sameName(item.satellite, item.source) ? item.source : null}
                 </span>
               </a>
             </li>

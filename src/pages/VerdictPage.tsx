@@ -1,3 +1,4 @@
+import { EpisodeReports } from '../components/EpisodeReports'
 import { OperatorActionPanel } from '../components/OperatorActionPanel'
 import { TopBar } from '../components/TopBar'
 import { VerdictPanel } from '../components/VerdictPanel'
@@ -5,8 +6,8 @@ import { useCanopySocket } from '../hooks/useCanopySocket'
 import { useEpisode } from '../hooks/useEpisode'
 import { useKnowledgeBase } from '../hooks/useKnowledgeBase'
 
-/** Why fault versus attack, in full, beside the decision taken on it.
- *  Captures S3, S4 and S6. */
+/** Why fault versus attack, in full, beside the decision taken on it and
+ *  the reports it rests on. Captures S3, S4 and S6. */
 export function VerdictPage() {
   useCanopySocket()
   useKnowledgeBase()
@@ -27,6 +28,7 @@ export function VerdictPage() {
               <p>The decide stage takes the verdict and either recommends a recovery on the spacecraft or routes a defensive response to the authority that can act on it.</p>
             </section>
           )}
+          <EpisodeReports satelliteId={attribution?.satellite_id ?? null} />
         </div>
       </section>
     </main>

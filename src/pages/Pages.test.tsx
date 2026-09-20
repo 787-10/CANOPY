@@ -82,19 +82,18 @@ describe('the overview (Brigade)', () => {
     fireEvent.click(rows.find((row) => row.getAttribute('data-satellite') === SIM01)!)
     expect(useEventStore.getState().pinnedSatelliteId).toBe(SIM01)
     expect(screen.getByTestId('decision-summary')).toHaveTextContent('Recovery recommendation')
-    expect(screen.getByRole('heading', { level: 2, name: 'Recovery recommendation' })).toBeInTheDocument()
     fireEvent.click(screen.getByTestId('follow-latest'))
     expect(screen.getByTestId('decision-summary')).toHaveTextContent('Passive defense')
   })
 
-  it('the reports strip carries every signal and the bus alerts, oldest left', () => {
+  it('the reports strip carries every signal and the bus alerts, newest left', () => {
     seedRunC()
     render(<Brigade />)
     const cards = within(screen.getByTestId('reports-track')).getAllByRole('listitem')
-    expect(cards.map((card) => card.getAttribute('data-kind'))).toEqual(['report', 'report', 'alert', 'report', 'alert'])
-    expect(cards[0]).toHaveTextContent('Geomagnetic storm')
-    expect(cards[4]).toHaveTextContent('Alert')
-    expect(cards[4]).toHaveTextContent('SIM-02')
+    expect(cards.map((card) => card.getAttribute('data-kind'))).toEqual(['alert', 'alert', 'report'])
+    expect(cards[0]).toHaveTextContent('Alert')
+    expect(cards[0]).toHaveTextContent('SIM-02')
+    expect(cards[2]).toHaveTextContent('Geomagnetic storm')
     expect(screen.getByTestId('reports-count')).toHaveTextContent('3')
   })
 

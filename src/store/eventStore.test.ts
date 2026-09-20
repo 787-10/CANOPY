@@ -506,7 +506,7 @@ describe('eventStore — reset', () => {
 })
 
 describe('eventStore — persist partialize', () => {
-  it('persists ring buffers under the canopy-event-store key but excludes live/Set fields', async () => {
+  it('persists ring buffers and the operator calls under the canopy-event-store key but excludes live fields', async () => {
     // Touch persisted (ring-buffer) state and live/Set state.
     store().ingestSignal(makeSignal('s1'))
     store().ingestTrace(makeTrace('t1'))
@@ -561,8 +561,6 @@ describe('eventStore — persist partialize', () => {
       'view',
       'selectedEventId',
       'approvedEventIds',
-      'acceptedDecisionIds',
-      'deferredDecisionIds',
       'pendingApproval',
       'maneuverDemo',
       'takeoverEvent',
@@ -572,8 +570,14 @@ describe('eventStore — persist partialize', () => {
       expect(persisted).not.toHaveProperty(key)
     }
 
+    // The operator's calls travel as arrays (Sets do not survive JSON) with
+    // their time stamps, and come back as Sets.
+    expect(persisted.acceptedDecisionIds).toEqual(['acc-1'])
+    expect(persisted.deferredDecisionIds).toEqual(['def-1'])
+    expect(Object.keys(persisted.decisionStatusAt as Record<string, string>).sort()).toEqual(['acc-1', 'def-1'])
+
     // The persisted blob carries exactly the partialized keys — nothing else.
-    expect(Object.keys(persisted).sort()).toEqual([...includedKeys].sort())
+    expect(Object.keys(persisted).sort()).toEqual([...([...includedKeys].sort()), 'acceptedDecisionIds', 'deferredDecisionIds', 'decisionStatusAt'].sort())
     expect(parsed.version).toBe(2)
   })
 })

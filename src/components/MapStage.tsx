@@ -12,12 +12,14 @@ type MapStageProps = {
   signals: Signal[]
   /** The newest substantive report; drives the stage's effect state. */
   report: Signal | null
+  /** Display name of the spacecraft the operator pinned (`SIM-01`), or null. */
+  pinnedSatellite?: string | null
 }
 
 /** The orbital view (demo plan F1): the globe over Site A with the synthetic
  *  spacecraft, the station and any RF marker. The status line above the
  *  globe carries the latest report; nothing is drawn over the map. */
-export function MapStage({ correlatedSignalIds, focusSignalId, signals, report }: MapStageProps) {
+export function MapStage({ correlatedSignalIds, focusSignalId, signals, report, pinnedSatellite = null }: MapStageProps) {
   const latestSignal = report
   const effectState = signalEffectState(latestSignal)
 
@@ -40,6 +42,7 @@ export function MapStage({ correlatedSignalIds, focusSignalId, signals, report }
           displayMode="globe"
           focusSignalId={focusSignalId}
           signals={signals}
+          pinnedSatellite={pinnedSatellite}
         />
       </Suspense>
     </section>

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { commanderSignalSummary, signalKindLabel, spacecraftDisplayName, verdictCopy, verdictHeadline } from '../lib/commanderLanguage'
+import { commanderSignalSummary, spacecraftDisplayName, verdictCopy } from '../lib/commanderLanguage'
 import { attributionTimings, formatMs } from '../lib/timing'
 import { useEventStore } from '../store/eventStore'
 import type { Attribution, Signal } from '../types/canopy'
@@ -10,8 +10,9 @@ type StatusBannerProps = {
 }
 
 /** One line that says what is happening: the spacecraft and its latest
- *  report on the left, the verdict with its confidence and timing on the
- *  right. Everything else is a page away. */
+ *  report on the left, the verdict badge with its confidence, revision
+ *  state, actor and timing on the right, each stated once. The report's own
+ *  confidence and the verdict headline live on their cards. */
 export function StatusBanner({ report, attribution }: StatusBannerProps) {
   const traces = useEventStore((s) => s.traces)
   const timings = useMemo(
@@ -26,6 +27,8 @@ export function StatusBanner({ report, attribution }: StatusBannerProps) {
   const summary = report ? commanderSignalSummary(report) : null
   const verdict = attribution?.verdict ?? null
   const copy = verdict ? verdictCopy[verdict] : null
+  const actor = attribution?.actor
+  const showActor = !!actor && actor !== 'None' && actor !== 'Unknown'
 
   return (
     <section
@@ -35,11 +38,9 @@ export function StatusBanner({ report, attribution }: StatusBannerProps) {
     >
       <div className="status-banner__report">
         <span className="status-banner__subject">
-          {report
-            ? `${subject} · latest report: ${signalKindLabel(report)} · ${Math.round(report.confidence * 100)}% confidence`
-            : subject}
+          {report ? `${subject} · latest report` : subject}
         </span>
-        <strong className="status-banner__headline">
+        <strong className="status-banner__headline" title={summary?.oneLine}>
           {summary ? summary.oneLine : 'No reports received yet. Start a run from the launcher.'}
         </strong>
       </div>
@@ -49,19 +50,23 @@ export function StatusBanner({ report, attribution }: StatusBannerProps) {
             <span className={`status-banner__badge status-banner__badge--${verdict}`} data-testid="status-verdict">
               {copy.label}
             </span>
-            <span className="status-banner__confidence">
-              {Math.round(attribution.confidence * 100)}%
-              {attribution.provisional ? ' · provisional' : ' · final'}
-            </span>
-            <span className="status-banner__meaning">{verdictHeadline(attribution)}</span>
-            <span className="status-banner__timing" data-testid="status-timing">
-              {timings?.provisionalMs !== null && timings?.provisionalMs !== undefined
-                ? `provisional in ${formatMs(timings.provisionalMs)}`
-                : 'provisional pending'}
-              {' · '}
-              {timings?.finalMs !== null && timings?.finalMs !== undefined
-                ? `final in ${formatMs(timings.finalMs)}`
-                : 'final pending'}
+            <span className="status-banner__line">
+              <span className="status-banner__confidence">
+                {Math.round(attribution.confidence * 100)}%
+                {attribution.provisional ? ' · provisional' : ' · final'}
+              </span>
+              {showActor ? (
+                <span className="status-banner__actor" data-testid="status-actor">{actor}</span>
+              ) : null}
+              <span className="status-banner__timing" data-testid="status-timing">
+                {timings?.provisionalMs !== null && timings?.provisionalMs !== undefined
+                  ? `provisional in ${formatMs(timings.provisionalMs)}`
+                  : 'provisional pending'}
+                {' · '}
+                {timings?.finalMs !== null && timings?.finalMs !== undefined
+                  ? `final in ${formatMs(timings.finalMs)}`
+                  : 'final pending'}
+              </span>
             </span>
           </>
         ) : (

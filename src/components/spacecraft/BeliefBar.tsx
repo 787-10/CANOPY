@@ -18,10 +18,6 @@ export function BeliefBar({ basis, physicsConsistency }: BeliefBarProps) {
       </div>
     )
   }
-  const internal = basis.internal ?? 0
-  const external = basis.external ?? 0
-  const unknown = basis.unknown ?? Math.max(0, 1 - internal - external)
-  const total = internal + external + unknown || 1
   const rows: Array<{
     key: 'internal' | 'external' | 'unknown'
     label: string
@@ -52,12 +48,7 @@ export function BeliefBar({ basis, physicsConsistency }: BeliefBarProps) {
     <div className="belief" data-testid="belief-bar" data-kind={basis.kind}>
       {basis.kind === 'belief' ? (
         <>
-          <div className="belief__stack" role="img" aria-label={`internal ${pct(basis.internal)}, external ${pct(basis.external)}, unknown ${pct(basis.unknown)}`}>
-            <span className="belief__seg belief__seg--internal" style={{ width: `${(internal / total) * 100}%` }} />
-            <span className="belief__seg belief__seg--external" style={{ width: `${(external / total) * 100}%` }} />
-            <span className="belief__seg belief__seg--unknown" style={{ width: `${(unknown / total) * 100}%` }} />
-          </div>
-          <ul className="belief__rows">
+          <ul className="belief__rows" aria-label={`internal ${pct(basis.internal)}, external ${pct(basis.external)}, unknown ${pct(basis.unknown)}`}>
             {rows.map((row) => (
               <li key={row.key} className={`belief__row belief__row--${row.key}`} data-testid={`belief-${row.key}`}>
                 <span className="belief__row-label">{row.label}</span>

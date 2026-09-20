@@ -2,8 +2,11 @@ import { commanderSignalSummary, plainEventName, signalKindLabel, spacecraftEnvi
 import { withCapture } from '../store/captureStore'
 import type { Signal } from '../types/canopy'
 
-const formatTime = (ts: string) =>
-  new Date(ts).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+const formatTime = (ts: string) => {
+  const d = new Date(ts)
+  if (Number.isNaN(d.getTime())) return ts
+  return `${d.toISOString().slice(11, 19)}Z`
+}
 
 /** Every signal the engine received, newest first, one row each: when, what
  *  kind, from whom, what it says, and the spacecraft or environment facts
@@ -32,8 +35,7 @@ export function SignalTable({ signals }: { signals: Signal[] }) {
             <tr key={signal.id} data-domain={signal.domain} data-newest={index === 0 ? 'true' : undefined} className="signals-table__row">
               <td className="signals-table__time">{formatTime(signal.ts)}</td>
               <td className="signals-table__kind">
-                <a href={withCapture(`/signal?id=${encodeURIComponent(signal.id)}`)}>{signalKindLabel(signal)}</a>
-                <small>{plainEventName(signal)}</small>
+                <a href={withCapture(`/signal?id=${encodeURIComponent(signal.id)}`)} title={plainEventName(signal)}>{signalKindLabel(signal)}</a>
               </td>
               <td className="signals-table__source">{summary.sourceLabel}</td>
               <td className="signals-table__summary">
