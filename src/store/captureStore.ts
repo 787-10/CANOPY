@@ -21,6 +21,10 @@ export const CAPTURE_STORAGE_KEY = 'megalith-capture'
 export const CAPTURE_HIDES: ReadonlyArray<{ component: string; hides: string }> = [
   { component: 'BusHealthCard', hides: 'signal id and provenance footer' },
   { component: 'RunSummary', hides: 'raw trace ids next to each stage timing' },
+  {
+    component: 'SideColumn',
+    hides: 'the collapse toggles of the Situation and Response columns (both forced expanded)',
+  },
 ]
 
 type CaptureState = {

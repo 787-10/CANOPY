@@ -533,7 +533,8 @@ describe('eventStore — persist partialize', () => {
     }
     const persisted = parsed.state
 
-    // Included: ring buffers + lookup maps + embedding snapshot.
+    // Included: ring buffers + lookup maps + embedding snapshot, and the
+    // overview's episode pin so the detail pages follow it.
     const includedKeys = [
       'signals',
       'anomalies',
@@ -545,6 +546,7 @@ describe('eventStore — persist partialize', () => {
       'signalsById',
       'attributionsById',
       'decisionsById',
+      'pinnedSatelliteId',
     ]
     for (const key of includedKeys) {
       expect(persisted).toHaveProperty(key)

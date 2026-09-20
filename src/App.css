@@ -3811,21 +3811,28 @@ html[data-capture="1"] .brigade-shell::before {
   color: var(--text-subtle);
 }
 
+/* Globe in the middle, Situation left, Response right, Reports along the
+   bottom. The column widths are custom properties the page sets: 320 / 360
+   px expanded, 44 px collapsed (the rail). */
 .overview {
+  --left-w: 320px;
+  --right-w: 360px;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
-  gap: 12px;
+  grid-template-columns: var(--left-w, 320px) minmax(0, 1fr) var(--right-w, 360px);
+  grid-template-rows: minmax(0, 1fr) 172px;
+  grid-template-areas:
+    'left map right'
+    'strip strip strip';
+  gap: 10px;
+  min-width: 0;
   min-height: 0;
+  padding: 10px 12px 12px;
 }
 
 .overview .map-stage {
+  grid-area: map;
+  min-width: 0;
   min-height: 0;
-}
-
-.overview__cards {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
 }
 
 .summary-card {
@@ -4003,69 +4010,6 @@ html[data-capture="1"] .brigade-shell::before {
   font-size: 1rem;
   font-weight: 760;
   color: var(--status-live-bright);
-}
-
-.reports {
-  display: grid;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.reports__link {
-  display: grid;
-  grid-template-columns: 72px 150px minmax(0, 1fr) auto;
-  gap: 12px;
-  align-items: baseline;
-  padding: 8px 10px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.03);
-  color: inherit;
-  text-decoration: none;
-  font-size: 0.95rem;
-}
-
-.reports__link:hover {
-  background: rgba(255, 255, 255, 0.07);
-}
-
-.reports__time {
-  color: var(--text-subtle);
-  font-variant-numeric: tabular-nums;
-}
-
-.reports__kind {
-  font-weight: 700;
-}
-
-.reports__row--bus_health .reports__kind {
-  color: var(--brand-bright);
-}
-
-.reports__row--rf_ew .reports__kind {
-  color: var(--amber);
-}
-
-.reports__row--space_weather .reports__kind {
-  color: #8fb4ff;
-}
-
-.reports__summary {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  color: var(--text-muted);
-}
-
-.reports__physics {
-  padding: 2px 8px;
-  border: 1px solid rgba(123, 150, 255, 0.55);
-  border-radius: 3px;
-  color: var(--brand-bright);
-  font-size: 0.8rem;
-  font-weight: 700;
-  white-space: nowrap;
 }
 
 /* ---- Detail pages ------------------------------------------------------- */
@@ -4408,10 +4352,836 @@ dt,
 .status-banner__headline,
 .summary-card__text,
 .summary-card__action,
-.reports__link,
 .signals-table td,
 .verdict-panel__headline,
 .verdict-panel__list li,
 .page-intro {
   font-family: var(--font-sans);
+}
+
+/* ---- Overview columns, disclosures and the reports strip ------------------
+   Chakra Petch for labels and chips, Barlow for text, Royal Blue accents,
+   the summary-card surface everywhere. Nothing here is bolder than the
+   status banner. */
+.side-column {
+  --handle-w: 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) var(--handle-w);
+  grid-template-rows: minmax(0, 1fr);
+  min-width: 0;
+  min-height: 0;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: rgba(7, 16, 15, 0.86);
+  /* The body scrolls; the column itself must not clip the handle's ring. */
+  overflow: visible;
+}
+
+.side-column--left {
+  grid-area: left;
+}
+
+.side-column--right {
+  grid-area: right;
+  grid-template-columns: var(--handle-w) minmax(0, 1fr);
+}
+
+/* Content track: left column col 1, right column col 2. */
+.side-column__body {
+  grid-row: 1;
+  grid-column: 1;
+  min-width: 0;
+  min-height: 0;
+  padding: 12px 12px 14px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
+.side-column--right .side-column__body {
+  grid-column: 2;
+}
+
+.side-column__body[hidden] {
+  display: none;
+}
+
+/* Handle track: a full-height button on the column's inner edge (towards
+   the globe). It is a sibling of the body in its own grid track, so it
+   never sits over content. */
+.side-column__toggle {
+  grid-row: 1;
+  grid-column: 2;
+  display: grid;
+  place-items: center;
+  width: 100%;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  border-left: 1px solid var(--line);
+  border-radius: 0 3px 3px 0;
+  background: rgba(255, 255, 255, 0.025);
+  color: var(--text-muted);
+}
+
+.side-column--right .side-column__toggle {
+  grid-column: 1;
+  border-left: 0;
+  border-right: 1px solid var(--line);
+  border-radius: 3px 0 0 3px;
+}
+
+.side-column__toggle:hover {
+  background: rgba(29, 63, 168, 0.18);
+  color: var(--brand-bright);
+}
+
+.side-column__toggle:focus-visible {
+  outline: 2px solid var(--brand-bright);
+  outline-offset: -2px;
+  color: var(--brand-bright);
+}
+
+.side-column__toggle:disabled {
+  cursor: default;
+}
+
+.side-column__chevron {
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-top: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+}
+
+/* Chevron points towards where the column goes: left column open points
+   left (collapse), closed points right (expand); mirrored on the right. */
+.side-column--left.side-column--expanded .side-column__chevron,
+.side-column--right.side-column--collapsed .side-column__chevron {
+  transform: rotate(-135deg) translate(-1px, 1px);
+}
+
+.side-column--left.side-column--collapsed .side-column__chevron,
+.side-column--right.side-column--expanded .side-column__chevron {
+  transform: rotate(45deg) translate(-1px, 1px);
+}
+
+/* Collapsed: the whole column is the 44px rail. One column, two rows: the
+   vertical label on top, the handle filling the rest, so they cannot
+   collide. */
+.side-column--collapsed {
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.side-column__rail-label {
+  grid-row: 1;
+  grid-column: 1;
+  justify-self: center;
+  padding: 14px 0 10px;
+  color: var(--text-subtle);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  writing-mode: vertical-rl;
+}
+
+.side-column__rail-label[hidden] {
+  display: none;
+}
+
+.side-column--collapsed .side-column__toggle {
+  grid-row: 2;
+  grid-column: 1;
+  border-left: 0;
+  border-right: 0;
+  border-top: 1px solid var(--line);
+  border-radius: 0 0 3px 3px;
+}
+
+.side-column__empty {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.side-column__link {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--brand-bright);
+  font-size: 0.88rem;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.side-column__link:hover {
+  text-decoration: underline;
+}
+
+.side-column__quiet {
+  margin-top: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.side-column__quiet:hover {
+  border-color: var(--brand-bright);
+  color: var(--brand-bright);
+}
+
+/* Situation: three disclosures. */
+.situation {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.disclosure {
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 6px;
+}
+
+.disclosure:last-child {
+  border-bottom: 0;
+}
+
+.disclosure__head {
+  margin: 0;
+}
+
+.disclosure__toggle {
+  display: grid;
+  grid-template-columns: 12px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 2px;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.disclosure__toggle:hover,
+.disclosure__toggle:focus-visible {
+  color: var(--text-primary);
+  outline: none;
+}
+
+.disclosure__chevron {
+  display: block;
+  width: 6px;
+  height: 6px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg);
+  transition: transform 0.15s ease;
+}
+
+.disclosure--open .disclosure__chevron {
+  transform: rotate(45deg);
+}
+
+.disclosure__label {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.disclosure__count {
+  min-width: 22px;
+  padding: 1px 7px;
+  border: 1px solid var(--brand-soft);
+  border-radius: 999px;
+  background: rgba(29, 63, 168, 0.18);
+  color: var(--brand-bright);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
+
+.disclosure__body {
+  display: grid;
+  gap: 6px;
+  padding: 2px 2px 6px 20px;
+}
+
+.disclosure__body[hidden] {
+  display: none;
+}
+
+.theaters {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.theater {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 2px 10px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--text-primary);
+  text-align: left;
+}
+
+.theater:hover:not(:disabled),
+.theater:focus-visible {
+  border-color: var(--brand-soft);
+  background: rgba(29, 63, 168, 0.12);
+  outline: none;
+}
+
+.theater--pinned {
+  border-color: var(--brand-bright);
+  background: rgba(29, 63, 168, 0.22);
+  box-shadow: inset 3px 0 0 var(--brand);
+}
+
+.theater:disabled {
+  color: var(--text-muted);
+}
+
+.theater__name {
+  font-size: 0.98rem;
+  font-weight: 700;
+}
+
+.theater--unresolved .theater__name {
+  font-weight: 600;
+}
+
+.theater__verdict {
+  align-self: center;
+  padding: 2px 7px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.theater__verdict--internal_fault {
+  color: var(--verdict-internal);
+}
+
+.theater__verdict--natural_external {
+  color: var(--verdict-natural);
+}
+
+.theater__verdict--hostile_external {
+  color: var(--verdict-hostile);
+}
+
+.theater__verdict--unknown {
+  color: var(--verdict-unknown);
+}
+
+.theater__verdict--absent {
+  border-style: dashed;
+  color: var(--verdict-absent);
+}
+
+.theater__meta {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* With a marking chip the meta keeps to the first column, chip beside it. */
+.theater__meta:has(+ .theater__marking) {
+  grid-column: 1;
+}
+
+.theater__meta b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.theater__marking {
+  grid-column: 2;
+  grid-row: 2;
+  align-self: center;
+  justify-self: end;
+  padding: 1px 6px;
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.facts {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.facts div {
+  display: grid;
+  gap: 1px;
+}
+
+.facts dt {
+  color: var(--text-subtle);
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.94rem;
+  line-height: 1.35;
+}
+
+.facts__trend {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.facts__trend b {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.mini-spark {
+  display: block;
+  flex: 0 0 auto;
+}
+
+.mini-spark__base {
+  stroke: var(--line-bright);
+  stroke-width: 1;
+}
+
+.mini-spark__line {
+  fill: none;
+  stroke: var(--brand-bright);
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.mini-spark__end {
+  fill: var(--brand-bright);
+}
+
+/* Response: the compact action panel, then the two summaries. */
+.response {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+}
+
+.response .operator-action {
+  border-radius: 4px;
+  border-top: 1px solid var(--line-bright);
+}
+
+.operator-action--compact {
+  gap: 6px;
+  padding: 10px 12px 12px;
+}
+
+.operator-action--compact h2 {
+  font-size: 1.1rem;
+}
+
+.operator-action--compact .operator-action__chip {
+  font-size: 0.72rem;
+}
+
+.operator-action--compact .operator-action__btn {
+  padding: 9px 8px;
+  font-size: 0.84rem;
+}
+
+.response .summary-card {
+  min-height: 0;
+  gap: 6px;
+  padding: 10px 12px 12px;
+  font-size: 0.92rem;
+  line-height: 1.32;
+}
+
+.response .summary-card__eyebrow {
+  font-size: 0.72rem;
+}
+
+.response .summary-card__head h2 {
+  font-size: 0.76rem;
+}
+
+.response .summary-card__link {
+  font-size: 0.84rem;
+}
+
+.response .summary-card__badge {
+  padding: 4px 9px;
+  font-size: 0.86rem;
+}
+
+.response .summary-card__confidence {
+  font-size: 0.96rem;
+}
+
+.response .summary-card__action {
+  font-size: 1.12rem;
+}
+
+.response .summary-card__text {
+  font-size: 0.92rem;
+}
+
+.response .summary-card__kv {
+  gap: 0 10px;
+  font-size: 0.88rem;
+}
+
+.response .summary-card__kv span {
+  font-size: 0.68rem;
+}
+
+.response .summary-card__withheld {
+  padding: 6px 8px;
+  font-size: 0.84rem;
+  line-height: 1.3;
+}
+
+.summary-card__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(245, 247, 240, 0.08);
+  overflow: hidden;
+}
+
+.summary-card__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 3px;
+  background: var(--brand);
+  box-shadow: inset 0 0 0 1px var(--brand-bright);
+}
+
+.summary-card__kv--wide {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+
+.summary-card__kv--wide strong {
+  font-weight: 600;
+}
+
+.summary-card__gate {
+  color: var(--text-muted);
+}
+
+/* Reports: the bottom row. */
+.reports-strip {
+  grid-area: strip;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line-bright);
+  border-radius: 4px;
+  background: rgba(7, 16, 15, 0.86);
+}
+
+.reports-strip__edge {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  white-space: nowrap;
+}
+
+.reports-strip__title {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.reports-strip__alerts {
+  color: var(--amber);
+  font-family: var(--font-display);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reports-strip__empty {
+  margin: 0;
+  color: var(--text-subtle);
+  font-size: 0.92rem;
+}
+
+.reports-strip__track {
+  display: flex;
+  gap: 10px;
+  align-items: stretch;
+  margin: 0;
+  padding: 2px 2px 6px;
+  min-width: 0;
+  list-style: none;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-behavior: smooth;
+  scrollbar-width: thin;
+}
+
+.report-card {
+  flex: 0 0 200px;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.report-card:hover {
+  border-color: var(--brand-soft);
+  background: rgba(29, 63, 168, 0.12);
+}
+
+.report-card--alert {
+  border-color: rgba(201, 164, 87, 0.55);
+  border-left: 3px solid var(--amber);
+  background: rgba(201, 164, 87, 0.06);
+}
+
+.report-card__link {
+  display: grid;
+  gap: 4px;
+  height: 100%;
+  padding: 8px 10px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.report-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.report-card__alert,
+.report-card__domain {
+  padding: 1px 6px;
+  border: 1px solid currentColor;
+  border-radius: 3px;
+  font-family: var(--font-display);
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.report-card__alert {
+  color: var(--amber);
+}
+
+.report-card__domain {
+  color: var(--domain-context);
+}
+
+.report-card__domain--bus_health {
+  color: var(--brand-bright);
+}
+
+.report-card__domain--space_weather {
+  color: #8fb4ff;
+}
+
+.report-card__domain--rf_ew {
+  color: var(--domain-rf-ew);
+}
+
+.report-card__domain--cyber {
+  color: var(--domain-cyber);
+}
+
+.report-card__domain--pnt,
+.report-card__domain--satcom {
+  color: var(--domain-pnt);
+}
+
+.report-card__domain--orbit,
+.report-card__domain--sda {
+  color: var(--domain-space);
+}
+
+.report-card__domain--drone {
+  color: var(--domain-drone);
+}
+
+.report-card__time {
+  color: var(--text-subtle);
+  font-size: 0.74rem;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.report-card__label {
+  font-size: 0.96rem;
+  font-weight: 700;
+  line-height: 1.25;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.report-card__meta {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.report-card__meta b {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+@keyframes report-enter {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.report-card--enter {
+  animation: report-enter 240ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .report-card--enter {
+    animation: none;
+  }
+
+  .reports-strip__track {
+    scroll-behavior: auto;
+  }
+
+  .disclosure__chevron {
+    transition: none;
+  }
+}
+
+/* Capture mode holds both columns open (the page forces the state) and the
+   global rule above zeroes every animation; the strip must not smooth-scroll
+   into a frame either. */
+html[data-capture="1"] .reports-strip__track {
+  scroll-behavior: auto;
+}
+
+html[data-capture="1"] .report-card--enter {
+  animation: none;
+}
+
+/* With the toggles hidden the handle track goes too: content takes the
+   whole column. */
+html[data-capture="1"] .side-column,
+html[data-capture="1"] .side-column--right {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+html[data-capture="1"] .side-column__body {
+  grid-column: 1;
+}
+
+/* One column under 1100px: globe, Response, Situation, Reports. The columns
+   cannot collapse here, so the toggles go and a stored "collapsed" state is
+   ignored. */
+@media (max-width: 1099px) {
+  /* The shell's own narrow rules start at 1080px; the one-column overview
+     must scroll in the 1081 to 1099 band as well. */
+  .brigade-shell {
+    height: auto;
+    min-height: 100svh;
+    /* The shell's decorative ::after (inset -30%) and the globe's credit
+       strip reach past a narrow shell; only vertical scrolling is wanted. */
+    overflow-x: hidden;
+    overflow-y: auto;
+  }
+
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(360px, 55svh) auto auto 172px;
+    grid-template-areas:
+      'map'
+      'right'
+      'left'
+      'strip';
+    padding: 10px;
+  }
+
+  .side-column__toggle,
+  .side-column__rail-label {
+    display: none;
+  }
+
+  .side-column,
+  .side-column--right,
+  .side-column--collapsed {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .side-column__body,
+  .side-column--right .side-column__body {
+    grid-column: 1;
+  }
+
+  .side-column--collapsed .side-column__body[hidden] {
+    display: block;
+  }
 }

@@ -15,6 +15,11 @@ type OperatorActionPanelProps = {
    *  (the one taken on the satellite cluster's verdict); left out, the
    *  newest decision in the store is shown. */
   decision?: Decision | null
+  /** The overview's approve/deny box: the action, its gate or withheld chip,
+   *  the "selected from N options" line and the buttons; the authority and
+   *  target, the recovery block and the rationale are left to the cards
+   *  under it. Same handlers, same store writes. */
+  compact?: boolean
 }
 
 /** Operator-facing review surface for the decide-stage output: the action,
@@ -23,7 +28,10 @@ type OperatorActionPanelProps = {
  *  the store. Accepting records the decision and nothing else: a recovery
  *  runs on the friendly bus and a defensive response is routed to the
  *  authority named, neither is animated. */
-export function OperatorActionPanel({ decision: episodeDecision }: OperatorActionPanelProps = {}) {
+export function OperatorActionPanel({
+  decision: episodeDecision,
+  compact = false,
+}: OperatorActionPanelProps = {}) {
   const newestDecision = useEventStore((s) => s.decisions[0] ?? null)
   const decision = episodeDecision === undefined ? newestDecision : episodeDecision
   const accepted = useEventStore((s) =>
@@ -73,6 +81,7 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
         isRecovery ? 'operator-action--recovery' : '',
         isBlocked ? 'operator-action--blocked' : '',
         withheld ? 'operator-action--withheld' : '',
+        compact ? 'operator-action--compact' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -97,16 +106,18 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
         ) : null}
       </header>
 
-      <dl className="operator-action__meta">
-        <div>
-          <dt>Authority</dt>
-          <dd>{decision.authority}</dd>
-        </div>
-        <div>
-          <dt>Target</dt>
-          <dd>{decision.target}</dd>
-        </div>
-      </dl>
+      {compact ? null : (
+        <dl className="operator-action__meta">
+          <div>
+            <dt>Authority</dt>
+            <dd>{decision.authority}</dd>
+          </div>
+          <div>
+            <dt>Target</dt>
+            <dd>{decision.target}</dd>
+          </div>
+        </dl>
+      )}
 
       {selection ? (
         // Spec 1.4 bounded response: the menu the action came from and why.
@@ -117,12 +128,12 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
           data-testid="selection-basis"
           data-capture-hide
         >
-          {selectionSentence(selection)}
+          {selectionSentence(selection, { options: !compact })}
           {selection.basis ? ` · ${selection.basis}` : ''}
         </p>
       ) : null}
 
-      {recovery ? (
+      {compact ? null : recovery ? (
         <dl className="operator-action__recovery" data-testid="recovery-block">
           <div>
             <dt>Action id</dt>
@@ -162,7 +173,7 @@ export function OperatorActionPanel({ decision: episodeDecision }: OperatorActio
         </p>
       ) : null}
 
-      {!recovery || recovery.rationale !== gate.text ? (
+      {!compact && (!recovery || recovery.rationale !== gate.text) ? (
         <p className="operator-action__rationale">{gate.text}</p>
       ) : null}
 

@@ -107,6 +107,10 @@ interface EventState {
    *  → miss). Cleared automatically when the animation finishes. */
   maneuverDemo: ManeuverDemo | null;
   takeoverEvent: UIEvent | null;
+  /** The satellite cluster the operator pinned from the overview's
+   *  Theaters list; null follows the latest episode. Persisted with the
+   *  event buffers so the detail pages follow the same pin. */
+  pinnedSatelliteId: string | null;
 
   // Knowledge base resolved by id (loaded once via GET /kb).
   kb: Record<string, KBEntry>;
@@ -133,6 +137,7 @@ interface EventState {
   endManeuverDemo: () => void;
   openTakeover: (event: UIEvent) => void;
   closeTakeover: () => void;
+  pinEpisode: (satelliteId: string | null) => void;
   setKB: (entries: KBEntry[]) => void;
   reset: () => void;
 }
@@ -159,6 +164,7 @@ const initialState = (): Omit<
   | "endManeuverDemo"
   | "openTakeover"
   | "closeTakeover"
+  | "pinEpisode"
   | "setKB"
   | "reset"
 > => ({
@@ -182,6 +188,7 @@ const initialState = (): Omit<
   deferredDecisionIds: new Set(),
   maneuverDemo: null,
   takeoverEvent: null,
+  pinnedSatelliteId: null,
   kb: {},
 });
 
@@ -316,6 +323,7 @@ export const useEventStore = create<EventState>()(
   endManeuverDemo: () => set({ maneuverDemo: null }),
   openTakeover: (event) => set({ takeoverEvent: event }),
   closeTakeover: () => set({ takeoverEvent: null }),
+  pinEpisode: (pinnedSatelliteId) => set({ pinnedSatelliteId }),
       setKB: (entries) =>
         set({
           kb: Object.fromEntries(entries.map((e) => [e.id, e])),
@@ -344,6 +352,7 @@ export const useEventStore = create<EventState>()(
         signalsById: state.signalsById,
         attributionsById: state.attributionsById,
         decisionsById: state.decisionsById,
+        pinnedSatelliteId: state.pinnedSatelliteId,
       }),
     },
   ),

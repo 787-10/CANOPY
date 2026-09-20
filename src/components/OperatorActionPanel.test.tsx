@@ -253,3 +253,56 @@ describe('OperatorActionPanel — bounded response (spec 1.4)', () => {
     expect(screen.queryByTestId('selection-basis')).not.toBeInTheDocument()
   })
 })
+
+describe('OperatorActionPanel — compact (overview approve/deny box)', () => {
+  it('keeps the action, the selection line without the option list and the buttons; drops the meta, recovery block and rationale', () => {
+    const decision = ingestRecovery()
+    useEventStore.getState().ingestDecision({
+      ...decision,
+      selectable_set: ['recovery_recommendation'],
+      selection_basis: 'recovery-routed',
+    })
+    render(<OperatorActionPanel compact />)
+    expect(screen.getByRole('heading', { level: 2 })).toHaveTextContent('Recovery recommendation')
+    expect(screen.getByText('Internal diagnosis recommendation')).toBeInTheDocument()
+    expect(screen.getByTestId('selection-basis')).toHaveTextContent(
+      'Selected from 1 option · recovery routed by the decision rule',
+    )
+    expect(screen.getByTestId('selection-basis')).not.toHaveTextContent('Recovery recommendation ·')
+    expect(screen.queryByTestId('recovery-block')).not.toBeInTheDocument()
+    expect(screen.queryByText('Authority')).not.toBeInTheDocument()
+    expect(screen.queryByText('Internal fault on comms; recovery recommended.')).not.toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Recovery recommendation' })).toHaveClass('operator-action--compact')
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeInTheDocument()
+  })
+
+  it('Accept, Deny and Reconsider write the same store state as the full panel', () => {
+    const decision = ingestRecovery()
+    render(<OperatorActionPanel decision={decision} compact />)
+    fireEvent.click(screen.getByRole('button', { name: 'Deny' }))
+    expect(useEventStore.getState().deferredDecisionIds.has(decision.id)).toBe(true)
+    expect(screen.getByText('Denied')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: 'Reconsider' }))
+    expect(useEventStore.getState().deferredDecisionIds.has(decision.id)).toBe(false)
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }))
+    expect(useEventStore.getState().acceptedDecisionIds.has(decision.id)).toBe(true)
+    expect(useEventStore.getState().maneuverDemo).toBeNull()
+    expect(screen.getByText('Accepted')).toBeInTheDocument()
+  })
+
+  it('still shows the withheld and gate chips in compact form', () => {
+    useEventStore.getState().ingestDecision(
+      makeDecision('d-withheld', {
+        action: 'threat_warning',
+        authority: 'local',
+        rationale: '[gate:threat/uplink_jamming_active] Recovery withheld while jamming is active.',
+        withheld_recovery: { action_id: 'reset_transponder_chain', target_subsystem: 'comms', reason_code: 'threat/uplink_jamming_active' },
+      }),
+    )
+    render(<OperatorActionPanel compact />)
+    expect(screen.getByTestId('gate-chip')).toHaveTextContent('blocked threat/uplink_jamming_active')
+    expect(screen.getByTestId('withheld-chip')).toHaveTextContent(/Reset transponder chain on Comms/)
+    expect(screen.queryByText('Recovery withheld while jamming is active.')).not.toBeInTheDocument()
+  })
+})
