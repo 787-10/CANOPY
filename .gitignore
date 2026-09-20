@@ -57,3 +57,5 @@ bench/compare/
 bench/runs/
 # non-public suite scorecards are run output, not source
 bench/scorecard-*.json
+# timing-seed replicates of the held-out suite (megalith.tools.calibration_seeds, C9)
+scenarios/heldout-seeds/
