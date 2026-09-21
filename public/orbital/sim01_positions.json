@@ -2187,13 +2187,20 @@
     "orbit": {
       "altitude_km": 550.0,
       "inclination_deg": 97.6,
+      "pass_lat": -27.5,
+      "pass_lng": 128.5,
+      "pass_utc": "2026-09-20T15:08:00Z",
       "period_s": 5730.1
     },
     "pass": {
+      "aos_utc": "2026-09-20T15:03:09Z",
       "closest_approach_km": 0.0,
       "closest_approach_utc": "2026-09-20T15:08:00Z",
+      "los_utc": "2026-09-20T15:12:52Z",
+      "mask_deg": 5.0,
       "max_elevation_deg": 90.0,
       "site": "Site A",
+      "site_alt_m": 310.0,
       "site_lat": -27.5,
       "site_lng": 128.5,
       "track_window_utc": [

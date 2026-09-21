@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { wsUrl, wsUrlWithToken } from '../lib/gateway'
+import { useClockStore } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import type {
   Anomaly,
@@ -9,6 +10,7 @@ import type {
   Decision,
   OsintEmbeddingSnapshot,
   ReasoningTrace,
+  ReplayMarker,
   Signal,
   UIEvent,
 } from '../types/canopy'
@@ -68,6 +70,7 @@ function normalizeMessage(value: unknown): CanopyMessage | null {
       'trace',
       'embedding',
       'reset',
+      'replay',
     ].includes(discriminator)
   ) {
     return null
@@ -111,6 +114,11 @@ function ingestIntoStore(message: CanopyMessage): void {
       // second console or the film script): drop every event of the run
       // before so the next run's verdicts are the only ones on screen.
       store.reset()
+      useClockStore.getState().reset()
+      break
+    case 'replay':
+      // The run's timeline (spec §10, 1.4.3): the flight clock's only source.
+      useClockStore.getState().applyReplay(message.data as ReplayMarker)
       break
     case 'embedding':
       store.ingestEmbeddingSnapshot(message.data as OsintEmbeddingSnapshot)
@@ -141,6 +149,9 @@ function mirrorMessage(state: CanopySocketState, message: CanopyMessage): Canopy
       }
     case 'reset':
       return { ...initialState, isConnected: state.isConnected, lastError: state.lastError }
+    case 'replay':
+      // Gateway state, not an event; the clock store holds it.
+      return state
     case 'embedding':
       // Snapshots replace wholesale; the store holds the current one.
       return state
@@ -198,6 +209,9 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
       ws.addEventListener('close', () => {
         if (!current()) return
         setConnection('offline')
+        // A run's clock cannot be trusted without its stream: hold it as stale
+        // until the reconnect's snapshot says where the run is.
+        useClockStore.getState().socketClosed()
         setState((state) => ({
           ...state,
           isConnected: false,

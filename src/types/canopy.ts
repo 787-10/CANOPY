@@ -307,6 +307,26 @@ export type ResetMarker = {
   cleared?: Record<string, Record<string, number>>
 }
 
+/** Gateway control envelope announcing a run's timeline (docs/INTERFACE-SPEC.md
+ *  §10, 1.4.3): sent when a replay starts (before its first signal), when it
+ *  finishes or is cancelled, and as a snapshot to every new connection. The
+ *  flight clock evaluates `now_ts + (wall − receipt) × speed` from it. */
+export type ReplayMarker = {
+  state: 'started' | 'finished' | 'cancelled'
+  scenario: string
+  speed: number
+  /** null when the run was started with `no_cap`. */
+  max_delay_s: number | null
+  first_ts: string
+  last_ts: string
+  /** Scenario time at emission. */
+  now_ts: string
+  /** Wall UTC the run started. */
+  started_at: string
+  /** Wall UTC of emission. */
+  ts: string
+}
+
 export type CanopyMessage =
   | { type: 'signal'; topic?: string; data: Signal }
   | { type: 'anomaly'; topic?: string; data: Anomaly }
@@ -316,6 +336,7 @@ export type CanopyMessage =
   | { type: 'trace'; topic?: string; data: ReasoningTrace }
   | { type: 'embedding'; topic?: string; data: OsintEmbeddingSnapshot }
   | { type: 'reset'; topic?: string; data: ResetMarker }
+  | { type: 'replay'; topic?: string; data: ReplayMarker }
 
 export type CanopySocketState = {
   signals: Signal[]
@@ -369,3 +390,4 @@ export type WSEnvelope =
   | { topic: string; kind: 'trace'; data: ReasoningTrace }
   | { topic: string; kind: 'embedding'; data: OsintEmbeddingSnapshot }
   | { topic: string; kind: 'reset'; data: ResetMarker }
+  | { topic: string; kind: 'replay'; data: ReplayMarker }

@@ -15,7 +15,17 @@ export type SyntheticTrackInfo = {
   satellite_id?: string
   epoch_utc?: string
   note?: string
-  orbit?: { altitude_km?: number; inclination_deg?: number; period_s?: number }
+  orbit?: {
+    altitude_km?: number
+    inclination_deg?: number
+    period_s?: number
+    /** The ascending pass the orbit is defined by (1.4.3): the sub-satellite
+     *  point at `pass_utc`. With altitude and inclination, enough for
+     *  `lib/orbit/kepler.ts` to reproduce every point in the file. */
+    pass_utc?: string
+    pass_lat?: number
+    pass_lng?: number
+  }
   pass?: {
     site?: string
     site_lat?: number
@@ -25,6 +35,10 @@ export type SyntheticTrackInfo = {
     closest_approach_km?: number
     max_elevation_deg?: number
     track_window_utc?: [string, string]
+    /** Visibility from the site at `mask_deg` (1.4.3), wider than the track window. */
+    mask_deg?: number
+    aos_utc?: string | null
+    los_utc?: string | null
   }
 }
 
