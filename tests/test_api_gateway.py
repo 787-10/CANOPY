@@ -140,9 +140,12 @@ def test_replay_honours_speed_and_max_delay_s(
 
     response = client.post("/scenarios/beat47.jsonl/replay?speed=20&max_delay_s=6")
     assert response.status_code == 200
-    assert response.json() == {
+    body = response.json()
+    assert {k: body[k] for k in ("status", "scenario", "speed", "max_delay_s")} == {
         "status": "replaying", "scenario": "beat47.jsonl", "speed": 20.0, "max_delay_s": 6.0,
     }
+    # 1.4.3 adds the run's timeline to the answer; the pacing keys are unchanged.
+    assert body["no_cap"] is False and body["first_ts"].endswith("Z") and body["last_ts"].endswith("Z")
     response = client.post("/scenarios/beat47.jsonl/replay")
     assert response.status_code == 200
     assert response.json()["speed"] == 5.0 and response.json()["max_delay_s"] == 0.5
@@ -446,3 +449,130 @@ def test_emitter_handles_the_shapes_it_claims() -> None:
     assert nested == "{\n  a: string\n  b?: number\n}"
     with pytest.raises(gen_ts_types.SchemaError):
         ts({"$ref": "http://elsewhere/schema.json"})
+
+
+# ---------------------------------------------------------------------------
+# The ``replay`` control envelope (docs/INTERFACE-SPEC.md §10, 1.4.3)
+# ---------------------------------------------------------------------------
+
+
+def _drain_until(ws, predicate, *, deadline_s: float = 60.0) -> tuple[dict, list[dict]]:
+    """Receive envelopes until ``predicate`` matches; return it and everything before it."""
+    seen: list[dict] = []
+    deadline = time.time() + deadline_s
+    while time.time() < deadline:
+        envelope = ws.receive_json()
+        if predicate(envelope):
+            return envelope, seen
+        seen.append(envelope)
+    raise AssertionError(f"no matching envelope within {deadline_s}s; kinds={[e.get('kind') for e in seen]}")
+
+
+def _is_replay(state: str):
+    return lambda e: e.get("kind") == "replay" and e["data"]["state"] == state
+
+
+def test_replay_announces_started_before_the_first_signal_and_finished_after(client: TestClient) -> None:
+    client.post("/reset")
+    with client.websocket_connect("/ws") as ws:
+        response = client.post("/scenarios/beat47.jsonl/replay?speed=1000")
+        assert response.status_code == 200
+        body = response.json()
+        assert body["no_cap"] is False and body["max_delay_s"] == 0.5
+        assert body["first_ts"].endswith("Z") and body["last_ts"].endswith("Z")
+
+        started, before = _drain_until(ws, _is_replay("started"))
+        # Nothing of the run precedes its timeline on this connection.
+        assert [e["kind"] for e in before] == []
+        data = started["data"]
+        assert started["topic"] == "control.replay"
+        assert data["scenario"] == "beat47.jsonl" and data["speed"] == 1000.0
+        assert data["max_delay_s"] == 0.5
+        assert data["first_ts"] == body["first_ts"] and data["last_ts"] == body["last_ts"]
+        assert data["now_ts"] == data["first_ts"]
+        assert data["started_at"].endswith("Z") and data["ts"].endswith("Z")
+
+        finished, during = _drain_until(ws, _is_replay("finished"))
+        assert finished["data"]["now_ts"] == body["last_ts"]
+        signals = [e for e in during if e.get("kind") == "signal"]
+        assert signals, "the run's signals arrive between started and finished"
+        assert all(e.get("kind") != "replay" for e in during)
+
+
+def test_a_new_websocket_receives_the_replay_snapshot_first(client: TestClient) -> None:
+    client.post("/reset")
+    with client.websocket_connect("/ws") as first:
+        client.post("/scenarios/beat47.jsonl/replay?speed=1000")
+        _drain_until(first, _is_replay("finished"))
+        with client.websocket_connect("/ws") as late:
+            snapshot = late.receive_json()
+            assert snapshot["kind"] == "replay"
+            assert snapshot["data"]["state"] == "finished"
+            assert snapshot["data"]["scenario"] == "beat47.jsonl"
+            assert snapshot["data"]["now_ts"] == snapshot["data"]["last_ts"]
+
+
+def test_reset_announces_a_cancelled_replay_before_the_reset_marker(client: TestClient) -> None:
+    client.post("/reset")
+    with client.websocket_connect("/ws") as ws:
+        # A crawl: the first signal publishes at once, then the run sleeps.
+        response = client.post("/scenarios/beat47.jsonl/replay?speed=0.001&max_delay_s=3600")
+        assert response.status_code == 200
+        _drain_until(ws, _is_replay("started"))
+        response = client.post("/reset")
+        assert response.json()["replay_cancelled"] is True
+        cancelled, _ = _drain_until(ws, _is_replay("cancelled"))
+        assert cancelled["data"]["state"] == "cancelled"
+        reset_marker, between = _drain_until(ws, lambda e: e.get("kind") == "reset")
+        assert reset_marker["data"]["replay_cancelled"] is True
+        assert all(e.get("kind") != "replay" for e in between)
+    # After a reset there is no run to snapshot.
+    with client.websocket_connect("/ws") as fresh:
+        client.post("/scenarios/beat47.jsonl/replay?speed=1000")
+        first = fresh.receive_json()
+        assert first["kind"] == "replay" and first["data"]["state"] == "started"
+
+
+def test_a_new_replay_cancels_the_previous_one_and_announces_both(client: TestClient) -> None:
+    client.post("/reset")
+    with client.websocket_connect("/ws") as ws:
+        client.post("/scenarios/beat47.jsonl/replay?speed=0.001&max_delay_s=3600")
+        _drain_until(ws, _is_replay("started"))
+        response = client.post("/scenarios/beat47.jsonl/replay?speed=1000&no_cap=1")
+        assert response.status_code == 200
+        assert response.json()["no_cap"] is True and response.json()["max_delay_s"] is None
+        cancelled, _ = _drain_until(ws, _is_replay("cancelled"))
+        started, between = _drain_until(ws, _is_replay("started"))
+        assert cancelled["data"]["speed"] == 0.001 and started["data"]["speed"] == 1000.0
+        assert started["data"]["max_delay_s"] is None
+        assert all(e.get("kind") != "replay" for e in between)
+        _drain_until(ws, _is_replay("finished"))
+    client.post("/reset")
+
+
+def test_no_cap_reaches_the_replay_service_as_no_cap(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import canopy.api as api_module
+
+    calls: list[dict] = []
+
+    class FakeReplay:
+        last_published_ts = None
+
+        def __init__(self, bus, path, *, speed: float, max_delay_s: float | None, **kwargs) -> None:
+            calls.append({"speed": speed, "max_delay_s": max_delay_s})
+
+        async def run(self) -> None:
+            return None
+
+    monkeypatch.setattr(api_module, "ScenarioReplayService", FakeReplay)
+    assert client.post("/scenarios/beat47.jsonl/replay?speed=60&no_cap=1").json()["max_delay_s"] is None
+    assert client.post("/scenarios/beat47.jsonl/replay?speed=60&max_delay_s=6").json()["max_delay_s"] == 6.0
+    assert client.post("/scenarios/beat47.jsonl/replay?speed=60&max_delay_s=0").json()["max_delay_s"] == 0.0
+    assert calls == [
+        {"speed": 60.0, "max_delay_s": None},
+        {"speed": 60.0, "max_delay_s": 6.0},
+        {"speed": 60.0, "max_delay_s": 0.0},
+    ]
+    client.post("/reset")

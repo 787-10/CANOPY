@@ -4,6 +4,7 @@ import asyncio
 import json
 import logging
 from collections.abc import Callable, Iterable, Iterator
+from datetime import datetime
 from pathlib import Path
 
 from canopy.services.bus import Bus
@@ -67,6 +68,10 @@ class ScenarioReplayService:
         self._stop_when_done = stop_when_done
         self._signal_filter = signal_filter
         self._signal_transform = signal_transform
+        # Scenario time of the newest signal published: the gateway's
+        # ``replay`` control envelope reports it as ``now_ts`` to a console
+        # that connects mid-run (docs/INTERFACE-SPEC.md §10, 1.4.3).
+        self.last_published_ts: datetime | None = None
 
     async def run(self) -> None:
         try:
@@ -93,5 +98,6 @@ class ScenarioReplayService:
                     await asyncio.sleep(delay)
             await self._bus.publish(f"signals.{signal.domain}", signal)
             previous_ts = signal.ts
+            self.last_published_ts = signal.ts
             published += 1
         log.info("scenario replay: published %d signals from %s", published, path)

@@ -9,6 +9,10 @@ Endpoints:
 * ``POST /reset``                      — cancel a running replay and clear every
                                          service's in-process state between runs Every connected WebSocket then receives a ``reset`` control envelope
   (``{"kind": "reset", "topic": "control.reset", ...}``) so consoles clear their state.
+  A run's timeline is announced the same way: a ``replay`` control envelope
+  (``started`` before the first signal, ``finished`` or ``cancelled`` after,
+  and a snapshot to every new connection) is the authority for the console's
+  flight clock (docs/INTERFACE-SPEC.md §2 and §10, 1.4.3).
 * ``POST /signals``                    — accept a Signal and publish to the bus
 * ``GET  /schemas``                    — JSON Schema of every event kind, from the
                                          pydantic models (``canopy.api.schemas``)
@@ -60,7 +64,7 @@ from canopy._engine import (
 from canopy.api import archive
 from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
 from canopy.services.bus import codec
-from canopy.services.scenario_replay import ScenarioReplayService
+from canopy.services.scenario_replay import ScenarioReplayService, load_scenario_signals
 from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
 
@@ -166,6 +170,22 @@ def _log_replay_outcome(task: asyncio.Task) -> None:
         )
 
 
+def _announce_replay_done(app: FastAPI):
+    """Done-callback: a run that completes announces ``finished``; one that
+    raised announces ``cancelled``. A cancelled task says nothing, because the
+    route or reset that cancelled it already announced. A task that is no
+    longer the current one (superseded under the lock) says nothing either.
+    """
+
+    def callback(task: asyncio.Task) -> None:
+        if task.cancelled() or app.state.replay_task is not task:
+            return
+        new_state = "finished" if task.exception() is None else "cancelled"
+        asyncio.ensure_future(_announce_replay(app, new_state))
+
+    return callback
+
+
 RESET_DRAIN_TIMEOUT_S = 3.0
 
 
@@ -267,6 +287,10 @@ async def _lifespan(app: FastAPI):
     app.state.archive = archive.ArchiveReader(archive.resolve_archive_dir())
     app.state.clients = set()
     app.state.replay_task = None
+    # The current run's timeline (the ``replay`` control envelope's data) and
+    # the service publishing it; None until a replay has started or after a reset.
+    app.state.replay_state = None
+    app.state.replay_service = None
     app.state.control_lock = asyncio.Lock()
     app.state.engine_tasks = start_engine_tasks(engine)
     app.state.fanout_tasks = [
@@ -321,11 +345,58 @@ def control_envelope(kind: str, data: dict[str, Any]) -> dict[str, Any]:
     """A gateway control message in the fan-out envelope shape (spec §10, 1.4.2).
 
     Not a bus event: it describes this gateway's own state. ``control.*``
-    topics are reserved for it; the only kind so far is ``reset``, which every
-    console answers by clearing its event store so a run started by another
-    client never mixes with the run before it.
+    topics are reserved for it. ``reset`` makes every console clear its event
+    store so a run started by another client never mixes with the run before
+    it; ``replay`` (1.4.3) announces a run's timeline for the flight clock.
     """
     return {"kind": kind, "topic": f"control.{kind}", "data": data}
+
+
+def _iso_z(when: datetime) -> str:
+    return when.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+def replay_envelope(state: dict[str, Any], *, now_ts: datetime) -> dict[str, Any]:
+    """The ``replay`` control envelope for a run's recorded timeline.
+
+    ``now_ts`` is the scenario time at emission: the first signal's at
+    ``started``, the newest published one while a run is live, the last one at
+    ``finished``. A console evaluates ``now_ts + (wall − receipt) × speed``.
+    """
+    return control_envelope(
+        "replay",
+        {
+            "state": state["state"],
+            "scenario": state["scenario"],
+            "speed": state["speed"],
+            "max_delay_s": state["max_delay_s"],
+            "first_ts": _iso_z(state["first_ts"]),
+            "last_ts": _iso_z(state["last_ts"]),
+            "now_ts": _iso_z(now_ts),
+            "started_at": _iso_z(state["started_at"]),
+            "ts": _iso_z(datetime.now(UTC)),
+        },
+    )
+
+
+def _replay_now_ts(app: FastAPI) -> datetime:
+    """Scenario time of the current run as far as the gateway knows it."""
+    state = app.state.replay_state
+    if state["state"] == "finished":
+        return state["last_ts"]
+    service = app.state.replay_service
+    published = getattr(service, "last_published_ts", None)
+    return published or state["first_ts"]
+
+
+async def _announce_replay(app: FastAPI, new_state: str) -> None:
+    """Move the current run to ``new_state`` and tell every console."""
+    state = app.state.replay_state
+    if state is None or state["state"] != "started":
+        return
+    now_ts = _replay_now_ts(app)
+    state["state"] = new_state
+    await _broadcast(app.state.clients, replay_envelope(state, now_ts=now_ts))
 
 
 def create_app(
@@ -444,12 +515,17 @@ def create_app(
         name: str,
         speed: float = Query(DEFAULT_REPLAY_SPEED, gt=0.0),
         max_delay_s: float = Query(DEFAULT_REPLAY_MAX_DELAY_S, ge=0.0),
+        no_cap: bool = Query(False),
     ) -> dict[str, Any]:
         """Start replaying a demo scenario; a running replay is cancelled first.
 
         ``speed`` scales the scenario's own timestamps; ``max_delay_s`` caps any
         single inter-signal pause, so ``speed=20&max_delay_s=6`` paces a run
-        with long lulls to roughly a minute on screen.
+        with long lulls to roughly a minute on screen. ``no_cap`` ignores the
+        cap so signals land at their scenario times scaled by ``speed``, for a
+        run paced by the console's flight clock (spec §2, 1.4.3). The run's
+        timeline is announced as a ``replay`` control envelope before its first
+        signal and again when it finishes or is cancelled.
         """
         try:
             case = SCENARIO_REGISTRY.by_file(name)
@@ -458,9 +534,14 @@ def create_app(
         if "demo" not in case.visibility:
             raise HTTPException(status_code=404, detail=f"scenario not found: {name}")
         path = case.scenario_path
+        cap: float | None = None if no_cap else max_delay_s
+        inputs = [signal for signal in load_scenario_signals(path) if case.includes_as_input(signal)]
+        if not inputs:
+            raise HTTPException(status_code=400, detail=f"scenario has no input signals: {name}")
 
         async with _control_lock(app):
-            await cancel_replay(app.state.replay_task)
+            if await cancel_replay(app.state.replay_task):
+                await _announce_replay(app, "cancelled")
             # Same input discipline as the bench: oracle records (the scenario's
             # own answer key) never reach the bus, and redacted observables are
             # stripped, so the console shows what an operator would see.
@@ -468,18 +549,38 @@ def create_app(
                 app.state.engine.bus,
                 path,
                 speed=speed,
-                max_delay_s=max_delay_s,
+                max_delay_s=cap,
                 signal_filter=case.includes_as_input,
                 signal_transform=case.sanitize_input,
             )
+            app.state.replay_service = replay
+            app.state.replay_state = {
+                "state": "started",
+                "scenario": name,
+                "speed": speed,
+                "max_delay_s": cap,
+                "first_ts": inputs[0].ts,
+                "last_ts": inputs[-1].ts,
+                "started_at": datetime.now(UTC),
+            }
+            # Announced inside the lock and before the task exists, so on every
+            # connection the timeline precedes the run's first signal.
+            await _broadcast(
+                app.state.clients,
+                replay_envelope(app.state.replay_state, now_ts=inputs[0].ts),
+            )
             task = asyncio.create_task(replay.run(), name=f"replay-{name}")
             task.add_done_callback(_log_replay_outcome)
+            task.add_done_callback(_announce_replay_done(app))
             app.state.replay_task = task
         return {
             "status": "replaying",
             "scenario": name,
             "speed": speed,
-            "max_delay_s": max_delay_s,
+            "max_delay_s": cap,
+            "no_cap": no_cap,
+            "first_ts": _iso_z(inputs[0].ts),
+            "last_ts": _iso_z(inputs[-1].ts),
         }
 
     @app.post("/reset")
@@ -492,7 +593,11 @@ def create_app(
         """
         async with _control_lock(app):
             cancelled = await cancel_replay(app.state.replay_task)
+            if cancelled:
+                await _announce_replay(app, "cancelled")
             app.state.replay_task = None
+            app.state.replay_state = None
+            app.state.replay_service = None
             cleared = await reset_engine(app.state.engine)
             cleared["operator"] = {"decisions": len(app.state.operator_decisions)}
             app.state.operator_decisions.clear()
@@ -639,6 +744,16 @@ def create_app(
                 return
         await websocket.accept()
         app.state.clients.add(websocket)
+        # A console joining mid-run, or reloading a page, learns the run's
+        # timeline at once (spec §10, 1.4.3) instead of waiting for a signal.
+        if app.state.replay_state is not None:
+            try:
+                await websocket.send_json(
+                    replay_envelope(app.state.replay_state, now_ts=_replay_now_ts(app))
+                )
+            except Exception:
+                app.state.clients.discard(websocket)
+                return
         try:
             while True:
                 # Block on receive_text so the connection stays open; the
