@@ -17,6 +17,7 @@ from canopy.api import app
 from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
 from canopy.services.bus import codec
 from canopy.services.schemas.events import (
+    Ephemeris,
     Anomaly,
     Attribution,
     AttributionChallenge,
@@ -306,6 +307,24 @@ def _sample_events() -> dict[str, object]:
         "ui_event": ui_event,
         "trace": trace,
         "embedding": embedding,
+        "ephemeris": Ephemeris(
+            id="eph-1",
+            ts=TS,
+            satellite_id="ctb://megalith.demo/sim-01",
+            lat=-27.5,
+            lng=128.5,
+            alt_km=550.0,
+            speed_km_s=7.585,
+            elements={
+                "altitude_km": 550.0,
+                "inclination_deg": 97.6,
+                "pass_utc": "2026-09-20T15:08:00Z",
+                "pass_lat": -27.5,
+                "pass_lng": 128.5,
+                "period_s": 5730.1,
+            },
+            published_at=TS,
+        ),
     }
 
 
@@ -321,7 +340,7 @@ def test_schemas_endpoint_returns_every_registered_kind(client: TestClient) -> N
     assert list(schemas) == list(codec.registered_kinds())
     assert set(schemas) == {
         "signal", "anomaly", "attribution", "attribution_challenge",
-        "decision", "ui_event", "trace", "embedding",
+        "decision", "ui_event", "trace", "embedding", "ephemeris",
     }
     for kind, schema in schemas.items():
         assert schema["$schema"] == "https://json-schema.org/draft/2020-12/schema"
@@ -539,6 +558,39 @@ def test_a_late_websocket_joins_an_uncapped_run_at_the_timeline_position(client:
             elapsed = (sent_at - started_at).total_seconds()
             assert 0.3 <= advanced <= elapsed + 0.05, (advanced, elapsed)
     client.post("/reset")
+
+
+def test_ephemeris_samples_reach_the_socket_while_a_run_is_in_progress(client: TestClient) -> None:
+    """Spec §10 (1.4.4): during an uncapped run the gateway fans out one
+    ``ephemeris`` sample per synthetic body per second of wall time, stamped
+    with the timeline's scenario time; none once the run has finished."""
+    from datetime import datetime
+
+    client.post("/reset")
+    with client.websocket_connect("/ws") as ws:
+        response = client.post("/scenarios/beat47.jsonl/replay?speed=1&no_cap=1")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        first_ts = datetime.fromisoformat(body["first_ts"].replace("Z", "+00:00"))
+        last_ts = datetime.fromisoformat(body["last_ts"].replace("Z", "+00:00"))
+        _drain_until(ws, _is_replay("started"))
+        sample, _ = _drain_until(ws, lambda e: e.get("kind") == "ephemeris", deadline_s=5.0)
+        assert sample["topic"].startswith("ephemeris.")
+        data = sample["data"]
+        assert data["source"] == "circular-model" and data["satellite_id"].startswith("ctb://megalith.demo/")
+        ts = datetime.fromisoformat(data["ts"].replace("Z", "+00:00"))
+        assert first_ts <= ts <= last_ts
+        assert -90 <= data["lat"] <= 90 and -180 <= data["lng"] < 180 and data["alt_km"] > 0
+        assert data["elements"]["pass_utc"].endswith("Z")
+    client.post("/reset")
+    # No run in progress: the service publishes nothing over a cadence and more.
+    import time
+
+    service = client.app.state.ephemeris
+    before = service.published
+    time.sleep(1.3)
+    assert service.published == before
+    assert client.get("/health").status_code == 200
 
 
 def test_reset_announces_a_cancelled_replay_before_the_reset_marker(client: TestClient) -> None:

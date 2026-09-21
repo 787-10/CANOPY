@@ -1348,5 +1348,86 @@
       "model_name",
       "embedding_dim"
     ]
+  },
+  "ephemeris": {
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": true,
+    "description": "An engine-owned position sample for one spacecraft (spec §10, 1.4.4).\n\n``ts`` is the *scenario* time of the state. The engine propagates the same\ncircular model the synthetic track files come from (``elements`` is the\nfile's defining pass) and publishes a sample on a cadence while a replay is\nin progress, so the console draws what the engine states rather than what\nit computes itself; the console's own port is the fallback with no run.\nSynthetic spacecraft only: never a TLE, never a catalogue number.",
+    "properties": {
+      "id": {
+        "title": "Id",
+        "type": "string"
+      },
+      "ts": {
+        "format": "date-time",
+        "title": "Ts",
+        "type": "string"
+      },
+      "marking": {
+        "default": "U",
+        "description": "Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1).",
+        "pattern": "^(U|CUI|CUI//SP-[A-Z0-9][A-Z0-9-]*(/SP-[A-Z0-9][A-Z0-9-]*)*)$",
+        "title": "Marking",
+        "type": "string"
+      },
+      "satellite_id": {
+        "minLength": 1,
+        "title": "Satellite Id",
+        "type": "string"
+      },
+      "source": {
+        "const": "circular-model",
+        "default": "circular-model",
+        "title": "Source",
+        "type": "string"
+      },
+      "lat": {
+        "maximum": 90.0,
+        "minimum": -90.0,
+        "title": "Lat",
+        "type": "number"
+      },
+      "lng": {
+        "exclusiveMaximum": 180.0,
+        "minimum": -180.0,
+        "title": "Lng",
+        "type": "number"
+      },
+      "alt_km": {
+        "exclusiveMinimum": 0.0,
+        "title": "Alt Km",
+        "type": "number"
+      },
+      "speed_km_s": {
+        "exclusiveMinimum": 0.0,
+        "title": "Speed Km S",
+        "type": "number"
+      },
+      "elements": {
+        "additionalProperties": true,
+        "title": "Elements",
+        "type": "object"
+      },
+      "published_at": {
+        "format": "date-time",
+        "title": "Published At",
+        "type": "string"
+      }
+    },
+    "required": [
+      "id",
+      "ts",
+      "marking",
+      "satellite_id",
+      "source",
+      "lat",
+      "lng",
+      "alt_km",
+      "speed_km_s",
+      "elements",
+      "published_at"
+    ],
+    "title": "Ephemeris",
+    "type": "object"
   }
 }

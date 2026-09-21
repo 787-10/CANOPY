@@ -254,6 +254,14 @@ export function clockText(scenarioMs: number): string {
 
 /** The status line's clock: the time, the rate when it is not 1×, the state
  *  when it is not running, and the date when it differs from the wall date. */
+/** `HH:MM:SSZ`, with the date appended when it is not `referenceMs`'s day
+ *  (a next pass tomorrow reads `01:40:20Z 2026-09-21`, flight plan §8). */
+export function clockTextOn(ms: number, referenceMs: number): string {
+  const day = new Date(ms).toISOString().slice(0, 10)
+  const referenceDay = new Date(referenceMs).toISOString().slice(0, 10)
+  return day === referenceDay ? clockText(ms) : `${clockText(ms)} ${day}`
+}
+
 export function flightClockLabel(state: Pick<ClockState, 'mode' | 'rate' | 'timeAt'>, wallMs = now()): string {
   const scenarioMs = state.timeAt(wallMs)
   const parts = [clockText(scenarioMs)]

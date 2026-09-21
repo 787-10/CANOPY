@@ -25,7 +25,7 @@ import {
   orbitEntityIdForSatellite,
   type N2YOLayerState,
 } from './n2yoSatelliteLayer'
-import { CircularOrbit, elementsFromSynthetic, type Subpoint } from './orbit/kepler'
+import { CircularOrbit, EARTH_RADIUS_KM, elementsFromSynthetic, type Subpoint } from './orbit/kepler'
 import { footprintRadiusKm, lookAngles, nextAos, type Site } from './orbit/lookAngles'
 
 export const DEFAULT_MASK_DEG = 5
@@ -233,4 +233,30 @@ export function flightReadout(body: FlightBody, unixMs: number): FlightReadout |
 /** The body's sub-satellite point at a scenario time (for the satellite card). */
 export function flightSubpoint(body: FlightBody, unixMs: number): Subpoint {
   return body.orbit.subpointAt(unixMs)
+}
+
+export type EngineCheck = {
+  /** The engine's sample time (scenario). */
+  sampleMs: number
+  /** Great-circle distance between the engine's sub-point and the console's at that time, km. */
+  separationKm: number
+}
+
+/** Engine samples of the console's own model disagree only through a defect;
+ *  beyond this the readout says so. */
+export const ENGINE_DISAGREEMENT_KM = 1.0
+
+/** How far the console's propagation sits from an engine sample of the same
+ *  body at the sample's time. */
+export function engineCheck(body: FlightBody, sample: { ts: string; lat: number; lng: number }): EngineCheck | null {
+  const sampleMs = Date.parse(sample.ts)
+  if (!Number.isFinite(sampleMs)) return null
+  const ours = body.orbit.subpointAt(sampleMs)
+  const toRad = Math.PI / 180
+  const dLat = (sample.lat - ours.lat) * toRad
+  const dLng = (sample.lng - ours.lng) * toRad
+  const a =
+    Math.sin(dLat / 2) ** 2 + Math.cos(ours.lat * toRad) * Math.cos(sample.lat * toRad) * Math.sin(dLng / 2) ** 2
+  const separationKm = 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)))
+  return { sampleMs, separationKm }
 }

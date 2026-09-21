@@ -62,10 +62,13 @@ import {
   removeFlightBody,
   setLayerEntitiesShown,
   updateFlightRing,
+  ENGINE_DISAGREEMENT_KM,
+  engineCheck,
   type FlightBody,
   type FlightReadout,
 } from '../lib/flightLayer'
-import { FLIGHT_RATES, clockText, driftIsNotable, flightClockLabel, useClockStore, type FlightRate } from '../store/clockStore'
+import { freshEphemeris, useEphemerisStore } from '../store/ephemerisStore'
+import { FLIGHT_RATES, clockTextOn, driftIsNotable, flightClockLabel, useClockStore, type FlightRate } from '../store/clockStore'
 import { toPoint as mgrsToPoint } from 'mgrs'
 import { commanderSignalSummary } from '../lib/commanderLanguage'
 import { utcClock } from '../lib/timing'
@@ -375,8 +378,11 @@ export function CesiumGlobe({
   const flightViewRef = useRef(false)
   const flightBodiesRef = useRef<FlightBody[]>([])
   const hasFramedOnceRef = useRef(false)
-  const [flightReadouts, setFlightReadouts] = useState<Array<{ name: string; readout: FlightReadout | null }>>([])
+  const [flightReadouts, setFlightReadouts] = useState<
+    Array<{ name: string; readout: FlightReadout | null; source: 'engine' | 'console'; disagreementKm: number | null }>
+  >([])
   const [flightClock, setFlightClock] = useState('')
+  const [flightClockMs, setFlightClockMs] = useState(() => Date.now())
   const [flightDriftMs, setFlightDriftMs] = useState<number | null>(null)
   // Drift is measured when a signal lands (its ts against the clock then), not
   // continuously: between sparse signals the newest one is simply old.
@@ -1380,8 +1386,24 @@ export function CesiumGlobe({
       const clock = useClockStore.getState()
       const ms = clock.timeAt()
       bodies.forEach((body) => updateFlightRing(viewer, body, ms))
-      setFlightReadouts(bodies.map((body) => ({ name: body.layer.satelliteName, readout: flightReadout(body, ms) })))
+      const engine = useEphemerisStore.getState().latest
+      setFlightReadouts(
+        bodies.map((body) => {
+          // The engine's sample is the source of record while it is fresh
+          // (spec §10, 1.4.4); the console's own model between runs.
+          const satelliteId = configFor(body.layer)?.satelliteId ?? body.layer.cache.synthetic?.satellite_id ?? ''
+          const sample = freshEphemeris(engine, satelliteId)
+          const check = sample ? engineCheck(body, sample) : null
+          return {
+            name: body.layer.satelliteName,
+            readout: flightReadout(body, ms),
+            source: sample ? 'engine' : 'console',
+            disagreementKm: check && check.separationKm > ENGINE_DISAGREEMENT_KM ? check.separationKm : null,
+          }
+        }),
+      )
       setFlightClock(flightClockLabel(clock))
+      setFlightClockMs(ms)
       viewer.scene.requestRender()
     }
     tick()
@@ -2180,12 +2202,19 @@ export function CesiumGlobe({
           <span className="flight-readout__clock">
             scenario clock <em>{flightClock}</em>
           </span>
-          {flightReadouts.map(({ name, readout }) => (
+          {flightReadouts.map(({ name, readout, source, disagreementKm }) => (
             <span
               key={name}
               className={`flight-readout__body${readout?.visible ? ' flight-readout__body--visible' : ''}`}
+              data-source={source}
             >
               <strong>{name}</strong>
+              <span className="flight-readout__source" title={source === 'engine' ? "The engine's position sample, published this second" : "The console's own model; the engine publishes only during a run"}>
+                {source === 'engine' ? 'engine' : 'console model'}
+              </span>
+              {disagreementKm !== null ? (
+                <span className="flight-readout__drift">engine Δ {disagreementKm.toFixed(1)} km</span>
+              ) : null}
               {readout ? (
                 readout.visible ? (
                   <>
@@ -2193,12 +2222,12 @@ export function CesiumGlobe({
                       el {readout.elevationDeg.toFixed(0)}° · az {readout.azimuthDeg.toFixed(0)}°
                     </span>
                     <span className="flight-readout__state">
-                      {readout.losMs !== null ? `sets ${clockText(readout.losMs)}` : 'in view'}
+                      {readout.losMs !== null ? `sets ${clockTextOn(readout.losMs, flightClockMs)}` : 'in view'}
                     </span>
                   </>
                 ) : (
                   <span className="flight-readout__state">
-                    below horizon{readout.nextAosMs !== null ? ` · next pass ${clockText(readout.nextAosMs)}` : ''}
+                    below horizon{readout.nextAosMs !== null ? ` · next pass ${clockTextOn(readout.nextAosMs, flightClockMs)}` : ''}
                   </span>
                 )
               ) : (

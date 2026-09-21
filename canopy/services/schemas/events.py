@@ -311,6 +311,30 @@ class Signal(_Event):
     provenance: Provenance
 
 
+class Ephemeris(_Event):
+    """An engine-owned position sample for one spacecraft (spec §10, 1.4.4).
+
+    ``ts`` is the *scenario* time of the state. The engine propagates the same
+    circular model the synthetic track files come from (``elements`` is the
+    file's defining pass) and publishes a sample on a cadence while a replay is
+    in progress, so the console draws what the engine states rather than what
+    it computes itself; the console's own port is the fallback with no run.
+    Synthetic spacecraft only: never a TLE, never a catalogue number.
+    """
+
+    satellite_id: str = Field(min_length=1)
+    source: Literal["circular-model"] = "circular-model"
+    lat: float = Field(ge=-90.0, le=90.0)
+    lng: float = Field(ge=-180.0, lt=180.0)
+    alt_km: float = Field(gt=0.0)
+    speed_km_s: float = Field(gt=0.0)
+    #: The defining pass the state was propagated from: altitude_km,
+    #: inclination_deg, pass_utc, pass_lat, pass_lng, period_s.
+    elements: dict[str, Any] = Field(default_factory=dict)
+    #: Wall UTC the sample was published.
+    published_at: datetime = Field(default_factory=_now)
+
+
 class Anomaly(_Event):
     """Canonical CANOPY Anomaly — matches services/bus/schemas/anomaly.schema.json."""
 

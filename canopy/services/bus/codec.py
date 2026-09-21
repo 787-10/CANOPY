@@ -31,6 +31,7 @@ from canopy.services.schemas.events import (
     Attribution,
     AttributionChallenge,
     Decision,
+    Ephemeris,
     OsintEmbeddingSnapshot,
     ReasoningTrace,
     Signal,
@@ -158,6 +159,8 @@ for _kind, _cls in (
     ("ui_event", UIEvent),
     ("trace", ReasoningTrace),
     ("embedding", OsintEmbeddingSnapshot),
+    # Engine-owned position samples (spec §10, 1.4.4): topics ``ephemeris.*``.
+    ("ephemeris", Ephemeris),
 ):
     register(_kind, _cls)
 del _kind, _cls

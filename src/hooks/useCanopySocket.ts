@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { wsUrl, wsUrlWithToken } from '../lib/gateway'
 import { useClockStore } from '../store/clockStore'
+import { useEphemerisStore } from '../store/ephemerisStore'
 import { useEventStore } from '../store/eventStore'
 import type {
+  Ephemeris,
   Anomaly,
   Attribution,
   CanopyMessage,
@@ -71,6 +73,7 @@ function normalizeMessage(value: unknown): CanopyMessage | null {
       'embedding',
       'reset',
       'replay',
+      'ephemeris',
     ].includes(discriminator)
   ) {
     return null
@@ -115,6 +118,7 @@ function ingestIntoStore(message: CanopyMessage): void {
       // before so the next run's verdicts are the only ones on screen.
       store.reset()
       useClockStore.getState().reset()
+      useEphemerisStore.getState().reset()
       break
     case 'replay':
       // The run's timeline (spec §10, 1.4.3): the flight clock's only source.
@@ -123,12 +127,18 @@ function ingestIntoStore(message: CanopyMessage): void {
     case 'embedding':
       store.ingestEmbeddingSnapshot(message.data as OsintEmbeddingSnapshot)
       return
+    case 'ephemeris':
+      // The engine's position sample (spec §10, 1.4.4): the flight layer's source of record.
+      useEphemerisStore.getState().ingest(message.data as Ephemeris)
+      return
   }
 }
 
 /** Pure: the hook's own bounded mirror of recent events. */
 function mirrorMessage(state: CanopySocketState, message: CanopyMessage): CanopySocketState {
   switch (message.type) {
+    case 'ephemeris':
+      return state
     case 'signal':
       return { ...state, signals: prependLimited<Signal>(state.signals, message.data, 50) }
     case 'anomaly':

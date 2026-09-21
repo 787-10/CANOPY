@@ -5,6 +5,7 @@ import {
   DRIFT_TOLERANCE_WALL_MS,
   FLIGHT_VIEW_STORAGE_KEY,
   clockText,
+  clockTextOn,
   driftIsNotable,
   flightClockLabel,
   initialiseFlightView,
@@ -269,5 +270,13 @@ describe('anchoring a started marker', () => {
     const received = Date.parse('2026-09-21T11:26:00.000Z')
     useClockStore.getState().applyReplay(marker('2026-09-21T11:25:30.000Z'), received)
     expect(useClockStore.getState().timeAt(received)).toBe(Date.parse('2026-09-20T14:48:28Z'))
+  })
+})
+
+describe('clockTextOn', () => {
+  it('appends the date only when the time falls on another day than the reference', () => {
+    const ref = Date.parse('2026-09-20T15:14:42Z')
+    expect(clockTextOn(Date.parse('2026-09-20T15:12:52Z'), ref)).toBe('15:12:52Z')
+    expect(clockTextOn(Date.parse('2026-09-21T01:40:20Z'), ref)).toBe('01:40:20Z 2026-09-21')
   })
 })

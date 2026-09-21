@@ -65,6 +65,7 @@ from canopy.api import archive
 from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
 from canopy.services.bus import codec
 from canopy.services.attrib import DEFAULT_CLUSTER_WINDOW_SCENARIO_S
+from canopy.services.ephemeris import EphemerisService, load_bodies
 from canopy.services.scenario_replay import ScenarioReplayService, load_scenario_signals
 from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
@@ -102,7 +103,9 @@ _FANOUT_PATTERNS: tuple[str, ...] = (
     "ui_events.*",
     "traces.*",
     "embeddings.*",
+    "ephemeris.*",
 )
+ORBITAL_DIR = ROOT / "public" / "orbital"
 
 
 def resolve_api_token(env: Mapping[str, str] | None = None) -> str | None:
@@ -299,6 +302,15 @@ async def _lifespan(app: FastAPI):
     app.state.replay_service = None
     app.state.control_lock = asyncio.Lock()
     app.state.engine_tasks = start_engine_tasks(engine)
+    # Engine-owned ephemeris (spec §10, 1.4.4): one sample per synthetic body
+    # per second of wall time while a run is in progress, at the replay
+    # timeline's scenario time; nothing between runs.
+    app.state.ephemeris = EphemerisService(
+        engine.bus,
+        load_bodies(ORBITAL_DIR),
+        scenario_time=lambda: _replay_now_ts(app) if _replay_rate(app) is not None else None,
+    )
+    app.state.engine_tasks.append(asyncio.create_task(app.state.ephemeris.run(), name="ephemeris"))
     app.state.fanout_tasks = [
         asyncio.create_task(
             _fanout(engine.bus, pattern, app.state.clients),

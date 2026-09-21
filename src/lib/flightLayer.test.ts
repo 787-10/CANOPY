@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { LABEL_OFFSETS, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
+import { ENGINE_DISAGREEMENT_KM, LABEL_OFFSETS, engineCheck, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
 import type { N2YOLayerState } from './n2yoSatelliteLayer'
 import type { N2YOPositionCache } from './positionCache'
 
@@ -75,5 +75,20 @@ describe('label placement for N bodies', () => {
     expect(labelOffsetFor(2).x).toBeGreaterThan(0)
     expect(labelOffsetFor(3).x).toBeLessThan(0)
     expect([labelOffsetFor(4).x, labelOffsetFor(4).y]).toEqual([0, -42])
+  })
+})
+
+describe('engine check', () => {
+  const body = flightBodyFor(layer)!
+  it('agrees with an engine sample of the same model to metres, and measures a disagreement', () => {
+    const at = Date.parse(cache.synthetic!.orbit!.pass_utc!) + 400_000
+    const ours = body.orbit.subpointAt(at)
+    const same = engineCheck(body, { ts: new Date(at).toISOString(), lat: ours.lat, lng: ours.lng })!
+    expect(same.sampleMs).toBe(at)
+    expect(same.separationKm).toBeLessThan(0.001)
+    const off = engineCheck(body, { ts: new Date(at).toISOString(), lat: ours.lat + 0.1, lng: ours.lng })!
+    expect(off.separationKm).toBeGreaterThan(ENGINE_DISAGREEMENT_KM)
+    expect(off.separationKm).toBeCloseTo(11.1, 0)
+    expect(engineCheck(body, { ts: 'nope', lat: 0, lng: 0 })).toBeNull()
   })
 })

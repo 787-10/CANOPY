@@ -60,3 +60,12 @@ html[data-capture="1"] .globe-controls--flight,
 html[data-capture="1"] .flight-readout {
   display: none;
 }
+
+.flight-readout__source {
+  color: var(--text-subtle);
+  font-weight: 500;
+}
+
+.flight-readout__body[data-source="engine"] .flight-readout__source {
+  color: var(--cyan, var(--brand-bright));
+}

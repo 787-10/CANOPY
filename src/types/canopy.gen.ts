@@ -4,7 +4,7 @@
 //   is present on the wire, null when unset, so nothing here is optional.
 // Regenerate: cd external/canopy && uv run --no-sync python scripts/gen_ts_types.py
 // Fixture: src/types/canopy.schemas.json (the schemas this file was generated from).
-// Schema digest: sha256:e3adfdeef2e5f4ac5051c534e8b8005086bb41a4596d0ce8cb99431b864c6ffa
+// Schema digest: sha256:eac9bfa87704642fbb68753a76c8cde1a736a86c3f22cf23b65e11ad6f9406df
 
 /** Where the signal applies. Must include at least one localizer. */
 export type Location = {
@@ -239,6 +239,25 @@ export type OsintEmbeddingSnapshot = {
   [key: string]: unknown
 }
 
+/** An engine-owned position sample for one spacecraft (spec §10, 1.4.4). ``ts`` is the *scenario* time of the state. The engine propagates the same circular model the synthetic track files come from (``elements`` is the file's defining pass) and publishes a sample on a cadence while a replay is in progress, so the console draws what the engine states rather than what it computes itself; the console's own port is the fallback with no run. Synthetic spacecraft only: never a TLE, never a catalogue number. */
+export type Ephemeris = {
+  id: string
+  /** ISO-8601 date-time (UTC). */
+  ts: string
+  /** Marking: U, CUI or CUI//SP-<CATEGORY>[/SP-<CATEGORY>...]; a derived event carries the most restrictive marking of its inputs (docs/INTERFACE-SPEC.md 1.1). */
+  marking: string
+  satellite_id: string
+  source: 'circular-model'
+  lat: number
+  lng: number
+  alt_km: number
+  speed_km_s: number
+  elements: Record<string, unknown>
+  /** ISO-8601 date-time (UTC). */
+  published_at: string
+  [key: string]: unknown
+}
+
 /** Bus codec kinds: the `kind` tag of every WebSocket envelope. */
 export const EVENT_KINDS = [
   'signal',
@@ -249,6 +268,7 @@ export const EVENT_KINDS = [
   'ui_event',
   'trace',
   'embedding',
+  'ephemeris',
 ] as const
 
 export type EventKind = (typeof EVENT_KINDS)[number]
@@ -262,6 +282,7 @@ export type EventByKind = {
   ui_event: UIEvent
   trace: ReasoningTrace
   embedding: OsintEmbeddingSnapshot
+  ephemeris: Ephemeris
 }
 
 /** The WebSocket envelope (docs/INTERFACE-SPEC.md §10): `{kind, topic, data}`. */

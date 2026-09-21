@@ -327,6 +327,31 @@ export type ReplayMarker = {
   ts: string
 }
 
+/** An engine-owned position sample (spec §10, 1.4.4): the sub-satellite point
+ *  of one synthetic spacecraft at scenario time `ts`, propagated by the engine
+ *  from the same defining pass the track file carries. Published once a second
+ *  of wall time per body while a run is in progress. */
+export type Ephemeris = {
+  id: string
+  ts: string
+  marking: string
+  satellite_id: string
+  source: 'circular-model'
+  lat: number
+  lng: number
+  alt_km: number
+  speed_km_s: number
+  elements: {
+    altitude_km?: number
+    inclination_deg?: number
+    pass_utc?: string
+    pass_lat?: number
+    pass_lng?: number
+    period_s?: number
+  }
+  published_at: string
+}
+
 export type CanopyMessage =
   | { type: 'signal'; topic?: string; data: Signal }
   | { type: 'anomaly'; topic?: string; data: Anomaly }
@@ -337,6 +362,7 @@ export type CanopyMessage =
   | { type: 'embedding'; topic?: string; data: OsintEmbeddingSnapshot }
   | { type: 'reset'; topic?: string; data: ResetMarker }
   | { type: 'replay'; topic?: string; data: ReplayMarker }
+  | { type: 'ephemeris'; topic?: string; data: Ephemeris }
 
 export type CanopySocketState = {
   signals: Signal[]
@@ -391,3 +417,4 @@ export type WSEnvelope =
   | { topic: string; kind: 'embedding'; data: OsintEmbeddingSnapshot }
   | { topic: string; kind: 'reset'; data: ResetMarker }
   | { topic: string; kind: 'replay'; data: ReplayMarker }
+  | { topic: string; kind: 'ephemeris'; data: Ephemeris }
