@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ENGINE_DISAGREEMENT_KM, LABEL_OFFSETS, engineCheck, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
+import { ENGINE_DISAGREEMENT_KM, LABEL_OFFSETS, PULSE_PERIOD_MS, engineCheck, glowDotImage, pulseScale, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
 import type { N2YOLayerState } from './n2yoSatelliteLayer'
 import type { N2YOPositionCache } from './positionCache'
 
@@ -70,11 +70,11 @@ describe('flight readout', () => {
 describe('label placement for N bodies', () => {
   it('cycles above, below, right, left so closely-spaced marks keep their names apart', () => {
     expect(LABEL_OFFSETS).toHaveLength(4)
-    expect([labelOffsetFor(0).x, labelOffsetFor(0).y]).toEqual([0, -42])
-    expect([labelOffsetFor(1).x, labelOffsetFor(1).y]).toEqual([0, 46])
+    expect([labelOffsetFor(0).x, labelOffsetFor(0).y]).toEqual([0, -26])
+    expect([labelOffsetFor(1).x, labelOffsetFor(1).y]).toEqual([0, 26])
     expect(labelOffsetFor(2).x).toBeGreaterThan(0)
     expect(labelOffsetFor(3).x).toBeLessThan(0)
-    expect([labelOffsetFor(4).x, labelOffsetFor(4).y]).toEqual([0, -42])
+    expect([labelOffsetFor(4).x, labelOffsetFor(4).y]).toEqual([0, -26])
   })
 })
 
@@ -90,5 +90,16 @@ describe('engine check', () => {
     expect(off.separationKm).toBeGreaterThan(ENGINE_DISAGREEMENT_KM)
     expect(off.separationKm).toBeCloseTo(11.1, 0)
     expect(engineCheck(body, { ts: 'nope', lat: 0, lng: 0 })).toBeNull()
+  })
+})
+
+describe('the mark', () => {
+  it('breathes about its base scale and draws a glow canvas', () => {
+    expect(pulseScale(0)).toBeCloseTo(1, 6)
+    expect(pulseScale(PULSE_PERIOD_MS / 4)).toBeCloseTo(1.14, 6)
+    expect(pulseScale((3 * PULSE_PERIOD_MS) / 4, 2)).toBeCloseTo(2 * 0.86, 6)
+    // jsdom has no 2D canvas: the helper returns null there and a 64 px canvas in a browser.
+    const canvas = glowDotImage('#7b96ff')
+    expect(canvas === null || canvas.width === 64).toBe(true)
   })
 })

@@ -55,7 +55,6 @@ import {
   addFlightBody,
   flightBodyFor,
   flightReadout,
-  flightSatelliteId,
   flightSatelliteNumber,
   flightSubpoint,
   isFlightSatelliteEntityId,
@@ -64,6 +63,9 @@ import {
   updateFlightRing,
   ENGINE_DISAGREEMENT_KM,
   engineCheck,
+  FLIGHT_MODEL_MIN_ZOOM_M,
+  focusFlightModel,
+  unfocusFlightModel,
   type FlightBody,
   type FlightReadout,
 } from '../lib/flightLayer'
@@ -204,6 +206,8 @@ type CesiumGlobeProps = {
 // the Site A anchor uses, so the pinned mark, the station and an RF emitter
 // estimate read as separate marks.
 const PIN_CAMERA_HEIGHT_M = 1_400_000
+/** The globe's zoom floor; a focused spacecraft model lowers it for its stay. */
+const GLOBE_MIN_ZOOM_M = 250
 
 // One press of Zoom in (or +) brings the camera to 60% of its height; Zoom
 // out (or -) is the inverse, so a press each way lands where it started.
@@ -218,12 +222,18 @@ type PointerPress = { x: number; y: number; at: number; moved: boolean; pickedId
 // Select a track in place: label on and orbit drawn, camera untouched. (The
 // layer library's selectN2YOSatellite used to fly to the centred Earth as
 // well; that flight is gone, and the console keeps this camera-free form.)
-const selectTrackInPlace = (viewer: Viewer, layer: N2YOLayerState) => {
+const selectTrackInPlace = (
+  viewer: Viewer,
+  layer: N2YOLayerState,
+  { orbit = true }: { orbit?: boolean } = {},
+) => {
   const entity = viewer.entities.getById(layer.entityIds[0])
   if (entity?.label) {
     entity.label.show = new ConstantProperty(true)
   }
-  showN2YOOrbit(viewer, layer)
+  // In flight the pinned track's orbit (the pass-time ring) stays away: the
+  // flight layer draws the live one.
+  if (orbit) showN2YOOrbit(viewer, layer)
 }
 
 type MapPoint = {
@@ -377,6 +387,8 @@ export function CesiumGlobe({
   const clockRunLive = useClockStore((s) => s.run?.state === 'started' && s.run.max_delay_s === null)
   const flightViewRef = useRef(false)
   const flightBodiesRef = useRef<FlightBody[]>([])
+  // The body whose 3D model is on the globe (a double-click or Follow in flight).
+  const focusedBodyRef = useRef<FlightBody | null>(null)
   const hasFramedOnceRef = useRef(false)
   const [flightReadouts, setFlightReadouts] = useState<
     Array<{ name: string; readout: FlightReadout | null; source: 'engine' | 'console'; disagreementKm: number | null }>
@@ -437,6 +449,12 @@ export function CesiumGlobe({
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
     if (viewer.trackedEntity) viewer.trackedEntity = undefined
+    // Back to the Earth's frame: the spacecraft is a mark again.
+    if (focusedBodyRef.current) {
+      unfocusFlightModel(viewer, focusedBodyRef.current)
+      focusedBodyRef.current = null
+      viewer.scene.screenSpaceCameraController.minimumZoomDistance = GLOBE_MIN_ZOOM_M
+    }
   }, [])
 
   /** A flight the data asks for (first framing, a pin): it ends any follow,
@@ -466,9 +484,28 @@ export function CesiumGlobe({
   const followLayer = useCallback((layer: N2YOLayerState) => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
-    const entity = viewer.entities.getById(
-      flightViewRef.current ? flightSatelliteId(layer.satelliteId) : layer.entityIds[0],
-    )
+    const body = flightViewRef.current
+      ? flightBodiesRef.current.find((candidate) => candidate.layer === layer) ?? null
+      : null
+    if (body) {
+      // In flight the focus is the spacecraft itself: its 3D body in its own
+      // frame, the camera framed on it once the model has loaded (Cesium
+      // holds the tracking until the bounding sphere is known), the Earth
+      // turning beneath. No range to keep: the mark's range was the globe's.
+      if (focusedBodyRef.current && focusedBodyRef.current !== body) {
+        unfocusFlightModel(viewer, focusedBodyRef.current)
+      }
+      const entity = focusFlightModel(viewer, body)
+      if (!entity) return
+      focusedBodyRef.current = body
+      followTokenRef.current += 1
+      // The globe's zoom floor (250 m) would hold the camera far from a 13 m
+      // body; lowered while focused, restored when the focus ends.
+      viewer.scene.screenSpaceCameraController.minimumZoomDistance = FLIGHT_MODEL_MIN_ZOOM_M
+      viewer.trackedEntity = entity
+      return
+    }
+    const entity = viewer.entities.getById(layer.entityIds[0])
     const position = entity?.position?.getValue(viewer.clock.currentTime)
     if (!entity || !position) return
     const camera = viewer.camera
@@ -545,7 +582,7 @@ export function CesiumGlobe({
     if (!layer) return
     if (selectedN2yoLayerRef.current !== layer) {
       selectedN2yoLayerRef.current = layer
-      selectTrackInPlace(viewer, layer)
+      selectTrackInPlace(viewer, layer, { orbit: !flightViewRef.current })
       setSelectedSatellite(layer)
     }
     followLayer(layer)
@@ -596,7 +633,7 @@ export function CesiumGlobe({
     viewer.scene.globe.enableLighting = false
     viewer.scene.globe.maximumScreenSpaceError = 1
     viewer.scene.globe.showGroundAtmosphere = true
-    viewer.scene.screenSpaceCameraController.minimumZoomDistance = 250
+    viewer.scene.screenSpaceCameraController.minimumZoomDistance = GLOBE_MIN_ZOOM_M
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = 42000000
 
     // Follow mode is the widget's own tracked-entity state (Esc, Reset view
@@ -713,7 +750,7 @@ export function CesiumGlobe({
         deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
       }
       selectedN2yoLayerRef.current = layer
-      selectTrackInPlace(viewer, layer)
+      selectTrackInPlace(viewer, layer, { orbit: !flightViewRef.current })
       setSelectedSatellite(layer)
       viewer.scene.requestRender()
     }, ScreenSpaceEventType.LEFT_CLICK)
@@ -739,7 +776,7 @@ export function CesiumGlobe({
           deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
         }
         selectedN2yoLayerRef.current = layer
-        selectTrackInPlace(viewer, layer)
+        selectTrackInPlace(viewer, layer, { orbit: !flightViewRef.current })
         setSelectedSatellite(layer)
         followLayer(layer)
       },
@@ -1280,7 +1317,7 @@ export function CesiumGlobe({
         deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
       }
       selectedN2yoLayerRef.current = layer
-      selectTrackInPlace(viewer, layer)
+      selectTrackInPlace(viewer, layer, { orbit: !flightViewRef.current })
       setSelectedSatellite(layer)
       if (flightViewRef.current && flightBodiesRef.current.some((body) => body.layer === layer)) {
         // A pinned spacecraft in flight is followed: it will not stay where a flight lands.
@@ -1385,7 +1422,7 @@ export function CesiumGlobe({
       if (viewer.isDestroyed()) return
       const clock = useClockStore.getState()
       const ms = clock.timeAt()
-      bodies.forEach((body) => updateFlightRing(viewer, body, ms))
+      bodies.forEach((body) => updateFlightRing(viewer, body))
       const engine = useEphemerisStore.getState().latest
       setFlightReadouts(
         bodies.map((body) => {
@@ -1412,6 +1449,11 @@ export function CesiumGlobe({
       window.clearInterval(interval)
       removeTick()
       if (viewer.isDestroyed()) return
+      if (focusedBodyRef.current) {
+        unfocusFlightModel(viewer, focusedBodyRef.current)
+        focusedBodyRef.current = null
+        viewer.scene.screenSpaceCameraController.minimumZoomDistance = GLOBE_MIN_ZOOM_M
+      }
       bodies.forEach((body) => removeFlightBody(viewer, body))
       // Back to pass view: a flight-only body stays hidden unless the stream names it.
       simLayers.forEach((layer) => {
@@ -2199,8 +2241,8 @@ export function CesiumGlobe({
       ) : null}
       {displayMode === 'globe' && flightView ? (
         <aside className="flight-readout" aria-label="Flight clock" data-testid="flight-readout">
-          <span className="flight-readout__clock">
-            scenario clock <em>{flightClock}</em>
+          <span className="flight-readout__clock" title="The scenario clock: the gateway's replay timeline, or wall time between runs">
+            <em>{flightClock}</em>
           </span>
           {flightReadouts.map(({ name, readout, source, disagreementKm }) => (
             <span
@@ -2209,8 +2251,8 @@ export function CesiumGlobe({
               data-source={source}
             >
               <strong>{name}</strong>
-              <span className="flight-readout__source" title={source === 'engine' ? "The engine's position sample, published this second" : "The console's own model; the engine publishes only during a run"}>
-                {source === 'engine' ? 'engine' : 'console model'}
+              <span className="flight-readout__source" title={source === 'engine' ? "Position from the engine's sample, published this second" : "Position from the console's own model; the engine publishes only during a run"}>
+                {source === 'engine' ? 'eng' : 'con'}
               </span>
               {disagreementKm !== null ? (
                 <span className="flight-readout__drift">engine Δ {disagreementKm.toFixed(1)} km</span>
@@ -2219,26 +2261,26 @@ export function CesiumGlobe({
                 readout.visible ? (
                   <>
                     <span>
-                      el {readout.elevationDeg.toFixed(0)}° · az {readout.azimuthDeg.toFixed(0)}°
+                      {readout.elevationDeg.toFixed(0)}°/{readout.azimuthDeg.toFixed(0)}°
                     </span>
                     <span className="flight-readout__state">
-                      {readout.losMs !== null ? `sets ${clockTextOn(readout.losMs, flightClockMs)}` : 'in view'}
+                      {readout.losMs !== null ? `los ${clockTextOn(readout.losMs, flightClockMs)}` : 'in view'}
                     </span>
                   </>
                 ) : (
                   <span className="flight-readout__state">
-                    below horizon{readout.nextAosMs !== null ? ` · next pass ${clockTextOn(readout.nextAosMs, flightClockMs)}` : ''}
+                    {readout.nextAosMs !== null ? `aos ${clockTextOn(readout.nextAosMs, flightClockMs)}` : 'below horizon'}
                   </span>
                 )
               ) : (
-                <span className="flight-readout__state">no station in the file</span>
+                <span className="flight-readout__state">no station</span>
               )}
             </span>
           ))}
           {flightDriftMs !== null && driftIsNotable(flightDriftMs, clockRate) ? (
-            <span className="flight-readout__drift">
+            <span className="flight-readout__drift" title="The newest signal's time against the clock when it landed">
               stream {flightDriftMs > 0 ? '+' : '−'}
-              {Math.round(Math.abs(flightDriftMs) / 1000)} s from the clock
+              {Math.round(Math.abs(flightDriftMs) / 1000)} s
             </span>
           ) : null}
         </aside>

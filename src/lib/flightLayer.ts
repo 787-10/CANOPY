@@ -8,23 +8,23 @@
 import {
   ArcType,
   CallbackPositionProperty,
+  CallbackProperty,
   Cartesian2,
   Cartesian3,
   Color,
   ConstantProperty,
   JulianDate,
   LabelStyle,
+  ModelGraphics,
   NearFarScalar,
-  PolylineDashMaterialProperty,
+  ShadowMode,
   TrackingReferenceFrame,
+  VelocityOrientationProperty,
+  type Entity,
+  type PositionProperty,
   type Viewer,
 } from 'cesium'
-import {
-  FAMILY_COLOR_HEX,
-  n2yoMarkerImage,
-  orbitEntityIdForSatellite,
-  type N2YOLayerState,
-} from './n2yoSatelliteLayer'
+import { FAMILY_COLOR_HEX, orbitEntityIdForSatellite, type N2YOLayerState } from './n2yoSatelliteLayer'
 import { CircularOrbit, EARTH_RADIUS_KM, elementsFromSynthetic, type Subpoint } from './orbit/kepler'
 import { footprintRadiusKm, lookAngles, nextAos, type Site } from './orbit/lookAngles'
 
@@ -83,6 +83,39 @@ export function flightBodyFor(layer: N2YOLayerState): FlightBody | null {
 
 const bodyColor = () => Color.fromCssColorString(FAMILY_COLOR_HEX.SIM)
 
+/** The mark: a soft glow with a bright core, drawn once to a canvas. In flight
+ *  the spacecraft is a moving light, not a pictogram (the pinned pass view
+ *  keeps its marker image). Null outside a DOM (tests). */
+export function glowDotImage(colorHex: string, size = 64): HTMLCanvasElement | null {
+  if (typeof document === 'undefined') return null
+  const canvas = document.createElement('canvas')
+  canvas.width = size
+  canvas.height = size
+  const context = canvas.getContext('2d')
+  if (!context) return null
+  const centre = size / 2
+  const glow = context.createRadialGradient(centre, centre, 0, centre, centre, centre)
+  const color = Color.fromCssColorString(colorHex)
+  const rgb = `${Math.round(color.red * 255)}, ${Math.round(color.green * 255)}, ${Math.round(color.blue * 255)}`
+  glow.addColorStop(0, `rgba(${rgb}, 0.95)`)
+  glow.addColorStop(0.22, `rgba(${rgb}, 0.55)`)
+  glow.addColorStop(0.55, `rgba(${rgb}, 0.12)`)
+  glow.addColorStop(1, `rgba(${rgb}, 0)`)
+  context.fillStyle = glow
+  context.fillRect(0, 0, size, size)
+  context.fillStyle = 'rgba(255, 255, 255, 0.98)'
+  context.beginPath()
+  context.arc(centre, centre, size * 0.07, 0, Math.PI * 2)
+  context.fill()
+  return canvas
+}
+
+/** The glow breathes: scale over wall time, one cycle every 1.6 s, ±14 %. */
+export const PULSE_PERIOD_MS = 1600
+export function pulseScale(wallMs: number, base = 1): number {
+  return base * (1 + 0.14 * Math.sin((wallMs / PULSE_PERIOD_MS) * Math.PI * 2))
+}
+
 /** Show or hide a pinned layer's own entities (spacecraft, sub-point, orbit). */
 export function setLayerEntitiesShown(viewer: Viewer, layer: N2YOLayerState, shown: boolean): void {
   for (const id of [...layer.entityIds, orbitEntityIdForSatellite(layer.satelliteId)]) {
@@ -95,10 +128,10 @@ export function setLayerEntitiesShown(viewer: Viewer, layer: N2YOLayerState, sho
  *  closely-spaced objects (SIM-01 and OBJ-1, 23 km apart) would otherwise
  *  print one label over the other. Above, below, right, left, then repeat. */
 export const LABEL_OFFSETS: readonly (readonly [number, number])[] = [
-  [0, -42],
-  [0, 46],
-  [64, 0],
-  [-64, 0],
+  [0, -26],
+  [0, 26],
+  [46, 0],
+  [-46, 0],
 ]
 
 export function labelOffsetFor(index: number): Cartesian2 {
@@ -124,10 +157,11 @@ export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void
     billboard: {
       color: Color.WHITE,
       disableDepthTestDistance: 0,
-      height: 74,
-      image: n2yoMarkerImage(FAMILY_COLOR_HEX.SIM, 'SIM'),
-      scaleByDistance: new NearFarScalar(1500000, 1, 25000000, 0.62),
-      width: 82,
+      height: 36,
+      image: glowDotImage(FAMILY_COLOR_HEX.SIM) ?? undefined,
+      scale: new CallbackProperty(() => pulseScale(performance.now()), false),
+      scaleByDistance: new NearFarScalar(1500000, 1, 25000000, 0.7),
+      width: 36,
     },
     label: {
       backgroundColor: PANEL.withAlpha(0.9),
@@ -166,31 +200,41 @@ export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void
       },
     })
   }
-  updateFlightRing(viewer, body, JulianDate.toDate(viewer.clock.currentTime).getTime())
+  addFlightRing(viewer, body)
 }
 
-/** The orbit ring at one moment: the inertial circle in the Earth-fixed frame
- *  at that sidereal time. Refreshed on a coarse timer, not per frame. */
-export function updateFlightRing(viewer: Viewer, body: FlightBody, unixMs: number): void {
-  const positions = body.orbit
-    .ring(unixMs, RING_POINTS)
-    .map((point) => Cartesian3.fromDegrees(point.lng, point.lat, point.altKm * 1000))
-  const existing = viewer.entities.getById(body.entityIds[1])
-  if (existing?.polyline) {
-    existing.polyline.positions = new ConstantProperty(positions)
-    return
-  }
+/** The orbit ring: the inertial circle in the Earth-fixed frame at the
+ *  clock's sidereal time, evaluated every frame from the time Cesium passes
+ *  (a coarse timer made it jump 0.25° a second at 60×: the "ticking"). A
+ *  solid line, since a dash pattern re-laid each frame shimmers. */
+export function addFlightRing(viewer: Viewer, body: FlightBody): void {
+  if (viewer.entities.getById(body.entityIds[1])) return
+  const scratch: Cartesian3[] = []
+  const positions = new CallbackProperty((time) => {
+    const at = time ?? viewer.clock.currentTime
+    const ring = body.orbit.ring(JulianDate.toDate(at).getTime(), RING_POINTS)
+    scratch.length = ring.length
+    ring.forEach((point, index) => {
+      scratch[index] = Cartesian3.fromDegrees(point.lng, point.lat, point.altKm * 1000, undefined, scratch[index])
+    })
+    return scratch
+  }, false)
   viewer.entities.add({
     id: body.entityIds[1],
     name: `${body.layer.satelliteName} orbit`,
     polyline: {
       arcType: ArcType.NONE,
       clampToGround: false,
-      material: new PolylineDashMaterialProperty({ color: bodyColor().withAlpha(0.8), dashLength: 18 }),
+      material: bodyColor().withAlpha(0.42),
       positions,
-      width: 2,
+      width: 1.5,
     },
   })
+}
+
+/** The ring follows the clock by itself; this only makes sure it exists. */
+export function updateFlightRing(viewer: Viewer, body: FlightBody): void {
+  addFlightRing(viewer, body)
 }
 
 export function removeFlightBody(viewer: Viewer, body: FlightBody): void {
@@ -259,4 +303,49 @@ export function engineCheck(body: FlightBody, sample: { ts: string; lat: number;
     Math.sin(dLat / 2) ** 2 + Math.cos(ours.lat * toRad) * Math.cos(sample.lat * toRad) * Math.sin(dLng / 2) ** 2
   const separationKm = 2 * EARTH_RADIUS_KM * Math.asin(Math.min(1, Math.sqrt(a)))
   return { sampleMs, separationKm }
+}
+
+/** The spacecraft body the Spacecraft page shows (public/models/PROVENANCE.md),
+ *  drawn on the flying mark while it is the focus (a double-click, Follow). */
+export const FLIGHT_MODEL_URI = '/models/gpm.glb'
+/** Metres per model unit. The archive file's bounding sphere is 271 units
+ *  (measured through Cesium); the spacecraft is about 13 m long, so this puts
+ *  the body at its real size. The camera frames the bounding sphere, so the
+ *  picture is the same at any scale; the number is for the truth of it. */
+export const FLIGHT_MODEL_SCALE = 0.025
+
+/** Put the 3D body on a flight entity and hide its glow dot: the entity is
+ *  about to be tracked, so the camera frames the model in the spacecraft's
+ *  own frame (Cesium waits for the model's bounding sphere before it frames).
+ *  The body flies nose-first: orientation from the velocity. */
+/** Where the camera sits in the spacecraft's frame while focused (metres:
+ *  behind, beside and above a 13 m body), and the zoom floor that lets it. */
+export const FLIGHT_MODEL_VIEW_FROM = new Cartesian3(-30, 18, 13)
+export const FLIGHT_MODEL_MIN_ZOOM_M = 6
+
+export function focusFlightModel(viewer: Viewer, body: FlightBody): Entity | null {
+  const entity = viewer.entities.getById(body.entityIds[0])
+  if (!entity?.position) return null
+  entity.viewFrom = new ConstantProperty(FLIGHT_MODEL_VIEW_FROM)
+  if (!entity.model) {
+    entity.orientation = new VelocityOrientationProperty(entity.position as PositionProperty)
+    entity.model = new ModelGraphics({
+      uri: FLIGHT_MODEL_URI,
+      scale: FLIGHT_MODEL_SCALE,
+      minimumPixelSize: 0,
+      shadows: ShadowMode.DISABLED,
+    })
+  }
+  if (entity.billboard) entity.billboard.show = new ConstantProperty(false)
+  return entity
+}
+
+/** Back to the mark: the model goes, the glow dot returns. */
+export function unfocusFlightModel(viewer: Viewer, body: FlightBody): void {
+  const entity = viewer.entities.getById(body.entityIds[0])
+  if (!entity) return
+  entity.model = undefined
+  entity.orientation = undefined
+  entity.viewFrom = undefined
+  if (entity.billboard) entity.billboard.show = new ConstantProperty(true)
 }

@@ -4,29 +4,30 @@
 
 .flight-readout {
   position: absolute;
-  left: 14px;
-  bottom: 56px;
+  left: 10px;
+  bottom: 44px;
   z-index: 5;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  max-width: 340px;
-  padding: 8px 10px;
+  gap: 1px;
+  max-width: 300px;
+  padding: 3px 6px;
   border: 1px solid var(--frame, var(--line-bright));
-  border-radius: 6px;
-  background: var(--frame-bg, #060a0a);
+  border-radius: 4px;
+  background: rgba(6, 10, 10, 0.82);
   color: var(--text-muted);
   font-family: var(--font-mono, ui-monospace, monospace);
-  font-size: 0.66rem;
+  font-size: 0.56rem;
   font-weight: 600;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.04em;
+  line-height: 1.35;
   text-transform: uppercase;
   pointer-events: none;
 }
 
 .flight-readout__clock {
   color: var(--text-primary);
-  font-size: 0.78rem;
+  font-size: 0.62rem;
 }
 
 .flight-readout__clock em {
@@ -36,12 +37,14 @@
 
 .flight-readout__body {
   display: flex;
-  gap: 10px;
+  gap: 6px;
   align-items: baseline;
+  white-space: nowrap;
 }
 
 .flight-readout__body strong {
   color: var(--text-primary);
+  min-width: 3.2em;
 }
 
 .flight-readout__body--visible .flight-readout__state {
@@ -56,11 +59,6 @@
   color: var(--amber);
 }
 
-html[data-capture="1"] .globe-controls--flight,
-html[data-capture="1"] .flight-readout {
-  display: none;
-}
-
 .flight-readout__source {
   color: var(--text-subtle);
   font-weight: 500;
@@ -68,4 +66,9 @@ html[data-capture="1"] .flight-readout {
 
 .flight-readout__body[data-source="engine"] .flight-readout__source {
   color: var(--cyan, var(--brand-bright));
+}
+
+html[data-capture="1"] .globe-controls--flight,
+html[data-capture="1"] .flight-readout {
+  display: none;
 }
