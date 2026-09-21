@@ -224,7 +224,7 @@ def _sample_events() -> dict[str, object]:
     )
     decision = Decision(
         id="dec-1", ts=TS, attribution_id="attr-1", action="threat_warning",
-        target="brigade_commander", rationale="r", authority="local",
+        target="space-ops-c2", rationale="r", authority="local",
         withheld_recovery=WithheldRecovery(
             action_id="switch_redundant_amplifier", target_subsystem="comms",
             reason_code="verdict/hostile_external",

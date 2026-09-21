@@ -22,12 +22,12 @@ def test_operator_call_is_recorded_traced_and_reset(client: TestClient) -> None:
     try:
         response = client.post(
             "/decisions/dec-1/operator",
-            json={"status": "accepted", "action": "threat_warning", "authority": "local", "target": "brigade-c2"},
+            json={"status": "accepted", "action": "threat_warning", "authority": "local", "target": "space-ops-c2"},
         )
         assert response.status_code == 200, response.text
         body = response.json()
         assert body["status"] == "recorded"
-        assert body["trace"] == "operator accepted: threat_warning → brigade-c2"
+        assert body["trace"] == "operator accepted: threat_warning → space-ops-c2"
         assert body["record"]["decision_id"] == "dec-1"
 
         listed = client.get("/decisions/operator").json()["decisions"]
@@ -36,9 +36,9 @@ def test_operator_call_is_recorded_traced_and_reset(client: TestClient) -> None:
 
         denied = client.post(
             "/decisions/dec-1/operator",
-            json={"status": "denied", "action": "threat_warning", "authority": "local", "target": "brigade-c2"},
+            json={"status": "denied", "action": "threat_warning", "authority": "local", "target": "space-ops-c2"},
         ).json()
-        assert denied["trace"] == "operator denied: threat_warning → brigade-c2"
+        assert denied["trace"] == "operator denied: threat_warning → space-ops-c2"
         assert client.get("/decisions/operator").json()["decisions"][0]["status"] == "denied"
 
         reconsidered = client.post(

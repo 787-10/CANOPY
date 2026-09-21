@@ -528,7 +528,7 @@ def create_app(
 
         The console's Accept, Deny and Reconsider post here. The gateway keeps
         the latest call per decision and emits a decide-stage trace line
-        (``operator accepted: threat_warning → brigade-c2``) so the call is
+        (``operator accepted: threat_warning → space-ops-c2``) so the call is
         part of the run's record and reaches every connected console.
         """
         status = payload.get("status")

@@ -224,3 +224,11 @@ export function formatMs(value: number | null): string {
   if (value > 0 && value < 10) return `${value.toFixed(1)} ms`
   return `${Math.round(value).toLocaleString('en-US')} ms`
 }
+
+/** The console's clock: `HH:MM:SSZ` in UTC for an ISO timestamp or an
+ *  epoch-ms value, the raw input when it does not parse. Never a 12-hour or
+ *  local-zone string. */
+export function utcClock(ts: string | number): string {
+  const date = new Date(ts)
+  return Number.isNaN(date.getTime()) ? String(ts) : `${date.toISOString().slice(11, 19)}Z`
+}

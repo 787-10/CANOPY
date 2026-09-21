@@ -1,0 +1,151 @@
+/* ---- Run scorecard: the frame holds its content (2026-09-20) ----------------
+   Imported from pages/RunSummary.tsx. App.tsx pulls App.css in after the page
+   modules, so every rule here is scoped under .run-shell to outrank App.css's
+   single-class .run-* rules whatever the import order. Palette and faces are
+   the variables App.css defines; nothing new is introduced.
+
+   The defect this fixes: .run-grid sized its rows `minmax(0, 1fr) auto`, so
+   the archive row took its full content height and squeezed the scorecard
+   row below the facts' own height. The panels are overflow: visible (the
+   title sits in the border line), so the facts ran out of their frame and
+   over the archive. Now the scorecard row is at least its content and the
+   archive takes what is left; on a short viewport the scorecard panels give
+   up height before the archive disappears, and their bodies scroll. */
+
+.run-shell .run-grid {
+  grid-template-rows: minmax(max-content, 1fr) minmax(0, auto);
+}
+
+.run-shell .run-panel--archive {
+  grid-area: bundle;
+  min-height: 120px;
+}
+
+/* 237px = top bar, page padding and the grid's own padding (101px) + the row
+   gap (16px) + the archive floor (120px), so cap and floor meet exactly and
+   the panels always fill their row. Capture mode has no archive panel and
+   keeps the two panels at full height for the pinned frame. */
+.run-shell .run-grid:has(.run-panel--archive) > .run-panel--identity,
+.run-shell .run-grid:has(.run-panel--archive) > .run-panel--timings {
+  max-height: calc(100svh - 237px);
+}
+
+/* The panel stays overflow: visible for the lifted title; its body is the
+   scroll container (the scroll skin in styles/scrollbars.css applies). */
+.run-shell .run-panel__body {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 10px;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ---- Stage timings: fixed columns, one line per stage ----------------------
+   Shares measured at 1440x900 (table 905px): the longest stage label
+   ("Attribution, provisional", 246px), the "Since first anomaly" header
+   (132px) and the longest note (327px) each keep a few pixels spare; the
+   Note column takes the rest. */
+.run-shell .run-timings--stages {
+  table-layout: fixed;
+}
+
+.run-shell .run-timings--stages thead th:nth-child(1) {
+  width: 30%;
+}
+
+.run-shell .run-timings--stages thead th:nth-child(2) {
+  width: 17%;
+}
+
+.run-shell .run-timings--stages thead th:nth-child(3) {
+  width: 14%;
+}
+
+.run-shell .run-timings--stages tbody th {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The trace ids under a note: one line, cut with an ellipsis; the full list
+   is the cell's tooltip. */
+.run-shell .run-timings__ids {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- Archived runs: seven fixed columns, even rows --------------------------
+   Shares measured at 1440x900 (table 1386px) so the one-line cells hold
+   their values: "2026-09-18 22:58 UTC" (164px), a demo scenario id (147px),
+   "anthropic · claude-sonnet-4-6" (237px) and a 32-character run id (235px).
+   The bundle column takes the rest (19%). */
+.run-shell .run-timings--archive {
+  table-layout: fixed;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(1) {
+  width: 14%;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(2) {
+  width: 4%;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(3) {
+  width: 13%;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(4) {
+  width: 19%;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(5) {
+  width: 14%;
+}
+
+.run-shell .run-timings--archive thead th:nth-child(6) {
+  width: 17%;
+}
+
+/* The header row stays put while the bundle list scrolls inside its frame.
+   Collapsed borders do not travel with a sticky cell, so the rule under the
+   header is drawn as a shadow. */
+.run-shell .run-timings--archive thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--frame-bg);
+  box-shadow: inset 0 -1px 0 var(--line);
+}
+
+/* Ids and names stay on one line and are cut with an ellipsis (the cell's
+   tooltip has the whole value); the verdict and decision phrases may wrap. */
+.run-shell .run-timings--archive tbody td {
+  padding: 8px 10px;
+  overflow: hidden;
+  font-size: 0.8rem;
+  text-overflow: ellipsis;
+  vertical-align: top;
+  white-space: nowrap;
+}
+
+.run-shell .run-timings--archive tbody td:nth-child(5),
+.run-shell .run-timings--archive tbody td:nth-child(6) {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.run-shell .run-timings--archive tbody td small {
+  display: block;
+  margin-top: 2px;
+  color: var(--text-subtle);
+  font-size: 0.7rem;
+}
+
+.run-shell .run-timings--archive tbody td:last-child {
+  font-size: 0.72rem;
+}

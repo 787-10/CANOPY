@@ -1,0 +1,350 @@
+/* ---- Fit pass (2026-09-20 night) ---------------------------------------------
+   Nothing scrolls inside the console's Response column or on the Verdict
+   page: the content is tightened and folded to fit the window instead.
+   Imported by the components it styles, which App.tsx loads before App.css,
+   so every rule here carries the page shell's class to outrank the rule it
+   replaces there. Same skin: thin frames, dotted leaders, numbers in the
+   log face, the ▸ toggles. */
+
+/* ---- Console: the Response column ------------------------------------------ */
+
+/* The Response body never grows a scrollbar; the cards below are sized so
+   every episode state fits a 900px-tall window with the handle track shown. */
+.brigade-shell .side-column--right .side-column__body {
+  overflow-y: hidden;
+  scrollbar-width: none;
+}
+
+.brigade-shell .response {
+  gap: 12px;
+}
+
+.brigade-shell .response .summary-card {
+  gap: 5px;
+}
+
+/* Badge and confidence on one line inside the 336px body. */
+.brigade-shell .response .summary-card__lead {
+  gap: 8px;
+}
+
+.brigade-shell .response .summary-card__badge {
+  padding: 3px 8px;
+  font-size: 0.82rem;
+}
+
+.brigade-shell .response .summary-card__confidence {
+  font-size: 0.9rem;
+}
+
+.brigade-shell .response .summary-card__text,
+.brigade-shell .response .summary-card__gate,
+.brigade-shell .response .summary-card__withheld {
+  line-height: 1.3;
+}
+
+.brigade-shell .response .summary-card__buttons {
+  margin-top: 4px;
+}
+
+.brigade-shell .response .summary-card__button {
+  padding: 11px 12px;
+}
+
+/* Accepted / Denied: the tag and Reconsider share the first line, the
+   operator's outcome sits under them at full width. Placed by hand: grid
+   auto-placement would push the button under the spanning outcome. */
+.brigade-shell .response .summary-card__resolved {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  align-items: center;
+  gap: 4px 12px;
+}
+
+.brigade-shell .response .summary-card__resolved > span:first-child {
+  grid-row: 1;
+  grid-column: 1;
+}
+
+.brigade-shell .response .summary-card__resolved > .summary-card__button {
+  grid-row: 1;
+  grid-column: 2;
+  justify-self: end;
+  width: auto;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+}
+
+.brigade-shell .response .summary-card__resolved > .summary-card__outcome {
+  grid-row: 2;
+  grid-column: 1 / -1;
+  line-height: 1.3;
+}
+
+/* ---- Verdict page ------------------------------------------------------------ */
+
+/* Fixed-height page: the two columns take the window and do not scroll on
+   their own. A fold the operator opens may run past the window; only then
+   does the page itself scroll. */
+.page-shell.verdict-shell {
+  overflow: hidden auto;
+}
+
+.verdict-shell .verdict-page {
+  gap: 14px;
+}
+
+.verdict-shell .verdict-page > * {
+  overflow: visible;
+}
+
+.verdict-shell .verdict-page__decision {
+  gap: 14px;
+}
+
+.verdict-shell .verdict-panel {
+  gap: 8px;
+  padding-bottom: 12px;
+}
+
+.verdict-shell .verdict-panel__headline {
+  font-size: 1.2rem;
+  line-height: 1.2;
+}
+
+.verdict-shell .verdict-panel__timing {
+  padding: 4px 0;
+}
+
+/* Basis, actor and the doctrine entry share a row. A fact never shrinks: it
+   wraps to the next row whole, so a label cannot squeeze its value into a
+   broken word; only a sentence-long value (the forecast) wraps inside. */
+.verdict-shell .verdict-panel__facts {
+  gap: 4px 24px;
+}
+
+.verdict-shell .verdict-panel__facts > div {
+  flex: 0 0 auto;
+  flex-wrap: nowrap;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.verdict-shell .verdict-panel__facts dt {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.verdict-shell .verdict-panel__facts dd {
+  flex: 0 1 auto;
+  min-width: 0;
+  font-size: 1rem;
+  word-break: normal;
+  overflow-wrap: break-word;
+}
+
+.verdict-shell .verdict-panel__facts small {
+  flex: 0 0 auto;
+  font-size: 0.72rem;
+}
+
+.verdict-shell .verdict-panel__section h3 {
+  margin-bottom: 4px;
+}
+
+.verdict-shell .verdict-panel__list {
+  gap: 3px;
+}
+
+.verdict-shell .verdict-panel__list li {
+  font-size: 1rem;
+  line-height: 1.3;
+}
+
+.verdict-shell .verdict-panel__count {
+  margin-left: 6px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+/* Folds under a list, side by side: "+k more" and "Rule basis". An open one
+   takes the full width so its lines read at the list's measure. */
+.verdict-shell .verdict-panel__folds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 8px;
+}
+
+.verdict-shell .verdict-panel__folds > details {
+  min-width: 0;
+}
+
+.verdict-shell .verdict-panel__folds > details[open] {
+  flex-basis: 100%;
+}
+
+.verdict-shell .verdict-panel__folds > details > .verdict-panel__list {
+  margin-top: 8px;
+}
+
+/* The generic fold toggle: the same one-word mono chip as the other
+   `details` on the page (rule basis, entry text). */
+details.fold > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: max-content;
+  padding: 1px 8px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  list-style: none;
+  cursor: pointer;
+}
+
+details.fold > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.fold > summary::before {
+  content: '▸';
+  font-size: 0.7rem;
+}
+
+details[open].fold > summary::before {
+  content: '▾';
+}
+
+details.fold > summary:hover {
+  color: var(--brand-bright);
+  border-color: var(--brand-bright);
+  box-shadow: 0 0 10px rgba(123, 150, 255, 0.3);
+}
+
+/* KB citations: one line per entry, the id and the title on the toggle and
+   the entry text behind it. Each line takes the column's width so the title
+   reads whole; three across would leave it a few letters. */
+.verdict-shell .verdict-panel__citations {
+  flex-direction: column;
+  gap: 4px;
+}
+
+.verdict-shell .verdict-panel__citations > .kb-card {
+  min-width: 0;
+  padding: 0;
+  font-size: 0.8rem;
+}
+
+.verdict-shell details.kb-card > summary.kb-card__head,
+.verdict-shell .kb-card--unresolved > .kb-card__head {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 10px;
+  color: var(--text-subtle);
+  letter-spacing: 0;
+  text-transform: none;
+  list-style: none;
+  cursor: pointer;
+}
+
+.verdict-shell .kb-card--unresolved > .kb-card__head {
+  cursor: default;
+}
+
+.verdict-shell details.kb-card > summary.kb-card__head::-webkit-details-marker {
+  display: none;
+}
+
+.verdict-shell details.kb-card > summary.kb-card__head:hover .kb-card__title {
+  color: var(--brand-bright);
+}
+
+.verdict-shell .kb-card .kb-card__id {
+  font-family: var(--font-mono);
+  font-size: 0.74rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.verdict-shell .kb-card .kb-card__title {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 0.92rem;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.verdict-shell details.kb-card[open] .kb-card__title {
+  white-space: normal;
+}
+
+.verdict-shell .kb-card .kb-card__title--unresolved {
+  color: var(--text-subtle);
+  font-style: italic;
+  font-weight: 500;
+}
+
+.verdict-shell .kb-card__body {
+  padding: 0 10px 10px;
+}
+
+.verdict-shell .kb-card__meta {
+  color: var(--text-subtle);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.verdict-shell .kb-card__body .kb-card__summary {
+  margin-top: 4px;
+  font-size: 0.86rem;
+}
+
+.verdict-shell .kb-card__body .kb-card__implications {
+  font-size: 0.84rem;
+}
+
+/* The decision column: a tighter action panel, then the report list with
+   the rest of the reports behind "+k more". */
+.verdict-shell .operator-action {
+  gap: 8px;
+}
+
+.verdict-shell .operator-action__recovery {
+  gap: 4px 10px;
+  padding: 6px 10px;
+}
+
+.verdict-shell .episode-reports {
+  padding: 12px 12px 12px;
+}
+
+.verdict-shell .episode-reports__list {
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.verdict-shell .episode-report__link {
+  padding: 4px 10px;
+}
+
+.verdict-shell .episode-reports__more {
+  margin-top: 6px;
+}
+
+.verdict-shell .episode-reports__more > .episode-reports__list {
+  margin-top: 8px;
+}

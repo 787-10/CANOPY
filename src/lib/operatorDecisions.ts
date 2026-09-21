@@ -63,3 +63,37 @@ export function operatorStamp(iso: string | undefined): string | null {
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? null : `${d.toISOString().slice(11, 19)}Z`
 }
+
+// A decision behind the verdict revision (C21). The decide stage makes a
+// decision per attribution revision under one id; between the final verdict
+// arriving and the decide stage republishing, the decision on screen was made
+// for the provisional verdict.
+
+/** Shown beside the action title while the decision is behind the verdict. */
+export const STALE_DECISION_FLAG = 'based on provisional verdict · updating'
+export const STALE_DECISION_TITLE =
+  'The verdict was revised after this decision was made; the decide stage is recomputing it on the final verdict.'
+/** Title on a locked Accept: recoveries wait for the decision to catch up. */
+export const ACCEPT_LOCKED_TITLE = 'Accept opens when the decision catches up with the final verdict'
+
+/** True when the attribution on display is a later revision than the one
+ *  the decision was made for. Unknown revisions on either side are never
+ *  stale: the console flags only what the engine has stated. */
+export function decisionIsStale(
+  decision: Decision | null | undefined,
+  attributionRevision: number | null | undefined,
+): boolean {
+  if (!decision || typeof decision.revision !== 'number' || typeof attributionRevision !== 'number') {
+    return false
+  }
+  return attributionRevision > decision.revision
+}
+
+/** A recovery cannot be accepted while its decision is behind the verdict;
+ *  threat warnings and other defensive responses stay acceptable. */
+export function acceptIsLocked(
+  decision: Decision | null | undefined,
+  attributionRevision: number | null | undefined,
+): boolean {
+  return decision?.action === 'recovery_recommendation' && decisionIsStale(decision, attributionRevision)
+}

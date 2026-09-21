@@ -656,7 +656,7 @@ _DECISIONS: dict[str, _DecisionTemplate] = {
         target="satcom_link",
         rationale=(
             "SATCOM link degradation persists; requesting interdiction support to "
-            "preserve brigade BLOS."
+            "preserve the BLOS link."
         ),
         authority="request",
     ),
@@ -686,7 +686,7 @@ _DECISIONS: dict[str, _DecisionTemplate] = {
     ),
     "cyber_warning": _DecisionTemplate(
         action="threat_warning",
-        target="brigade_s2",
+        target="space-ops-c2",
         rationale=(
             "Probe activity is consistent with pre-RF/co-orbital tradecraft. "
             "Issuing watch alert."
@@ -695,7 +695,7 @@ _DECISIONS: dict[str, _DecisionTemplate] = {
     ),
     "default_warning": _DecisionTemplate(
         action="threat_warning",
-        target="brigade_commander",
+        target="space-ops-c2",
         rationale="Insufficient signal for direct action; routing as informational threat warning.",
         authority="local",
     ),

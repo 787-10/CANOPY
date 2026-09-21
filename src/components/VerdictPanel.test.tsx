@@ -283,3 +283,146 @@ describe('VerdictPanel — absent verdict and empty states', () => {
     expect(screen.getByText('Counter-C2 isolation')).toBeInTheDocument()
   })
 })
+
+describe('VerdictPanel — basis wording on a final revision (V11)', () => {
+  it('says the reasoning lane confirmed a rule verdict once the final revision keeps it', () => {
+    render(
+      <VerdictPanel
+        attribution={makeAttribution('att-confirmed', {
+          verdict: 'internal_fault',
+          verdict_basis: 'rule',
+          revision: 1,
+          provisional: false,
+          satellite_id: SAT,
+        })}
+      />,
+    )
+    const basis = screen.getByTestId('verdict-basis')
+    expect(basis).toHaveTextContent('Rule lane, confirmed by the reasoning lane')
+    expect(basis).toHaveAttribute(
+      'title',
+      'The reasoning lane reviewed the evidence and kept the rule verdict.',
+    )
+  })
+
+  it('keeps the plain rule-lane label on the provisional revision', () => {
+    render(
+      <VerdictPanel
+        attribution={makeAttribution('att-prov', {
+          verdict: 'internal_fault',
+          verdict_basis: 'rule',
+          revision: 0,
+          provisional: true,
+        })}
+      />,
+    )
+    expect(screen.getByTestId('verdict-basis')).toHaveTextContent(/^Rule lane$/)
+  })
+})
+
+describe('VerdictPanel — folds for the fixed-height Verdict page', () => {
+  const lines = (n: number, prefix: string) =>
+    Array.from({ length: n }, (_, i) => `${prefix} line ${i + 1}`)
+
+  it('keeps the first evidenceLimit lines in view and folds the rest behind "+k more"', () => {
+    render(
+      <VerdictPanel
+        attribution={makeAttribution('att-fold', {
+          verdict: 'internal_fault',
+          verdict_basis: 'rule',
+          satellite_id: SAT,
+          evidence: [...lines(5, 'evidence'), 'Verdict (rule): internal_fault. rule 1'],
+        })}
+        evidenceLimit={3}
+      />,
+    )
+    const shown = Array.from(screen.getByTestId('evidence').querySelectorAll('li')).map((li) => li.textContent)
+    expect(shown).toEqual(['evidence line 1', 'evidence line 2', 'evidence line 3'])
+    const more = screen.getByTestId('evidence-more')
+    expect(more.tagName).toBe('DETAILS')
+    expect(more.querySelector('summary')).toHaveTextContent('+2 more')
+    expect(
+      Array.from(screen.getByTestId('evidence-rest').querySelectorAll('li')).map((li) => li.textContent),
+    ).toEqual(['evidence line 4', 'evidence line 5'])
+    // The rule basis keeps its own fold beside it; every line is still on the page.
+    expect(screen.getByTestId('rule-basis')).toHaveTextContent('Verdict (rule): internal_fault. rule 1')
+    expect(screen.getByTestId('rule-basis').parentElement).toBe(more.parentElement)
+  })
+
+  it('folds the "Cited for the verdict" lines beyond citedLimit the same way', () => {
+    render(
+      <VerdictPanel
+        attribution={makeAttribution('att-cited', {
+          verdict: 'hostile_external',
+          verdict_basis: 'reasoning',
+          satellite_id: SAT,
+          verdict_evidence: lines(4, 'cited'),
+        })}
+        citedLimit={2}
+      />,
+    )
+    expect(
+      Array.from(screen.getByTestId('verdict-evidence').querySelectorAll('li')).map((li) => li.textContent),
+    ).toEqual(['cited line 1', 'cited line 2'])
+    expect(screen.getByTestId('verdict-evidence-more').querySelector('summary')).toHaveTextContent('+2 more')
+    expect(screen.getByTestId('verdict-evidence-rest')).toHaveTextContent('cited line 4')
+  })
+
+  it('shows every line and no fold when the list fits the limit, and by default', () => {
+    const { rerender } = render(
+      <VerdictPanel
+        attribution={makeAttribution('att-fits', {
+          verdict: 'internal_fault',
+          verdict_basis: 'rule',
+          satellite_id: SAT,
+          evidence: lines(3, 'evidence'),
+          verdict_evidence: lines(2, 'cited'),
+        })}
+        evidenceLimit={3}
+        citedLimit={2}
+      />,
+    )
+    expect(screen.queryByTestId('evidence-more')).not.toBeInTheDocument()
+    expect(screen.queryByTestId('verdict-evidence-more')).not.toBeInTheDocument()
+    rerender(
+      <VerdictPanel
+        attribution={makeAttribution('att-fits', {
+          verdict: 'internal_fault',
+          verdict_basis: 'rule',
+          satellite_id: SAT,
+          evidence: lines(12, 'evidence'),
+        })}
+      />,
+    )
+    expect(screen.getByTestId('evidence').querySelectorAll('li')).toHaveLength(12)
+    expect(screen.queryByTestId('evidence-more')).not.toBeInTheDocument()
+  })
+
+  it('renders each KB citation as one line (id and title on the toggle) with the entry text folded, and counts them in the heading', () => {
+    useEventStore.getState().setKB([
+      makeKBEntry('KB-A', { title: 'Amplifier ageing physics', summary: 'Forward power falls as the device heats.', decision_implications: ['Switch to the redundant chain.'] }),
+      makeKBEntry('KB-B', { title: 'Uncertainty anchor', summary: 'Public indicators are not proof.' }),
+    ])
+    render(
+      <VerdictPanel attribution={makeAttribution('att-kb2', { kb_citations: ['KB-A', 'KB-B', 'KB-MISSING'] })} />,
+    )
+    expect(screen.getByTestId('kb-citation-count')).toHaveTextContent('3')
+    const cards = screen.getAllByTestId('kb-card')
+    expect(cards).toHaveLength(3)
+    const [a, , missing] = cards
+    expect(a.tagName).toBe('DETAILS')
+    expect(a).not.toHaveAttribute('open')
+    expect(a.querySelector('summary')).toHaveTextContent('KB-A')
+    expect(a.querySelector('summary')).toHaveTextContent('Amplifier ageing physics')
+    expect(a.querySelector('summary')).toHaveAttribute('title', 'Amplifier ageing physics')
+    // The record is inside the fold, not on the toggle line.
+    expect(a.querySelector('summary')).not.toHaveTextContent('Forward power falls')
+    expect(a.querySelector('.kb-card__body')).toHaveTextContent('Forward power falls as the device heats.')
+    expect(a.querySelector('.kb-card__body')).toHaveTextContent('Switch to the redundant chain.')
+    expect(a.querySelector('.kb-card__body')).toHaveTextContent('RED · co-orbital')
+    // An unresolved id is a plain line, nothing to open.
+    expect(missing.tagName).toBe('DIV')
+    expect(missing).toHaveTextContent('KB-MISSING')
+    expect(missing).toHaveTextContent('unresolved')
+  })
+})

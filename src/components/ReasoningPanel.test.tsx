@@ -1,5 +1,5 @@
-import { beforeEach, describe, expect, it } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { act, fireEvent, render, screen } from '@testing-library/react'
 import { ReasoningPanel } from './ReasoningPanel'
 import { useEventStore } from '../store/eventStore'
 import { makeTrace } from '../test/factories'
@@ -131,5 +131,130 @@ describe('ReasoningPanel — verdict and physics lines', () => {
     expect(screen.getByText('physics · 0.50')).toBeInTheDocument()
     expect(lineFor('t-plain')?.querySelector('.reasoning-line__chips')).toBeNull()
     expect(lineFor('t-bogus')?.querySelector('.reasoning-line__chips')).toBeNull()
+  })
+})
+
+describe('ReasoningPanel — follows the newest line', () => {
+  // jsdom lays nothing out: give every element a tall scrollable box and a
+  // recording `scrollTo` so the pin and the follow logic can be observed.
+  const geometry = { scrollHeight: 2000, clientHeight: 400 }
+  const scrollTops = new WeakMap<Element, number>()
+  const scrollTo = vi.fn(function (this: HTMLElement, options?: ScrollToOptions | number) {
+    const top = typeof options === 'number' ? options : options?.top
+    if (typeof top === 'number') scrollTops.set(this, top)
+  })
+
+  beforeEach(() => {
+    scrollTo.mockClear()
+    Object.defineProperty(HTMLElement.prototype, 'scrollHeight', {
+      configurable: true,
+      get: () => geometry.scrollHeight,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'clientHeight', {
+      configurable: true,
+      get: () => geometry.clientHeight,
+    })
+    Object.defineProperty(HTMLElement.prototype, 'scrollTop', {
+      configurable: true,
+      get(this: Element) {
+        return scrollTops.get(this) ?? 0
+      },
+      set(this: Element, value: number) {
+        scrollTops.set(this, value)
+      },
+    })
+    Object.defineProperty(HTMLElement.prototype, 'scrollTo', {
+      configurable: true,
+      writable: true,
+      value: scrollTo,
+    })
+  })
+
+  afterEach(() => {
+    for (const key of ['scrollHeight', 'clientHeight', 'scrollTop', 'scrollTo']) {
+      Reflect.deleteProperty(HTMLElement.prototype, key)
+    }
+  })
+
+  const seed = (count: number, prefix = 't') => {
+    for (let i = 0; i < count; i += 1) {
+      useEventStore.getState().ingestTrace(makeTrace(`${prefix}-${i}`))
+    }
+  }
+  const stream = () => document.querySelector<HTMLElement>('.reasoning-panel__stream')!
+  const latest = () => screen.queryByTestId('trace-latest')
+
+  it('opens pinned to the newest line with no animation, and shows no affordance', () => {
+    seed(40)
+    render(<ReasoningPanel />)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 2000, behavior: 'instant' })
+    expect(scrollTo.mock.instances[0]).toBe(stream())
+    expect(stream().scrollTop).toBe(2000)
+    expect(latest()).toBeNull()
+  })
+
+  it('re-pins instantly when a line arrives while following', () => {
+    seed(3)
+    render(<ReasoningPanel />)
+    scrollTo.mockClear()
+    act(() => {
+      useEventStore.getState().ingestTrace(makeTrace('t-new'))
+    })
+    expect(scrollTo).toHaveBeenCalledTimes(1)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 2000, behavior: 'instant' })
+    expect(latest()).toBeNull()
+  })
+
+  it('stops following when the operator scrolls up, counts the lines that arrive, and jumps back on "latest"', () => {
+    seed(10)
+    render(<ReasoningPanel />)
+    stream().scrollTop = 1000
+    fireEvent.scroll(stream())
+    expect(latest()).toHaveTextContent('latest')
+    expect(latest()).not.toHaveTextContent('new')
+
+    scrollTo.mockClear()
+    act(() => {
+      useEventStore.getState().ingestTrace(makeTrace('t-a'))
+      useEventStore.getState().ingestTrace(makeTrace('t-b'))
+    })
+    expect(scrollTo).not.toHaveBeenCalled()
+    expect(stream().scrollTop).toBe(1000)
+    expect(latest()).toHaveTextContent('2 new')
+
+    fireEvent.click(latest()!)
+    expect(scrollTo).toHaveBeenCalledWith({ top: 2000, behavior: 'instant' })
+    expect(latest()).toBeNull()
+  })
+
+  it('resumes following on its own when scrolled back to within a few pixels of the end', () => {
+    seed(10)
+    render(<ReasoningPanel />)
+    stream().scrollTop = 800
+    fireEvent.scroll(stream())
+    expect(latest()).not.toBeNull()
+
+    // 2000 - 400 - 1597 = 3 px short of the end: close enough.
+    stream().scrollTop = 1597
+    fireEvent.scroll(stream())
+    expect(latest()).toBeNull()
+
+    scrollTo.mockClear()
+    act(() => {
+      useEventStore.getState().ingestTrace(makeTrace('t-after'))
+    })
+    expect(scrollTo).toHaveBeenCalledWith({ top: 2000, behavior: 'instant' })
+  })
+
+  it('keeps the film script hooks on every line', () => {
+    useEventStore.getState().ingestTrace(
+      makeTrace('t-hooks', { stage: 'attrib_redteam', message: 'challenge: weak evidence' }),
+    )
+    render(<ReasoningPanel compact />)
+    const line = lineFor('t-hooks')!
+    expect(line).toHaveAttribute('data-trace-id', 't-hooks')
+    expect(line.querySelector('[data-testid="trace-stage"]')).not.toBeNull()
+    expect(line.querySelector('[data-testid="trace-headline"]')).not.toBeNull()
+    expect(document.querySelector('.reasoning-panel--compact')).not.toBeNull()
   })
 })

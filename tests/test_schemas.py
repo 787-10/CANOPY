@@ -287,7 +287,7 @@ def _plain_decision(**overrides) -> Decision:
     data = {
         "attribution_id": "attr-1",
         "action": "threat_warning",
-        "target": "brigade-c2",
+        "target": "space-ops-c2",
         "rationale": "watch it",
         "authority": "local",
     }

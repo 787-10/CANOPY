@@ -1,3 +1,4 @@
+import { utcClock } from './timing'
 // Incidents ("theaters") for the overview's Situation column: one row per
 // satellite cluster the engine has attributed, plus one row per attribution
 // it could not key to a satellite but narrowed to a candidate set (closely
@@ -70,12 +71,11 @@ export function deriveIncidents(attributions: readonly Attribution[]): Incident[
  *  clock (a replay), not late arrivals: they read as clock time instead. */
 export const FUTURE_TOLERANCE_MS = 60_000
 
-const clockTime = (ms: number) =>
-  new Date(ms).toLocaleTimeString([], { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+const clockTime = (ms: number) => utcClock(ms)
 
 /** `12 s ago`, `3 min ago`, `2 h ago`; `just now` within a minute either
- *  side of now; the clock time (`15:07:00`) for a timestamp further in the
- *  future, which is a scenario clock rather than a delay. */
+ *  side of now; the clock time (`15:07:00Z`, UTC) for a timestamp further in
+ *  the future, which is a scenario clock rather than a delay. */
 export function relativeTime(ts: string, now: number = Date.now()): string {
   const then = Date.parse(ts)
   if (!Number.isFinite(then)) return 'unknown'

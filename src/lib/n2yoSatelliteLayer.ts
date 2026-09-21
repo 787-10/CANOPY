@@ -19,6 +19,7 @@ import {
   type N2YOTrackPoint,
 } from './positionCache'
 import { SYNTHETIC_SATELLITES } from './syntheticSatellites'
+import { utcClock } from './timing'
 
 export {
   fetchN2YOPositionCache,
@@ -521,14 +522,8 @@ export function createN2YODisplayAltitudeScale(caches: N2YOPositionCache[]) {
   }
 }
 
-const formatUtcTime = (timestampUtc: string) =>
-  new Intl.DateTimeFormat('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    timeZone: 'UTC',
-    timeZoneName: 'short',
-  }).format(new Date(timestampUtc))
+// The same `HH:MM:SSZ` clock as the report cards; never `03:08:00 PM UTC`.
+const formatUtcTime = (timestampUtc: string) => utcClock(timestampUtc)
 
 const toRadians = (degrees: number) => (degrees * Math.PI) / 180
 

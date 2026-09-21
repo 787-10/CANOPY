@@ -20,7 +20,9 @@ export function SignalTable({ signals }: { signals: Signal[] }) {
     <table className="signals-table" data-testid="signals-table">
       <thead>
         <tr>
-          <th scope="col">Time</th>
+          <th scope="col" title="Scenario clock, UTC">
+            Time <small className="clock-domain">scenario clock</small>
+          </th>
           <th scope="col">Report</th>
           <th scope="col">Source</th>
           <th scope="col">What it says</th>

@@ -1,7 +1,7 @@
 // View model for a bus_health Signal (docs/INTERFACE-SPEC.md §3). One place
 // that reads the observables so the feed card, the zoomed card and the
 // spacecraft page agree on every field and its fallback.
-import { eventTypeCopy, spacecraftDisplayName, subsystemLabel } from './commanderLanguage'
+import { eventTypeCopy, formatRate, spacecraftDisplayName, subsystemLabel } from './commanderLanguage'
 import { parsePhysicsBasis, type PhysicsBasis } from './physicsBasis'
 import type { RecoveryBlock, Signal } from '../types/canopy'
 
@@ -119,7 +119,7 @@ export function busHealthRecord(signal: Signal): BusHealthRecord {
     rateLabel:
       rateOfChange === null
         ? null
-        : `${rateOfChange > 0 ? '+' : ''}${formatRate(rateOfChange)}${rateUnit ? ` ${rateUnit}` : ''}`,
+        : `${rateOfChange > 0 ? '+' : ''}${formatRate(rateOfChange, rateUnit)}`,
     physicsConsistency: num(observables.physics_consistency),
     physicsBasis: parsePhysicsBasis(observables.physics_basis),
     shape: str(observables.shape),
@@ -134,16 +134,6 @@ export function busHealthRecord(signal: Signal): BusHealthRecord {
     summary: signal.payload.summary,
     confidence: signal.confidence,
   }
-}
-
-// Same precision as the feed one-liner (`-0.42 dB/s`); very small rates keep
-// two significant digits instead of collapsing to 0.00.
-function formatRate(value: number): string {
-  const magnitude = Math.abs(value)
-  if (value === 0) return '0.00'
-  if (magnitude >= 100) return value.toFixed(0)
-  if (magnitude >= 0.01) return value.toFixed(2)
-  return value.toExponential(1)
 }
 
 /** All bus_health records in a signal list, oldest first. */

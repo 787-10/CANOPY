@@ -483,7 +483,7 @@ def test_ui_event_message_names_the_withheld_recovery_and_keeps_the_decision_typ
     decision = Decision(
         attribution_id=attribution.id,
         action="threat_warning",
-        target="brigade_commander",
+        target="space-ops-c2",
         rationale="Precautionary threat warning on an unattributed anomaly cluster.",
         authority="local",
         withheld_recovery=WithheldRecovery(
@@ -528,7 +528,7 @@ def test_withheld_block_survives_the_bus_envelope() -> None:
     decision = Decision(
         attribution_id="attr-1",
         action="threat_warning",
-        target="brigade_commander",
+        target="space-ops-c2",
         rationale="r",
         authority="local",
         withheld_recovery=WithheldRecovery(**WITHHELD_RAW),

@@ -87,9 +87,7 @@ const signalItem = (signal: Signal): ReportItem => ({
   ts: signal.ts,
   domain: signal.domain,
   label: signalKindLabel(signal),
-  // A bus record is the internal diagnosis module's report; its source id
-  // would otherwise echo the spacecraft name.
-  source: signal.domain === 'bus_health' ? 'internal diagnosis' : commanderSignalSummary(signal).sourceLabel,
+  source: commanderSignalSummary(signal).sourceLabel,
   satellite: signal.payload.satellite_id
     ? spacecraftDisplayName(signal.payload.satellite_id)
     : null,

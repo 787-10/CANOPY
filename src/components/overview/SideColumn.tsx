@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import { OVERVIEW_RAIL_WIDTH, type OverviewSide } from '../../lib/overviewLayout'
+import '../../styles/fit.css'
 
 type SideColumnProps = {
   side: OverviewSide

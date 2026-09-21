@@ -8,6 +8,7 @@ import type {
   VerdictBasis,
   WithheldRecovery,
 } from '../types/canopy'
+import { syntheticSatelliteFor } from './syntheticSatellites'
 
 const domainCopy: Record<
   Domain,
@@ -547,6 +548,13 @@ const clampOneLine = (value: string, maxLength = 112) => {
   return `${clipped.slice(0, clipped.lastIndexOf(' '))}.`
 }
 
+// Tokens kept in capitals when a source or asset id is spelled out
+// (`noaa-swpc` -> `NOAA SWPC`, never `Noaa Swpc`).
+const ACRONYMS = new Set([
+  'AOR', 'C2', 'EW', 'GEO', 'GNSS', 'GPS', 'ISR', 'LEO', 'MEO', 'NOAA',
+  'PNT', 'RF', 'RPO', 'SATCOM', 'SDA', 'SIEM', 'SWPC', 'UAS',
+])
+
 const titleCaseSlug = (value: string) =>
   value
     .replace(/^bde\b/i, 'brigade')
@@ -554,12 +562,9 @@ const titleCaseSlug = (value: string) =>
     .replace(/^uas\b/i, 'drone')
     .replaceAll(/[-_]+/g, ' ')
     .replace(/\b\w/g, (character) => character.toUpperCase())
-    .replace(/\bGps\b/g, 'GPS')
-    .replace(/\bEw\b/g, 'EW')
-    .replace(/\bUas\b/g, 'UAS')
-    .replace(/\bLeo\b/g, 'LEO')
-    .replace(/\bSatcom\b/g, 'SATCOM')
-    .replace(/\bSiem\b/g, 'SIEM')
+    .replace(/\b[A-Za-z0-9]+\b/g, (word) =>
+      ACRONYMS.has(word.toUpperCase()) ? word.toUpperCase() : word,
+    )
 
 const shortActionByDomain: Record<Domain, string> = {
   orbit: 'watch space support',
@@ -576,20 +581,36 @@ const shortActionByDomain: Record<Domain, string> = {
   space_weather: 'weigh environmental cause',
 }
 
+/** A source or asset id in operator spelling. A `ctb://` id or a synthetic
+ *  spacecraft name is that spacecraft's display name (`SIM-01`), never a
+ *  spelled-out slug (`SIM 01`); anything else is spelled out with its
+ *  acronyms kept (`NOAA SWPC`). */
+const sourceLabelFromId = (id: string): string => {
+  if (id.startsWith('ctb://')) {
+    return spacecraftDisplayName(id)
+  }
+  return syntheticSatelliteFor(id)?.label ?? titleCaseSlug(id)
+}
+
 const friendlySourceLabel = (signal: Signal) => {
+  // A bus record is the internal diagnosis module's report (docs/INTERFACE-
+  // SPEC.md §3); its asset would otherwise echo the spacecraft name.
+  if (signal.domain === 'bus_health') {
+    return 'internal diagnosis'
+  }
   const asset = signal.payload.asset
   if (typeof asset === 'string') {
-    return assetAliases[asset] ?? titleCaseSlug(asset)
+    return assetAliases[asset] ?? sourceLabelFromId(asset)
   }
 
-  return sourceAliases[signal.source] ?? titleCaseSlug(signal.source)
+  return sourceAliases[signal.source] ?? sourceLabelFromId(signal.source)
 }
 
 const friendlyLocationLabel = (signal: Signal) => {
   const rawLabel =
     typeof signal.location.label === 'string' ? signal.location.label : null
   if (!rawLabel) {
-    return sourceAliases[signal.source] ?? titleCaseSlug(signal.source)
+    return sourceAliases[signal.source] ?? sourceLabelFromId(signal.source)
   }
 
   const aliased = locationAliases[rawLabel]
@@ -829,12 +850,15 @@ const oneLineForSignal = (signal: Signal) => {
     default:
       return (
         spacecraftEnvironmentOneLine(signal) ??
-        `${signal.payload.summary}; ${shortActionByDomain[signal.domain]}.`
+        // The summary's own full stop would otherwise sit before the
+        // semicolon ("…15:13:34Z.; weigh."), and a two-timestamp summary
+        // needs more room than the short lines above.
+        `${signal.payload.summary.replace(/[.\s]+$/, '')}; ${shortActionByDomain[signal.domain]}.`
       )
     }
   })()
 
-  return clampOneLine(oneLine)
+  return clampOneLine(oneLine, 160)
 }
 
 /** Subsystem ids from docs/INTERFACE-SPEC.md §3 in operator spelling. */
@@ -912,6 +936,26 @@ export function spacecraftEnvironmentFacts(
   return []
 }
 
+/** A rate of change with its unit (`-0.42 dB/s`). A slow drift under 0.01
+ *  per second is read per minute (`-0.26 dB/min`) so it never collapses to
+ *  `-0.00`; a rate still under 0.01 keeps two significant figures. */
+export function formatRate(value: number, unit: string | null): string {
+  const perSecond = unit?.match(/^(.*)\/s$/)
+  if (value !== 0 && Math.abs(value) < 0.01 && perSecond) {
+    return formatRate(value * 60, `${perSecond[1]}/min`)
+  }
+  const magnitude = Math.abs(value)
+  const number =
+    value === 0
+      ? '0.00'
+      : magnitude >= 100
+        ? value.toFixed(0)
+        : magnitude >= 0.01
+          ? value.toFixed(2)
+          : value.toPrecision(2)
+  return unit ? `${number} ${unit}` : number
+}
+
 const spacecraftEnvironmentOneLine = (signal: Signal): string | null => {
   const copy = eventTypeCopy(signal.payload.event_type)
   if (!copy) {
@@ -928,7 +972,7 @@ const spacecraftEnvironmentOneLine = (signal: Signal): string | null => {
     const physicsConsistency = numberValue(observables.physics_consistency)
     const where = subsystem ? ` in ${subsystemLabel(subsystem).toLowerCase()}` : ''
     const trend =
-      rate !== null && rateUnit ? ` at ${rate.toFixed(2)} ${rateUnit}` : ''
+      rate !== null && rateUnit ? ` at ${formatRate(rate, rateUnit)}` : ''
     const physics =
       physicsConsistency === null
         ? shortActionByDomain.bus_health
@@ -1071,6 +1115,24 @@ export const verdictBasisCopy: Record<VerdictBasis, VerdictCopy> = {
     meaning:
       'The model changed the rule verdict and cited the evidence below for the change.',
   },
+}
+
+/** The lane that set the verdict, in words. A rule basis on a final
+ *  revision means the reasoning lane reviewed the evidence and kept the
+ *  rule verdict, and the label says so rather than reading as if no model
+ *  ever looked. */
+export function verdictBasisFor(attribution: Attribution): VerdictCopy | null {
+  const basis = attribution.verdict_basis ?? null
+  if (!basis) {
+    return null
+  }
+  if (basis === 'rule' && (attribution.revision ?? 0) >= 1 && !attribution.provisional) {
+    return {
+      label: 'Rule lane, confirmed by the reasoning lane',
+      meaning: 'The reasoning lane reviewed the evidence and kept the rule verdict.',
+    }
+  }
+  return verdictBasisCopy[basis]
 }
 
 /** Headline an analyst reads first: verdict-aware, and the legacy

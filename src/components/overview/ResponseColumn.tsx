@@ -1,5 +1,6 @@
 import type { Attribution, Decision } from '../../types/canopy'
 import { DecisionSummaryCard, VerdictSummaryCard } from '../SummaryCards'
+import '../../styles/fit.css'
 
 type ResponseColumnProps = {
   attribution: Attribution | null
@@ -14,7 +15,7 @@ export function ResponseColumn({ attribution, decision }: ResponseColumnProps) {
   return (
     <div className="response" data-testid="response-column">
       <VerdictSummaryCard attribution={attribution} />
-      <DecisionSummaryCard decision={decision} />
+      <DecisionSummaryCard decision={decision} attributionRevision={attribution?.revision ?? null} />
     </div>
   )
 }

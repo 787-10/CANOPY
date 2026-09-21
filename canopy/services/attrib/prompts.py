@@ -224,7 +224,7 @@ def attribution_system_prompt() -> str:
         "## MISSION\n"
         "Produce calibrated, doctrine-grounded adversary attribution assessments from "
         "fused multi-domain anomaly signals. You are not a classified all-source fusion "
-        "system. You provide the brigade commander a fast, unclassified initial picture "
+        "system. You provide the space operations commander a fast, unclassified initial picture "
         "they currently have no access to on a tactical timeline. Your value is speed "
         "and decisive cross-domain fusion. Your discipline is calibration, not refusal.\n\n"
 

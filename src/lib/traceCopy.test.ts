@@ -30,6 +30,12 @@ describe('traceHeadline', () => {
     )
   })
 
+  it('reads the rule-made provisional decision', () => {
+    expect(traceHeadline(line('decide', 'provisional decision by rule: threat_warning (fast lane, no LLM)'))).toBe(
+      'Provisional decision by rule, before any model call: Threat warning holds until the final verdict.',
+    )
+  })
+
   it('reads the operator lines the gateway writes for Accept, Deny and Reconsider', () => {
     expect(traceHeadline(line('decide', 'operator accepted: threat_warning → brigade-c2'))).toBe(
       'Operator accepted the threat warning; it goes to Brigade C2.',

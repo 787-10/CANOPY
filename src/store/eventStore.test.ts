@@ -591,4 +591,31 @@ describe('eventStore — decision revisions', () => {
     store().ingestDecision(makeDecision('dec-rev', { revision: 2, action: 'sda_tasking' }))
     expect(store().decisionsById['dec-rev'].action).toBe('sda_tasking')
   })
+
+  it('clears an Accept or Deny given to an earlier revision when a higher one lands (C21)', () => {
+    store().ingestDecision(makeDecision('dec-c21', { revision: 0, action: 'recovery_recommendation' }))
+    store().acceptDecision('dec-c21')
+    expect(store().acceptedDecisionIds.has('dec-c21')).toBe(true)
+    expect(store().decisionStatusAt['dec-c21']).toBeDefined()
+
+    store().ingestDecision(makeDecision('dec-c21', { revision: 1, action: 'threat_warning' }))
+    expect(store().acceptedDecisionIds.has('dec-c21')).toBe(false)
+    expect(store().deferredDecisionIds.has('dec-c21')).toBe(false)
+    expect(store().decisionStatusAt['dec-c21']).toBeUndefined()
+
+    store().deferDecision('dec-c21')
+    store().ingestDecision(makeDecision('dec-c21', { revision: 2, action: 'passive_defense' }))
+    expect(store().deferredDecisionIds.has('dec-c21')).toBe(false)
+    expect(store().decisionStatusAt['dec-c21']).toBeUndefined()
+  })
+
+  it('keeps the operator call on a redelivered same or lower revision', () => {
+    store().ingestDecision(makeDecision('dec-keep', { revision: 1, action: 'threat_warning' }))
+    store().acceptDecision('dec-keep')
+    store().ingestDecision(makeDecision('dec-keep', { revision: 1, action: 'threat_warning' }))
+    expect(store().acceptedDecisionIds.has('dec-keep')).toBe(true)
+    store().ingestDecision(makeDecision('dec-keep', { revision: 0, action: 'passive_defense' }))
+    expect(store().acceptedDecisionIds.has('dec-keep')).toBe(true)
+    expect(store().decisionStatusAt['dec-keep']).toBeDefined()
+  })
 })

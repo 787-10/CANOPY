@@ -415,7 +415,7 @@ def validate_and_repair_decision(raw: dict[str, Any]) -> dict[str, Any]:
         )
         d["request_packet"] = {
             "to": "CJFSCC",
-            "supporting_supported": "Brigade -> CJFSCC",
+            "supporting_supported": "space-ops-c2 -> CJFSCC",
             "requested_effect": d.get("action", "unspecified"),
             "justification": rationale,
             "actor": "unspecified - attribution not forwarded",

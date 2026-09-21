@@ -114,14 +114,26 @@ RECOVERY_ACTION: Action = "recovery_recommendation"
 #   gate-withheld:<reason_code>  the gate blocked (§7): the set is the gate's
 #                                replacement, threat_warning, and the reason is the
 #                                one in the ``[gate:…]`` rationale prefix.
+#   provisional-rule             the decision answers a provisional (fast-lane)
+#                                verdict and no model was called: a recovery routes
+#                                by the §6 rule, anything else holds a precautionary
+#                                threat_warning until the reasoning lane's revision.
 
 SELECTION_RECOVERY_ROUTED = "recovery-routed"
 SELECTION_MODEL_WITHIN_SET = "model-within-set"
 SELECTION_MODEL_OUTSIDE_SET_REPAIRED = "model-outside-set-repaired"
 SELECTION_GATE_WITHHELD_PREFIX = "gate-withheld:"
+SELECTION_PROVISIONAL_RULE = "provisional-rule"
+
+# The revision-0 decision on a provisional verdict that routes no recovery:
+# a precautionary threat warning to the space operations C2 cell (a synthetic
+# addressee), replaced by the model's decision at the reasoning lane's revision.
+PROVISIONAL_WARNING_ACTION: Action = "threat_warning"
+PROVISIONAL_WARNING_TARGET = "space-ops-c2"
 
 SELECTION_BASES: tuple[str, ...] = (
     SELECTION_RECOVERY_ROUTED,
+    SELECTION_PROVISIONAL_RULE,
     SELECTION_MODEL_WITHIN_SET,
     SELECTION_MODEL_OUTSIDE_SET_REPAIRED,
     f"{SELECTION_GATE_WITHHELD_PREFIX}<reason_code>",
@@ -404,26 +416,41 @@ class DecideService:
             recovery = recovery_context(event, cluster)
             llm_input = event if recovery is None else with_recovery_context(event, recovery)
             generation = self._generation
-            try:
-                decision = await self._llm.decide(llm_input)
-            except Exception as exc:
-                self.errors.append(
-                    {
-                        "stage": "decision",
-                        "type": exc.__class__.__name__,
-                        "message": str(exc),
-                    }
+            if event.provisional:
+                # The provisional verdict gets its decision by rule, with no
+                # model call: a recovery routes by the §6 rule, anything else
+                # holds a precautionary threat warning. Revision 0 therefore
+                # lands with the fast lane, and the model decides once, for
+                # the reasoning lane's revision (pre-submission item C21).
+                decision = self._provisional_decision(event, recovery)
+                await self._trace(
+                    "info",
+                    f"provisional decision by rule: {decision.action} (fast lane, no LLM)",
+                    decision,
+                    event,
+                    provisional=True,
                 )
-                log.exception(
-                    "decide: LLMClient.decide failed for attribution=%s", event.id
-                )
-                continue
-            if generation != self._generation:
-                log.info(
-                    "decide: dropping result for attribution=%s from before an engine reset",
-                    event.id,
-                )
-                continue
+            else:
+                try:
+                    decision = await self._llm.decide(llm_input)
+                except Exception as exc:
+                    self.errors.append(
+                        {
+                            "stage": "decision",
+                            "type": exc.__class__.__name__,
+                            "message": str(exc),
+                        }
+                    )
+                    log.exception(
+                        "decide: LLMClient.decide failed for attribution=%s", event.id
+                    )
+                    continue
+                if generation != self._generation:
+                    log.info(
+                        "decide: dropping result for attribution=%s from before an engine reset",
+                        event.id,
+                    )
+                    continue
             model_action = decision.action
             decision = decision.model_copy(
                 update={
@@ -437,7 +464,10 @@ class DecideService:
             decision = await self._apply_gate(decision, event, cluster)
             decision = await self._annotate_withheld(decision, event, cluster)
             decision = self._annotate_selection(
-                decision, model_action=model_action, recovery=recovery
+                decision,
+                model_action=model_action,
+                recovery=recovery,
+                provisional=event.provisional,
             )
             decision = self._stamp_marking(decision, event, cluster)
             t0 = self._timing[0] if self._timing is not None else None
@@ -516,6 +546,49 @@ class DecideService:
         )
 
     # ---- Recovery routing (spec §6) -----------------------------------------
+
+    @staticmethod
+    def _provisional_decision(
+        attribution: Attribution, recovery: RecoveryContext | None
+    ) -> Decision:
+        """The revision-0 decision, by rule and without a model call.
+
+        A recovery in the cluster routes as the §6 rule routes it; any other
+        provisional verdict (a hostile call with no actor yet, an abstention)
+        holds a precautionary ``threat_warning`` at local authority. The
+        reasoning lane's revision replaces this decision under the same id,
+        so the operator sees the rationale of the verdict on screen, never a
+        model's reading of a verdict that was later revised.
+        """
+        if recovery is not None:
+            return Decision(
+                attribution_id=attribution.id,
+                action=RECOVERY_ACTION,
+                target=recovery.target,
+                rationale=recovery_rationale(recovery, attribution),
+                authority=ACTION_AUTHORITY[RECOVERY_ACTION],
+                request_packet=None,
+                source_signal_ids=list(attribution.source_signal_ids),
+                recovery=recovery.block,
+            )
+        verdict = (attribution.verdict or "unknown").replace("_", " ")
+        actor_clause = (
+            ", with no actor attributed yet" if attribution.actor == "Unknown" else ""
+        )
+        return Decision(
+            attribution_id=attribution.id,
+            action=PROVISIONAL_WARNING_ACTION,
+            target=PROVISIONAL_WARNING_TARGET,
+            rationale=(
+                f"Provisional: the fast lane called {verdict} at "
+                f"{attribution.confidence:.2f} before any model ran{actor_clause}; "
+                "a precautionary threat warning holds while the reasoning lane "
+                "reviews the evidence. This decision is revised with the final verdict."
+            ),
+            authority=ACTION_AUTHORITY[PROVISIONAL_WARNING_ACTION],
+            request_packet=None,
+            source_signal_ids=list(attribution.source_signal_ids),
+        )
 
     async def _route_recovery(
         self,
@@ -736,7 +809,11 @@ class DecideService:
 
     @staticmethod
     def _annotate_selection(
-        decision: Decision, *, model_action: str, recovery: RecoveryContext | None
+        decision: Decision,
+        *,
+        model_action: str,
+        recovery: RecoveryContext | None,
+        provisional: bool = False,
     ) -> Decision:
         """Set ``selectable_set`` and ``selection_basis`` (spec §6, 1.4).
 
@@ -755,6 +832,9 @@ class DecideService:
         elif recovery is not None:
             selectable = [RECOVERY_ACTION]
             basis = SELECTION_RECOVERY_ROUTED
+        elif provisional:
+            selectable = list(DEFENSIVE_ACTIONS)
+            basis = SELECTION_PROVISIONAL_RULE
         else:
             selectable = list(DEFENSIVE_ACTIONS)
             basis = (

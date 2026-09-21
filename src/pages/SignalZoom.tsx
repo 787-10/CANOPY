@@ -59,7 +59,7 @@ export function SignalZoom({ signalId = null }: SignalZoomProps) {
               Pass <code>?id=&lt;signal id&gt;</code> or replay a scenario so an internal-diagnosis
               record arrives.
             </p>
-            <a href={withCapture('/brigade')}>Back to the Brigade view</a>
+            <a href={withCapture('/brigade')}>Back to the console</a>
           </div>
         </section>
       )}

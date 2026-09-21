@@ -116,7 +116,7 @@ export function DemoLauncher({
         ) : null}
         <p className="demo-launcher__note">
           Starting clears the console buffers, posts the replay to the gateway and opens the
-          Brigade view in capture mode.
+          console in capture mode.
         </p>
       </section>
     </main>

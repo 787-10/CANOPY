@@ -59,7 +59,7 @@ describe('relativeTime', () => {
     expect(relativeTime('2026-09-20T13:10:00Z', now)).toBe('2 h ago')
     expect(relativeTime('2026-09-20T15:10:30Z', now)).toBe('just now')
     // Ten hours ahead: a replayed scenario's clock, shown as a time of day.
-    expect(relativeTime('2026-09-21T01:10:00Z', now)).toMatch(/^\d{2}:\d{2}:\d{2}$/)
+    expect(relativeTime('2026-09-21T01:10:00Z', now)).toMatch(/^\d{2}:\d{2}:\d{2}Z$/)
     expect(relativeTime('not a date', now)).toBe('unknown')
   })
 })

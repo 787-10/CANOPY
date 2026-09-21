@@ -148,6 +148,9 @@ export function traceHeadline(trace: ReasoningTrace): string {
   }
 
   if (trace.stage === 'decide') {
+    if ((m = message.match(/^provisional decision by rule: (\S+)/))) {
+      return `Provisional decision by rule, before any model call: ${actionLabel(m[1])} holds until the final verdict.`
+    }
     if ((m = message.match(/^operator (accepted|denied|reconsidered): (\S+)(?: → (.+))?$/))) {
       const what = actionLabel(m[2]).toLowerCase()
       if (m[1] === 'accepted') {

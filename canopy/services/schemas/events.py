@@ -65,7 +65,7 @@ VerdictBasis = Literal["rule", "reasoning"]
 #   ACTION_AUTHORITY   authority routing for *every* action. ``request`` means
 #                      the action exceeds local commander authority and must
 #                      route to the CJFSCC for engagement authority; ``local``
-#                      means it is within delegated brigade authority. Consumed
+#                      means it is within the local cell's delegated authority. Consumed
 #                      by ``decide.tools`` (``routing.validate``).
 #   SELECTABLE_ACTIONS the subset the decision agent is permitted to recommend,
 #                      in menu order. CANOPY is a defensive system: the

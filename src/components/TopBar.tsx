@@ -1,27 +1,11 @@
 import { useMemo } from 'react'
 import type { ReactNode } from 'react'
 import { mostRestrictiveMarking } from '../lib/marking'
+import { PAGES, type ConsolePage } from '../lib/pages'
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 
-export type ConsolePage =
-  | 'brigade'
-  | 'verdict'
-  | 'reasoning'
-  | 'signals'
-  | 'spacecraft'
-  | 'run'
-  | 'signal'
-  | 'demo'
-
-export const PAGES: Array<{ page: ConsolePage; label: string; href: string }> = [
-  { page: 'brigade', label: 'Console', href: '/brigade' },
-  { page: 'verdict', label: 'Verdict', href: '/verdict' },
-  { page: 'reasoning', label: 'Reasoning', href: '/reasoning' },
-  { page: 'signals', label: 'Signals', href: '/signals' },
-  { page: 'spacecraft', label: 'Spacecraft', href: '/spacecraft' },
-  { page: 'run', label: 'Run', href: '/runs' },
-]
+export type { ConsolePage }
 
 type TopBarProps = {
   /** Page title next to the MEGALITH mark. */

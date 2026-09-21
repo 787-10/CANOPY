@@ -1,36 +1,37 @@
-import { useEventStore } from "../store/eventStore";
+import { useEventStore } from '../store/eventStore'
 
 interface Props {
-  citationId: string;
+  citationId: string
 }
 
+/** One knowledge-base citation as a single line: the entry id and its title
+ *  on a `<details>` toggle, the record (actor, capability, entry text and
+ *  decision implications) behind it. A row of these stays one line each
+ *  until the operator opens one, so the Verdict page keeps its height. */
 export function KBCitationCard({ citationId }: Props) {
-  const entry = useEventStore((s) => s.kb[citationId]);
+  const entry = useEventStore((s) => s.kb[citationId])
 
   if (!entry) {
     return (
-      <div className="kb-card">
+      <div className="kb-card kb-card--unresolved" data-testid="kb-card" data-kb-id={citationId}>
         <div className="kb-card__head">
           <span className="kb-card__id">{citationId}</span>
-          <span>unresolved</span>
+          <span className="kb-card__title kb-card__title--unresolved">unresolved</span>
         </div>
       </div>
-    );
+    )
   }
 
   return (
-    <div className="kb-card">
-      <div className="kb-card__head">
+    <details className="kb-card" data-testid="kb-card" data-kb-id={entry.id}>
+      <summary className="kb-card__head" title={entry.title}>
         <span className="kb-card__id">{entry.id}</span>
-        <span>
+        <span className="kb-card__title">{entry.title}</span>
+      </summary>
+      <div className="kb-card__body">
+        <div className="kb-card__meta">
           {entry.actor} · {entry.capability_type}
-        </span>
-      </div>
-      <div className="kb-card__title">{entry.title}</div>
-      {/* The entry text is the record behind the citation; it opens on demand
-          so the card reads as one line until the operator wants the detail. */}
-      <details className="kb-card__more">
-        <summary>Entry text</summary>
+        </div>
         <div className="kb-card__summary">{entry.summary}</div>
         {entry.decision_implications && entry.decision_implications.length > 0 ? (
           <ul className="kb-card__implications">
@@ -39,7 +40,7 @@ export function KBCitationCard({ citationId }: Props) {
             ))}
           </ul>
         ) : null}
-      </details>
-    </div>
-  );
+      </div>
+    </details>
+  )
 }

@@ -352,7 +352,7 @@ async def test_request_authority_on_a_local_action_is_repaired_to_local() -> Non
         return Decision(
             attribution_id=attribution.id,
             action="threat_warning",
-            target="brigade-c2",
+            target="space-ops-c2",
             rationale="precautionary",
             authority="request",
             request_packet={"to": "CJFSCC"},
@@ -707,3 +707,93 @@ async def test_every_published_decision_carries_both_fields_on_every_revision() 
     assert [d.revision for d in decisions] == [0, 1]
     assert all(d.selectable_set and d.selection_basis for d in decisions)
     assert {d.selection_basis for d in decisions} == {"recovery-routed"}
+
+
+# ---- Provisional attributions decide by rule, no model call (C21, spec 1.4.1) ---
+
+
+class RefusingLLM:
+    """An LLMClient whose decide() must never be reached."""
+
+    def __init__(self) -> None:
+        self.seen: list[Attribution] = []
+
+    async def decide(self, attribution: Attribution) -> Decision:
+        self.seen.append(attribution)
+        raise AssertionError("decide() called for a provisional attribution")
+
+
+async def test_provisional_hostile_verdict_gets_a_rule_threat_warning_without_the_model() -> None:
+    bus_anom = _bus_anomaly()
+    jam = _anomaly("rf_anomaly", "sig-rf-1", offset_s=-200)
+    provisional = _attribution([bus_anom], verdict="hostile_external").model_copy(
+        update={"provisional": True, "revision": 0, "confidence": 0.49}
+    )
+    llm = RefusingLLM()
+
+    decisions, traces = await _run(llm, cached=[bus_anom, jam], attribution=provisional, gate=policy_gate)
+
+    assert llm.seen == []
+    assert len(decisions) == 1
+    decision = decisions[0]
+    assert decision.revision == 0
+    assert decision.action == "threat_warning"
+    assert decision.authority == "local"
+    assert decision.target == "space-ops-c2"
+    assert decision.request_packet is None
+    assert decision.recovery is None
+    assert decision.selection_basis == "provisional-rule"
+    assert decision.rationale.startswith("Provisional: the fast lane called hostile external at 0.49")
+    assert "no actor attributed yet" in decision.rationale
+    # The bus record's recommendation is still reported as withheld under a hostile verdict.
+    assert decision.withheld_recovery is not None
+    assert decision.withheld_recovery.action_id == "switch_redundant_amplifier"
+    assert any(
+        t.stage == "decide" and t.message == "provisional decision by rule: threat_warning (fast lane, no LLM)"
+        for t in traces
+    )
+
+
+async def test_provisional_internal_fault_routes_the_recovery_by_rule_without_the_model() -> None:
+    bus_anom = _bus_anomaly()
+    provisional = _attribution([bus_anom], verdict="internal_fault").model_copy(
+        update={"provisional": True, "revision": 0, "confidence": 0.75}
+    )
+    llm = RefusingLLM()
+
+    decisions, _ = await _run(llm, cached=[bus_anom], attribution=provisional, gate=policy_gate)
+
+    assert llm.seen == []
+    decision = decisions[0]
+    assert decision.revision == 0
+    assert decision.action == "recovery_recommendation"
+    assert decision.recovery is not None
+    assert decision.recovery.action_id == "switch_redundant_amplifier"
+    assert decision.selection_basis == "recovery-routed"
+    assert decision.withheld_recovery is None
+
+
+async def test_the_final_revision_still_asks_the_model() -> None:
+    bus_anom = _bus_anomaly()
+    final = _attribution([bus_anom], verdict="internal_fault").model_copy(
+        update={"provisional": False, "revision": 1}
+    )
+    llm = ScriptedLLM(_scripted_recovery)
+
+    decisions, _ = await _run(llm, cached=[bus_anom], attribution=final, gate=policy_gate)
+
+    assert [a.id for a in llm.seen] == ["attr-1"]
+    assert decisions[0].revision == 1
+    assert decisions[0].action == "recovery_recommendation"
+
+
+def _scripted_recovery(attribution: Attribution) -> Decision:
+    return Decision(
+        attribution_id=attribution.id,
+        action="recovery_recommendation",
+        target=SAT,
+        rationale="scripted",
+        authority="local",
+        request_packet=None,
+        source_signal_ids=list(attribution.source_signal_ids),
+    )

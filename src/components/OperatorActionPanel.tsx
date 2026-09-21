@@ -6,7 +6,16 @@ import {
   subsystemLabel,
 } from '../lib/commanderLanguage'
 import { actionLabel } from '../lib/actionLabels'
-import { operatorOutcome, operatorStamp, recordOperatorDecision } from '../lib/operatorDecisions'
+import {
+  ACCEPT_LOCKED_TITLE,
+  STALE_DECISION_FLAG,
+  acceptIsLocked,
+  STALE_DECISION_TITLE,
+  decisionIsStale,
+  operatorOutcome,
+  operatorStamp,
+  recordOperatorDecision,
+} from '../lib/operatorDecisions'
 import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
 import { targetLabel } from '../lib/targetLabel'
 import type { Decision } from '../types/canopy'
@@ -17,6 +26,10 @@ type OperatorActionPanelProps = {
    *  (the one taken on the satellite cluster's verdict); left out, the
    *  newest decision in the store is shown. */
   decision?: Decision | null
+  /** Revision of the episode attribution shown beside the panel. A decision
+   *  made for an earlier revision is flagged, and a recovery stays
+   *  unacceptable until the decide stage catches up (C21). */
+  attributionRevision?: number | null
   /** The overview's approve/deny box: the action, its gate or withheld chip,
    *  the "selected from N options" line and the buttons; the authority and
    *  target, the recovery block and the rationale are left to the cards
@@ -32,6 +45,7 @@ type OperatorActionPanelProps = {
  *  authority named, neither is animated. */
 export function OperatorActionPanel({
   decision: episodeDecision,
+  attributionRevision = null,
   compact = false,
 }: OperatorActionPanelProps = {}) {
   const newestDecision = useEventStore((s) => s.decisions[0] ?? null)
@@ -63,6 +77,8 @@ export function OperatorActionPanel({
   const isBlocked = gate.reasonCode !== null
   const withheld = decision.withheld_recovery ?? null
   const selection = selectionSummary(decision)
+  const stale = decisionIsStale(decision, attributionRevision)
+  const acceptLocked = acceptIsLocked(decision, attributionRevision)
   const eyebrow = isRecovery
     ? 'Internal diagnosis recommendation'
     : isBlocked
@@ -88,10 +104,20 @@ export function OperatorActionPanel({
       aria-labelledby="operator-action-title"
       data-decision-kind={isRecovery ? 'recovery' : isBlocked ? 'blocked' : 'action'}
       data-withheld={withheld ? withheld.reason_code : undefined}
+      data-stale={stale ? 'true' : undefined}
     >
       <header className="operator-action__head">
         <span className="operator-action__eyebrow">{eyebrow}</span>
         <h2 id="operator-action-title">{actionLabel(decision.action)}</h2>
+        {stale ? (
+          <span
+            className="operator-action__chip operator-action__chip--stale"
+            data-testid="stale-chip"
+            title={STALE_DECISION_TITLE}
+          >
+            {STALE_DECISION_FLAG}
+          </span>
+        ) : null}
         {isBlocked ? (
           <span
             className="operator-action__chip operator-action__chip--blocked"
@@ -184,6 +210,8 @@ export function OperatorActionPanel({
             className="operator-action__btn operator-action__btn--accept"
             onClick={accept}
             data-key="A"
+            disabled={acceptLocked}
+            title={acceptLocked ? ACCEPT_LOCKED_TITLE : undefined}
           >
             Accept
           </button>

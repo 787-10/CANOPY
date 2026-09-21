@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import {
   noVerdictCopy,
   spacecraftDisplayName,
-  verdictBasisCopy,
+  verdictBasisFor,
   verdictCopy,
   verdictHeadline,
 } from '../lib/commanderLanguage'
@@ -16,6 +16,11 @@ type VerdictPanelProps = {
   attribution: Attribution | null
   /** Compact layout for the Brigade decision stack. */
   compact?: boolean
+  /** "Cited for the verdict" lines in view before the fold; the rest open
+   *  behind "+k more". Default: every line. */
+  citedLimit?: number
+  /** Evidence lines in view before the fold. Default: every line. */
+  evidenceLimit?: number
 }
 
 // `absent` is the explicit fifth state: the attribution predates the verdict
@@ -31,7 +36,12 @@ const clamp01 = (value: number) => Math.min(1, Math.max(0, value))
  *  meter, which lane set the call, and every string the engine cited. The
  *  decision taken on the verdict is the OperatorActionPanel's, shown beside
  *  this panel in the console. */
-export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps) {
+export function VerdictPanel({
+  attribution,
+  compact = false,
+  citedLimit = Infinity,
+  evidenceLimit = Infinity,
+}: VerdictPanelProps) {
   const state = verdictState(attribution)
   const copy = state === 'absent' ? noVerdictCopy : verdictCopy[state]
   const physics =
@@ -39,10 +49,17 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
       ? clamp01(attribution.physics_consistency)
       : null
   const basis = attribution?.verdict_basis ?? null
+  const basisCopy = attribution ? verdictBasisFor(attribution) : null
   const verdictEvidence = attribution?.verdict_evidence ?? []
   const evidence = attribution?.evidence ?? []
   const ruleEvidence = evidence.filter((line) => line.startsWith('Verdict (rule):'))
   const humanEvidence = evidence.filter((line) => !line.startsWith('Verdict (rule):'))
+  // The page is a fixed height: the first lines of each list are in view,
+  // the rest fold behind "+k more" so nothing leaves without an affordance.
+  const citedShown = verdictEvidence.slice(0, citedLimit)
+  const citedRest = verdictEvidence.slice(citedLimit)
+  const humanShown = humanEvidence.slice(0, evidenceLimit)
+  const humanRest = humanEvidence.slice(evidenceLimit)
   const citations = attribution?.kb_citations ?? []
   const satelliteId = attribution?.satellite_id ?? null
   // Closely-spaced objects (docs/INTERFACE-SPEC.md §5.4): an attribution the
@@ -181,8 +198,8 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
           <dl className="verdict-panel__facts">
             <div>
               <dt>Basis</dt>
-              <dd data-testid="verdict-basis" title={basis ? verdictBasisCopy[basis].meaning : undefined}>
-                {basis ? verdictBasisCopy[basis].label : 'no lane recorded'}
+              <dd data-testid="verdict-basis" title={basisCopy?.meaning}>
+                {basisCopy ? basisCopy.label : 'no lane recorded'}
               </dd>
             </div>
             <div>
@@ -207,14 +224,31 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
             >
               <h3>Cited for the verdict</h3>
               {verdictEvidence.length ? (
-                <ul
-                  className="verdict-panel__list verdict-panel__list--verdict"
-                  data-testid="verdict-evidence"
-                >
-                  {verdictEvidence.map((line, index) => (
-                    <li key={`${index}-${line}`}>{line}</li>
-                  ))}
-                </ul>
+                <>
+                  <ul
+                    className="verdict-panel__list verdict-panel__list--verdict"
+                    data-testid="verdict-evidence"
+                  >
+                    {citedShown.map((line, index) => (
+                      <li key={`${index}-${line}`}>{line}</li>
+                    ))}
+                  </ul>
+                  {citedRest.length ? (
+                    <div className="verdict-panel__folds">
+                      <details className="verdict-panel__more" data-testid="verdict-evidence-more">
+                        <summary>+{citedRest.length} more</summary>
+                        <ul
+                          className="verdict-panel__list verdict-panel__list--verdict"
+                          data-testid="verdict-evidence-rest"
+                        >
+                          {citedRest.map((line, index) => (
+                            <li key={`${index}-${line}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    </div>
+                  ) : null}
+                </>
               ) : (
                 <p className="verdict-panel__empty">
                   {basis === 'reasoning'
@@ -234,22 +268,36 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
               <>
                 {humanEvidence.length ? (
                   <ul className="verdict-panel__list" data-testid="evidence">
-                    {humanEvidence.map((line, index) => (
+                    {humanShown.map((line, index) => (
                       <li key={`${index}-${line}`}>{line}</li>
                     ))}
                   </ul>
                 ) : null}
-                {ruleEvidence.length ? (
-                  // The rule lane's own basis line is a key=value dump; it is
-                  // the record, not the read, so it opens on demand.
-                  <details className="verdict-panel__more" data-testid="rule-basis">
-                    <summary>Rule basis</summary>
-                    <ul className="verdict-panel__list verdict-panel__list--rule">
-                      {ruleEvidence.map((line, index) => (
-                        <li key={`${index}-${line}`}>{line}</li>
-                      ))}
-                    </ul>
-                  </details>
+                {humanRest.length || ruleEvidence.length ? (
+                  <div className="verdict-panel__folds">
+                    {humanRest.length ? (
+                      <details className="verdict-panel__more" data-testid="evidence-more">
+                        <summary>+{humanRest.length} more</summary>
+                        <ul className="verdict-panel__list" data-testid="evidence-rest">
+                          {humanRest.map((line, index) => (
+                            <li key={`${index}-${line}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                    {ruleEvidence.length ? (
+                      // The rule lane's own basis line is a key=value dump; it is
+                      // the record, not the read, so it opens on demand.
+                      <details className="verdict-panel__more" data-testid="rule-basis">
+                        <summary>Rule basis</summary>
+                        <ul className="verdict-panel__list verdict-panel__list--rule">
+                          {ruleEvidence.map((line, index) => (
+                            <li key={`${index}-${line}`}>{line}</li>
+                          ))}
+                        </ul>
+                      </details>
+                    ) : null}
+                  </div>
                 ) : null}
               </>
             ) : (
@@ -259,7 +307,10 @@ export function VerdictPanel({ attribution, compact = false }: VerdictPanelProps
 
           {citations.length ? (
             <section className="verdict-panel__section" aria-label="KB citations">
-              <h3>KB citations</h3>
+              <h3>
+                KB citations
+                <span className="verdict-panel__count" data-testid="kb-citation-count">{citations.length}</span>
+              </h3>
               <div className="verdict-panel__citations">
                 {citations.map((id) => (
                   <KBCitationCard key={id} citationId={id} />

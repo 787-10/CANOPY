@@ -261,7 +261,7 @@
       "actor": "Actor-1",
       "domain": ["rf_ew", "satcom"],
       "capability_type": "uplink_interference_leo",
-      "summary": "Actor-1's doctrine (synthetic Doctrine Note SD-3, Field Manual FM-EW-2) places a ground-mobile S-band emitter 150 to 250 km from a targeted ground station and radiates on the satellite's uplink frequency only while the satellite is in mutual view. The satellite's receiver noise floor rises as one step at acquisition of signal and holds for the pass; the downlink margin falls with it while forward power and amplifier temperature stay nominal. A spectrum watch at the station keeps the bearing on the pass.",
+      "summary": "Actor-1's doctrine (Doctrine Note SD-3, Field Manual FM-EW-2) places a ground-mobile S-band emitter 150 to 250 km from a targeted ground station and radiates on the satellite's uplink frequency only while the satellite is in mutual view. The satellite's receiver noise floor rises as one step at acquisition of signal and holds for the pass; the downlink margin falls with it while forward power and amplifier temperature stay nominal. A spectrum watch at the station keeps the bearing on the pass.",
       "tactical_relevance": "A step-shaped margin loss on one satellite during one pass, a stable interference bearing from the ground station and consistent emitter geometry is the Actor-1 pattern; a gradual decline with rising amplifier temperature is not.",
       "decision_implications": [
         "Verdict hostile_external, actor Actor-1, when the bus-health record reads a receiver noise floor above baseline with nominal forward power and amplifier temperature and an rf_interference report from the ground station is in the cluster.",
@@ -271,12 +271,12 @@
       "source_refs": [
         {
           "source_id": "actor1-doctrine-note-sd3-synthetic",
-          "locator": "Doctrine Note SD-3 (synthetic), section 4",
+          "locator": "Doctrine Note SD-3, section 4",
           "claim_supported": "Actor-1 denies LEO downlinks by uplink interference timed to the pass over a targeted ground station."
         },
         {
           "source_id": "actor1-field-manual-fm-ew-2-synthetic",
-          "locator": "Field Manual FM-EW-2 (synthetic), chapter 3",
+          "locator": "Field Manual FM-EW-2, chapter 3",
           "claim_supported": "Emitters sit 150 to 250 km from the station and are cued by a spectrum watch on the pass."
         }
       ],
@@ -293,7 +293,8 @@
         "demo-link-margin-b-007",
         "demo-link-margin-b-008"
       ],
-      "notes": "Synthetic doctrine corpus for the MEGALITH demo; Actor-1 is fictional. Confidence basis: two synthetic doctrine documents that agree plus the SC-7 catalog entry. Attribution support, not proof of intent."
+      "notes": "Confidence basis: two doctrine documents that agree plus the SC-7 catalog entry. Attribution support, not proof of intent.",
+      "synthetic": true
     },
     {
       "id": "kb-megalith-demo-actor1-capability-001",
@@ -301,7 +302,7 @@
       "actor": "Actor-1",
       "domain": ["rf_ew"],
       "capability_type": "uplink_interference_leo",
-      "summary": "The synthetic emitter catalog credits Actor-1 with the SC-7 class: a light-vehicle S-band interferer, 2025 to 2110 MHz, 4 MHz swept-CW, raising a LEO receiver's noise floor 6 to 12 dB at 550 km. Signature: step onset at acquisition of signal, a bearing from the affected ground station that holds for the pass, 150 to 250 km standoff. The affected satellite's bus-health record reads 'forward power 20 W (nominal 20 W), amplifier temperature 305 K (baseline), receiver noise floor +8 dB from baseline, receiver lock lost' with a step shape: the SC-7 effect on the receive side, not amplifier ageing.",
+      "summary": "The emitter catalog credits Actor-1 with the SC-7 class: a light-vehicle S-band interferer, 2025 to 2110 MHz, 4 MHz swept-CW, raising a LEO receiver's noise floor 6 to 12 dB at 550 km. Signature: step onset at acquisition of signal, a bearing from the affected ground station that holds for the pass, 150 to 250 km standoff. The affected satellite's bus-health record reads 'forward power 20 W (nominal 20 W), amplifier temperature 305 K (baseline), receiver noise floor +8 dB from baseline, receiver lock lost' with a step shape: the SC-7 effect on the receive side, not amplifier ageing.",
       "tactical_relevance": "An rf_interference report from a ground station such as Site A naming a swept-CW S-band emitter on the satellite's uplink frequency, a stable bearing and a 150 to 250 km standoff matches SC-7 and therefore Actor-1.",
       "decision_implications": [
         "Name Actor-1 when an rf_interference report matches the SC-7 signature and the bus symptom is a step-shaped margin loss on the same satellite.",
@@ -311,7 +312,7 @@
       "source_refs": [
         {
           "source_id": "actor1-emitter-catalog-2026-synthetic",
-          "locator": "Emitter catalog (synthetic), entry SC-7",
+          "locator": "Emitter catalog 2026, entry SC-7",
           "claim_supported": "SC-7 parameters, mobility and standoff from the targeted ground station."
         }
       ],
@@ -328,7 +329,8 @@
         "demo-link-margin-b-007",
         "demo-link-margin-b-008"
       ],
-      "notes": "Synthetic catalog for the MEGALITH demo; SC-7 and every parameter are invented."
+      "notes": "Confidence basis: one catalog entry, corroborated by Doctrine Note SD-3. Capability support, not proof of use.",
+      "synthetic": true
     },
     {
       "id": "kb-megalith-demo-space-weather-001",
@@ -346,7 +348,7 @@
       "source_refs": [
         {
           "source_id": "megalith-demo-space-weather-primer-synthetic",
-          "locator": "Space-weather primer (synthetic), sections 2 and 5",
+          "locator": "Space-weather primer, sections 2 and 5",
           "claim_supported": "G-scale thresholds, typical Dst per level, and fleet-wide link, drag and upset effects."
         }
       ],
@@ -370,7 +372,8 @@
         "demo-link-margin-a-005",
         "demo-link-margin-a-006"
       ],
-      "notes": "Context entry, not an attribution (actor None); synthetic primer for the MEGALITH demo."
+      "notes": "Context entry, not an attribution (actor None).",
+      "synthetic": true
     },
     {
       "id": "kb-megalith-demo-internal-fault-001",
@@ -388,7 +391,7 @@
       "source_refs": [
         {
           "source_id": "megalith-demo-amplifier-ageing-note-synthetic",
-          "locator": "Amplifier ageing note (synthetic), section 3",
+          "locator": "Amplifier ageing note, section 3",
           "claim_supported": "Ageing lowers forward power gradually and raises device temperature; the noise floor is unaffected."
         }
       ],
@@ -407,7 +410,8 @@
         "demo-link-margin-c-009",
         "demo-link-margin-c-010"
       ],
-      "notes": "Context entry, not an attribution (actor None); synthetic note for the MEGALITH demo. Indexed to Runs A and C only: in a hostile run the record's own readings exclude it."
+      "notes": "Context entry, not an attribution (actor None). Indexed to Runs A and C only: in a hostile run the record's own readings exclude it.",
+      "synthetic": true
     }
   ]
 }

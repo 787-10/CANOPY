@@ -5,11 +5,13 @@ import { spacecraftDisplayName, subsystemLabel } from './commanderLanguage'
 
 const SUBSYSTEMS = new Set(['comms', 'power', 'thermal', 'adcs', 'cdh', 'c&dh', 'payload', 'propulsion'])
 const ID_TOKEN = /^[a-z][a-z0-9_]*(?:-[a-z0-9_]+)*-\d{3,}$/i
-const KNOWN: Record<string, string> = { 'brigade-c2': 'Brigade C2' }
+// Authority nodes the decide stage names. `space-ops-c2` is the synthetic
+// space echelon; `brigade-c2` is kept so archived bundles still label.
+const KNOWN: Record<string, string> = { 'space-ops-c2': 'Space Ops C2 (SIM)', 'brigade-c2': 'Brigade C2' }
 
 /** `ctb://megalith.demo/sim-01` -> `SIM-01`; `comms` -> `Comms`;
  *  `demo-link-margin-b-003, demo-link-margin-b-004` -> `2 reports`;
- *  `brigade-c2` -> `Brigade C2`; anything else as written, URIs replaced
+ *  `space-ops-c2` -> `Space Ops C2 (SIM)`; anything else as written, URIs replaced
  *  by their display names. */
 export function targetLabel(target: string | null | undefined): string {
   const raw = (target ?? '').trim()

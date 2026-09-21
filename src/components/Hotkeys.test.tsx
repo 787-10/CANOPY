@@ -41,4 +41,16 @@ describe('Hotkeys', () => {
     fireEvent.keyDown(window, { key: 'f' })
     expect(useEventStore.getState().pinnedSatelliteId).toBeNull()
   })
+
+  it('A is ignored while a recovery decision is behind the verdict revision; D still denies (C21)', () => {
+    const store = useEventStore.getState()
+    store.ingestAnomaly(makeAnomaly('an-1', { kind: 'bus_link_margin', payload: { satellite_id: SIM01 } }))
+    store.ingestAttribution(makeAttribution('att-1', { anomaly_ids: ['an-1'], satellite_id: SIM01, verdict: 'internal_fault', revision: 1, provisional: false }))
+    store.ingestDecision(makeDecision('dec-1', { attribution_id: 'att-1', action: 'recovery_recommendation', authority: 'local', target: 'SIM-01', revision: 0 }))
+    render(<Hotkeys />)
+    fireEvent.keyDown(window, { key: 'a' })
+    expect(useEventStore.getState().acceptedDecisionIds.has('dec-1')).toBe(false)
+    fireEvent.keyDown(window, { key: 'd' })
+    expect(useEventStore.getState().deferredDecisionIds.has('dec-1')).toBe(true)
+  })
 })

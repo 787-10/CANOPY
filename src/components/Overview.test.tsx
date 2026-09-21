@@ -154,6 +154,51 @@ describe('ResponseColumn', () => {
     render(<ResponseColumn attribution={null} decision={null} />)
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument()
     expect(screen.getByTestId('verdict-summary')).toHaveTextContent('provisional verdict')
-    expect(screen.getByTestId('decision-summary')).toHaveTextContent('The decision follows the verdict')
+    expect(screen.getByTestId('decision-pending')).toHaveTextContent('Pending · computed when the verdict lands')
+    expect(screen.getByTestId('decision-summary')).not.toHaveTextContent('The decision follows the verdict')
+  })
+})
+
+describe('DecisionSummaryCard — a decision behind the verdict revision (C21)', () => {
+  const staleRecovery = () =>
+    makeDecision('dec-stale', {
+      attribution_id: 'att-b',
+      action: 'recovery_recommendation',
+      authority: 'local',
+      target: 'SIM-01',
+      revision: 0,
+      recovery: { action_id: 'reduce_downlink_rate', target_subsystem: 'comms', requires_approval: false, rationale: 'Hold the rate.' },
+    })
+
+  it('flags a decision made for an earlier revision and locks Accept on a recovery until it catches up', () => {
+    render(<DecisionSummaryCard decision={staleRecovery()} attributionRevision={1} />)
+    expect(screen.getByTestId('decision-summary')).toHaveAttribute('data-stale', 'true')
+    expect(screen.getByTestId('decision-stale')).toHaveTextContent('based on provisional verdict · updating')
+    const accept = screen.getByRole('button', { name: 'Accept' })
+    expect(accept).toBeDisabled()
+    expect(accept).toHaveAttribute('title', 'Accept opens when the decision catches up with the final verdict')
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeEnabled()
+  })
+
+  it('keeps a threat warning acceptable while it is flagged', () => {
+    render(<DecisionSummaryCard decision={makeDecision('dec-tw', { action: 'threat_warning', authority: 'local', revision: 0 })} attributionRevision={1} />)
+    expect(screen.getByTestId('decision-stale')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+  })
+
+  it('shows no flag once the revisions match, and none when either revision is unknown', () => {
+    const { unmount } = render(<DecisionSummaryCard decision={{ ...staleRecovery(), revision: 1 }} attributionRevision={1} />)
+    expect(screen.queryByTestId('decision-stale')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+    unmount()
+    render(<DecisionSummaryCard decision={makeDecision('dec-unknown', { action: 'recovery_recommendation', authority: 'local' })} attributionRevision={1} />)
+    expect(screen.queryByTestId('decision-stale')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+  })
+
+  it('the response column hands the attribution revision to the card', () => {
+    render(<ResponseColumn attribution={hostile()} decision={staleRecovery()} />)
+    expect(screen.getByTestId('decision-stale')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeDisabled()
   })
 })

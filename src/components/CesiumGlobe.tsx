@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   ArcGisMapServerImageryProvider,
   ArcType,
@@ -15,8 +15,10 @@ import {
   ImageryLayer,
   IonWorldImageryStyle,
   LabelStyle,
+  Matrix4,
   NearFarScalar,
   PolylineDashMaterialProperty,
+  Ray,
   ScreenSpaceEventHandler,
   ScreenSpaceEventType,
   TileMapServiceImageryProvider,
@@ -38,16 +40,18 @@ import {
   n2yoOrbitalPositionAtTheta,
   n2yoOrbitSamples,
   rotateN2YOOrbitTangent,
-  selectN2YOSatellite,
   setN2YOSatelliteLayerVisible,
   setN2YOOrbitsVisible,
+  showN2YOOrbit,
   syntheticSatelliteFor,
   type N2YOLayerState,
   type N2YODisplayPoint,
   type N2YOSatelliteFamily,
 } from '../lib/n2yoSatelliteLayer'
+import { GlobeControls } from './GlobeControls'
 import { toPoint as mgrsToPoint } from 'mgrs'
 import { commanderSignalSummary } from '../lib/commanderLanguage'
+import { utcClock } from '../lib/timing'
 import {
   groundStationFromPositionCache,
   groundStationsFromSignals,
@@ -181,6 +185,28 @@ type CesiumGlobeProps = {
 // estimate read as separate marks.
 const PIN_CAMERA_HEIGHT_M = 1_400_000
 
+// One press of Zoom in (or +) brings the camera to 60% of its height; Zoom
+// out (or -) is the inverse, so a press each way lands where it started.
+const ZOOM_IN_FACTOR = 0.6
+const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR
+// The mouse-up that ends a drag, or a long press, is not a click.
+const CLICK_MAX_TRAVEL_PX = 6
+const CLICK_MAX_HOLD_MS = 600
+
+type PointerPress = { x: number; y: number; at: number; moved: boolean }
+
+// Select a track in place: label on and orbit drawn, camera untouched. The
+// layer library's selectN2YOSatellite also flies to the centred Earth (the
+// original CANOPY framed the whole catalogue that way); in the console that
+// flight fired on every layer resync, which ran once per incoming signal.
+const selectTrackInPlace = (viewer: Viewer, layer: N2YOLayerState) => {
+  const entity = viewer.entities.getById(layer.entityIds[0])
+  if (entity?.label) {
+    entity.label.show = new ConstantProperty(true)
+  }
+  showN2YOOrbit(viewer, layer)
+}
+
 type MapPoint = {
   lon: number
   lat: number
@@ -297,7 +323,18 @@ export function CesiumGlobe({
   const loadedN2yoSatelliteIdsRef = useRef<Set<number>>(new Set())
   const selectedN2yoLayerRef = useRef<N2YOLayerState | null>(null)
   const homeDestinationRef = useRef<Cartesian3 | null>(null)
-  const wasPinnedRef = useRef(false)
+  // The pin the globe has framed (its display name): a layer that loads after
+  // the pin arrives engages it once, not on every layer-count change.
+  const engagedPinRef = useRef<string | null>(null)
+  // The home framing flies once per stream; later signals only refresh it.
+  const framedStreamRef = useRef(false)
+  const signalsRef = useRef(signals)
+  const followingRef = useRef(false)
+  const followTokenRef = useRef(0)
+  const pointerDownRef = useRef(false)
+  const pressRef = useRef<PointerPress | null>(null)
+  const deferredFlightRef = useRef<(() => void) | null>(null)
+  const [following, setFollowing] = useState(false)
   const [, setActiveLayer] = useState('baseline')
   const [, setImageryMode] = useState('Loading imagery')
   const [, setRealSatelliteStatus] = useState('Satellites')
@@ -340,6 +377,128 @@ export function CesiumGlobe({
     const interval = window.setInterval(updateSelectedSatellitePoint, 500)
     return () => window.clearInterval(interval)
   }, [selectedSatellite])
+
+  useEffect(() => {
+    signalsRef.current = signals
+  }, [signals])
+
+  /** Stop tracking a spacecraft; the camera stays where it is. */
+  const stopFollowing = useCallback(() => {
+    followTokenRef.current += 1
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    if (viewer.trackedEntity) viewer.trackedEntity = undefined
+  }, [])
+
+  /** A flight the data asks for (first framing, a pin): it ends any follow,
+   *  and while the operator holds the globe it waits for the release. */
+  const flyCamera = useCallback(
+    (destination: Cartesian3, duration: number) => {
+      const run = () => {
+        const viewer = viewerRef.current
+        if (!viewer || viewer.isDestroyed()) return
+        stopFollowing()
+        viewer.camera.flyTo({ destination, duration })
+      }
+      if (pointerDownRef.current) {
+        deferredFlightRef.current = run
+        return
+      }
+      run()
+    },
+    [stopFollowing],
+  )
+
+  /** Track a spacecraft in place (CORE's followSat): Cesium frames a tracked
+   *  entity tight once its bounding sphere resolves, so wait for the tracking
+   *  transform to engage, then push the camera back out to the range it had.
+   *  The spacecraft slides to the centre at the operator's zoom and the
+   *  camera rides along; the wheel then zooms towards it. */
+  const followLayer = useCallback((layer: N2YOLayerState) => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    const entity = viewer.entities.getById(layer.entityIds[0])
+    const position = entity?.position?.getValue(viewer.clock.currentTime)
+    if (!entity || !position) return
+    const camera = viewer.camera
+    const token = ++followTokenRef.current
+    const range = Cartesian3.distance(camera.positionWC, position)
+    viewer.trackedEntity = entity
+    const armedAt = performance.now()
+    const remove = viewer.scene.preRender.addEventListener(() => {
+      if (
+        viewer.isDestroyed() ||
+        viewer.trackedEntity !== entity ||
+        followTokenRef.current !== token ||
+        performance.now() - armedAt > 3000
+      ) {
+        remove()
+        return
+      }
+      if (Matrix4.equals(camera.transform, Matrix4.IDENTITY)) return
+      remove()
+      const now = entity.position?.getValue(viewer.clock.currentTime)
+      if (!now) return
+      const diff = range - Cartesian3.distance(camera.positionWC, now)
+      if (diff > 1) camera.zoomOut(diff)
+      else if (diff < -1) camera.zoomIn(-diff)
+    })
+  }, [])
+
+  /** Zoom along the view direction to `factor` of the current height, kept
+   *  inside the controller's zoom limits and short of the ground ahead. */
+  const zoomBy = useCallback((factor: number) => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    const { camera, scene } = viewer
+    const controller = scene.screenSpaceCameraController
+    const height = camera.positionCartographic.height
+    const floor = controller.minimumZoomDistance * 2
+    const target = Math.min(Math.max(height * factor, floor), controller.maximumZoomDistance)
+    let distance = height - target
+    if (distance > 0) {
+      const ground = scene.globe.pick(new Ray(camera.positionWC, camera.directionWC), scene)
+      if (ground) {
+        distance = Math.min(distance, Cartesian3.distance(camera.positionWC, ground) - floor)
+      }
+      if (distance > 0) camera.zoomIn(distance)
+    } else if (distance < 0) {
+      camera.zoomOut(-distance)
+    }
+    scene.requestRender()
+  }, [])
+
+  /** Reset view: stop following and fly to the stream's home framing (the
+   *  station anchor once known, else the centred Earth). */
+  const resetView = useCallback(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    stopFollowing()
+    viewer.camera.flyTo({
+      destination: homeDestinationRef.current ?? RESET_CAMERA_DESTINATION,
+      duration: 0.9,
+    })
+  }, [stopFollowing])
+
+  /** Follow the selected spacecraft (pinned or clicked; the only loaded one
+   *  when nothing is selected); a second press stops. */
+  const toggleFollow = useCallback(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed()) return
+    if (viewer.trackedEntity) {
+      stopFollowing()
+      return
+    }
+    const layers = n2yoLayersRef.current
+    const layer = selectedN2yoLayerRef.current ?? (layers.length === 1 ? layers[0] : null)
+    if (!layer) return
+    if (selectedN2yoLayerRef.current !== layer) {
+      selectedN2yoLayerRef.current = layer
+      selectTrackInPlace(viewer, layer)
+      setSelectedSatellite(layer)
+    }
+    followLayer(layer)
+  }, [followLayer, stopFollowing])
 
   useEffect(() => {
     if (!containerRef.current || !creditRef.current) {
@@ -389,26 +548,68 @@ export function CesiumGlobe({
     viewer.scene.screenSpaceCameraController.minimumZoomDistance = 250
     viewer.scene.screenSpaceCameraController.maximumZoomDistance = 42000000
 
-    const flyToCenteredEarth = (duration = 0.45) => {
-      viewer.camera.flyTo({
-        destination: RESET_CAMERA_DESTINATION,
-        duration,
-      })
+    // Follow mode is the widget's own tracked-entity state (Esc, Reset view
+    // and the Follow button all read it here).
+    viewer.trackedEntityChanged.addEventListener(() => {
+      if (isDisposed) return
+      const active = Boolean(viewer.trackedEntity)
+      followingRef.current = active
+      setFollowing(active)
+    })
+
+    // Pointer state: data-driven flights wait for the operator to let go, and
+    // the mouse-up that ends a drag (or a long press) is not a click.
+    const canvas = viewer.scene.canvas
+    const onPointerDown = (event: PointerEvent) => {
+      pointerDownRef.current = true
+      pressRef.current =
+        event.button === 0
+          ? { x: event.clientX, y: event.clientY, at: performance.now(), moved: false }
+          : null
     }
+    const onPointerMove = (event: PointerEvent) => {
+      const press = pressRef.current
+      if (
+        press &&
+        !press.moved &&
+        Math.hypot(event.clientX - press.x, event.clientY - press.y) > CLICK_MAX_TRAVEL_PX
+      ) {
+        press.moved = true
+      }
+    }
+    const onPointerUp = () => {
+      pointerDownRef.current = false
+      const deferred = deferredFlightRef.current
+      deferredFlightRef.current = null
+      deferred?.()
+    }
+    canvas.addEventListener('pointerdown', onPointerDown)
+    window.addEventListener('pointermove', onPointerMove)
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerUp)
+    window.addEventListener('blur', onPointerUp)
 
     const clickHandler = new ScreenSpaceEventHandler(viewer.scene.canvas)
     clickHandler.setInputAction((event: ScreenSpaceEventHandler.PositionedEvent) => {
+      const press = pressRef.current
+      if (press && (press.moved || performance.now() - press.at > CLICK_MAX_HOLD_MS)) {
+        return
+      }
       const picked = viewer.scene.pick(event.position)
       const pickedId = typeof picked?.id?.id === 'string' ? picked.id.id : null
       if (!pickedId?.startsWith('n2yo-') || !pickedId.endsWith('-satellite')) {
-        if (selectedN2yoLayerRef.current) {
-          deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        // Empty space clears a click-selection and leaves the camera where the
+        // operator put it. The operator's pin is not a click-selection: the
+        // Situation column owns it, and "Follow latest" clears it.
+        const selected = selectedN2yoLayerRef.current
+        if (selected && selected.satelliteName !== engagedPinRef.current) {
+          stopFollowing()
+          deselectN2YOSatellite(viewer, selected)
           setN2YOOrbitsVisible(viewer, n2yoLayersRef.current, false)
           showAllOrbitsRef.current = false
           setShowAllOrbits(false)
           selectedN2yoLayerRef.current = null
           setSelectedSatellite(null)
-          flyToCenteredEarth()
           viewer.scene.requestRender()
         }
         return
@@ -427,14 +628,47 @@ export function CesiumGlobe({
         setShowAllOrbits(false)
       }
 
-      if (selectedN2yoLayerRef.current) {
+      if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
+        // Following the previous selection ends; Follow picks the new one up.
+        stopFollowing()
         deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
       }
       selectedN2yoLayerRef.current = layer
-      selectN2YOSatellite(viewer, layer)
+      selectTrackInPlace(viewer, layer)
       setSelectedSatellite(layer)
       viewer.scene.requestRender()
     }, ScreenSpaceEventType.LEFT_CLICK)
+
+    // Double-click replaces the widget's stock action, which tracked any
+    // entity under the cursor (the station dish included) with no way back:
+    // on a spacecraft it follows it; on empty space it is Reset view.
+    viewer.screenSpaceEventHandler.setInputAction(
+      (event: ScreenSpaceEventHandler.PositionedEvent) => {
+        // Everything under the cursor: at the home framing a report marker on
+        // the station sits over the spacecraft, and the spacecraft wins.
+        const picked = viewer.scene.drillPick(event.position, 8) as Array<{ id?: { id?: unknown } }>
+        const ids = picked
+          .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
+          .filter((id): id is string => id !== null)
+        const layer =
+          n2yoLayersRef.current.find((candidate) =>
+            ids.some((id) => candidate.entityIds.includes(id)),
+          ) ?? null
+        if (!layer) {
+          // A marker (a report, the station) is not empty space: nothing.
+          if (ids.length === 0) resetView()
+          return
+        }
+        if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
+          deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        }
+        selectedN2yoLayerRef.current = layer
+        selectTrackInPlace(viewer, layer)
+        setSelectedSatellite(layer)
+        followLayer(layer)
+      },
+      ScreenSpaceEventType.LEFT_DOUBLE_CLICK,
+    )
 
     const addLocalImagery = () => {
       void TileMapServiceImageryProvider.fromUrl(
@@ -534,12 +768,18 @@ export function CesiumGlobe({
     return () => {
       isDisposed = true
       clickHandler.destroy()
+      canvas.removeEventListener('pointerdown', onPointerDown)
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerUp)
+      window.removeEventListener('blur', onPointerUp)
       viewerRef.current = null
       if (!viewer.isDestroyed()) {
         viewer.destroy()
       }
     }
-  }, [])
+    // The helpers are stable callbacks; the viewer mounts once.
+  }, [followLayer, resetView, stopFollowing])
 
   useEffect(() => {
     const viewer = viewerRef.current
@@ -639,7 +879,7 @@ export function CesiumGlobe({
     viewer.scene.requestRender()
   }, [correlatedSignalIds, focusSignalId, signals])
 
-  const resetDynamicSources = () => {
+  const resetDynamicSources = useCallback(() => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) {
       return
@@ -662,11 +902,12 @@ export function CesiumGlobe({
     setShowAllOrbits(false)
     viewer.clock.shouldAnimate = true
     setActiveLayer('baseline')
+    stopFollowing()
     viewer.camera.flyTo({
       destination: RESET_CAMERA_DESTINATION,
       duration: 0.6,
     })
-  }
+  }, [stopFollowing])
 
   const visibleN2yoLayers = useCallback(
     (familySelection = satelliteFamilySelectionRef.current) =>
@@ -711,7 +952,7 @@ export function CesiumGlobe({
       setOrbitCapableLayerCount(orbitCapableLayers.length)
 
       if (selectedN2yoLayerRef.current) {
-        selectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        selectTrackInPlace(viewer, selectedN2yoLayerRef.current)
       } else if (showAllOrbitsRef.current && orbitCapableLayers.length > 0) {
         setN2YOOrbitsVisible(viewer, orbitCapableLayers, true)
       } else if (showAllOrbitsRef.current) {
@@ -867,8 +1108,22 @@ export function CesiumGlobe({
   const syntheticInStream = signals.some((signal) =>
     syntheticSatelliteFor(signal.payload.satellite_id ?? null),
   )
+  // The framing key changes when a synthetic spacecraft appears in the stream
+  // or the stream names its station, not on every signal: this effect used
+  // to list `signals` and flew the camera back to the anchor on each incoming
+  // record, over whatever the operator had done with it.
+  const namedStationKey = useMemo(() => {
+    const station = groundStationsFromSignals(signals)[0]
+    return station ? `${station.lat.toFixed(3)},${station.lng.toFixed(3)}` : ''
+  }, [signals])
+  const framingKey = syntheticInStream ? `sim|${namedStationKey}` : ''
   useEffect(() => {
-    if (displayMode !== 'globe' || !syntheticInStream) {
+    if (displayMode !== 'globe') {
+      return
+    }
+    if (!framingKey) {
+      // The stream was cleared (a new run): the next one frames itself again.
+      framedStreamRef.current = false
       return
     }
     const viewer = viewerRef.current
@@ -888,53 +1143,89 @@ export function CesiumGlobe({
         .filter((layer) => layer.satelliteFamily === 'SIM')
         .map((layer) => groundStationFromPositionCache(layer.cache))
         .filter((candidate): candidate is NonNullable<typeof candidate> => candidate !== null)
-      const station = mergeGroundStations(groundStationsFromSignals(signals), fromTracks)[0]
+      const station = mergeGroundStations(groundStationsFromSignals(signalsRef.current), fromTracks)[0]
       const anchor = station
         ? // Close enough that the station dish, the pinned spacecraft and an RF
           // emitter estimate ~180 km away read as separate marks (demo capture S1).
           Cartesian3.fromDegrees(station.lng, station.lat, 1_400_000)
         : RESET_CAMERA_DESTINATION
       homeDestinationRef.current = anchor
-      viewer.camera.flyTo({ destination: anchor, duration: 0.9 })
+      // Fly on the first framing of a stream only; afterwards the anchor is
+      // where Reset view and "Follow latest" return to.
+      if (framedStreamRef.current) return
+      framedStreamRef.current = true
+      flyCamera(anchor, 0.9)
     })
-    // Loads once per stream that carries a synthetic spacecraft.
-  }, [displayMode, syntheticInStream, ensureN2YOSatellitesLoaded, signals])
+  }, [displayMode, framingKey, ensureN2YOSatellitesLoaded, flyCamera])
 
   // The operator's pin: select the pinned spacecraft's track (label and
-  // orbit on) and fly to it; on "Follow latest" deselect and fly home.
+  // orbit on) and fly to it; on "Follow latest" deselect and fly home. A pin
+  // that arrives before its layer has loaded engages when the layer does
+  // (n2yoLayerCount changes), and only once per pin.
   useEffect(() => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed() || displayMode !== 'globe') return
     const layer = pinnedSatellite
       ? n2yoLayersRef.current.find((candidate) => candidate.satelliteName === pinnedSatellite) ?? null
       : null
-    if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
-      deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
-      selectedN2yoLayerRef.current = null
-      setSelectedSatellite(null)
-    }
     if (layer) {
+      if (engagedPinRef.current === layer.satelliteName) return
+      engagedPinRef.current = layer.satelliteName
+      if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
+        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+      }
       selectedN2yoLayerRef.current = layer
-      selectN2YOSatellite(viewer, layer)
+      selectTrackInPlace(viewer, layer)
       setSelectedSatellite(layer)
       const point = currentN2YODisplayPoint(layer)
-      viewer.camera.flyTo({
-        destination: Cartesian3.fromDegrees(point.lng, point.lat, PIN_CAMERA_HEIGHT_M),
-        duration: 0.9,
-      })
-      wasPinnedRef.current = true
-    } else if (wasPinnedRef.current) {
-      wasPinnedRef.current = false
+      flyCamera(Cartesian3.fromDegrees(point.lng, point.lat, PIN_CAMERA_HEIGHT_M), 0.9)
+    } else if (!pinnedSatellite && engagedPinRef.current) {
+      engagedPinRef.current = null
+      if (selectedN2yoLayerRef.current) {
+        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        selectedN2yoLayerRef.current = null
+        setSelectedSatellite(null)
+      }
       if (homeDestinationRef.current) {
-        viewer.camera.flyTo({ destination: homeDestinationRef.current, duration: 0.9 })
+        flyCamera(homeDestinationRef.current, 0.9)
+      } else {
+        stopFollowing()
       }
     }
     viewer.scene.requestRender()
-  }, [pinnedSatellite, displayMode])
+  }, [pinnedSatellite, displayMode, n2yoLayerCount, flyCamera, stopFollowing])
+
+  // Keys: + or = zooms in, - zooms out, Esc stops following (only then, so
+  // the key keeps its meaning elsewhere). Same guards as Hotkeys.tsx, whose
+  // keys (1 to 6, A, D, R, F) are not touched.
+  useEffect(() => {
+    if (displayMode !== 'globe') return
+    const onKey = (event: KeyboardEvent) => {
+      if (event.metaKey || event.ctrlKey || event.altKey) return
+      const target = event.target as HTMLElement | null
+      if (
+        target &&
+        (['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName) || target.isContentEditable)
+      ) {
+        return
+      }
+      if (event.key === '+' || event.key === '=') {
+        event.preventDefault()
+        zoomBy(ZOOM_IN_FACTOR)
+      } else if (event.key === '-' || event.key === '_') {
+        event.preventDefault()
+        zoomBy(ZOOM_OUT_FACTOR)
+      } else if (event.key === 'Escape' && followingRef.current && !event.repeat) {
+        stopFollowing()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [displayMode, zoomBy, stopFollowing])
 
   useEffect(() => {
     resetDynamicSources()
-  }, [displayMode])
+  }, [displayMode, resetDynamicSources])
 
   // Maneuver demo: when the operator accepts a decide-stage decision, run an
   // interactive Cesium animation showing the hostile and friendly orbital
@@ -1638,6 +1929,17 @@ export function CesiumGlobe({
   return (
     <>
       <div className="cesium-globe" ref={containerRef} />
+      {displayMode === 'globe' ? (
+        <GlobeControls
+          following={following}
+          canFollow={Boolean(selectedSatellite) || n2yoLayerCount === 1}
+          followTarget={selectedSatellite?.satelliteName ?? null}
+          onZoomIn={() => zoomBy(ZOOM_IN_FACTOR)}
+          onZoomOut={() => zoomBy(ZOOM_OUT_FACTOR)}
+          onResetView={resetView}
+          onToggleFollow={toggleFollow}
+        />
+      ) : null}
       {selectedSatellite ? (
         <aside className="satellite-detail" aria-label="Selected satellite">
           <span>Selected Satellite</span>
@@ -1668,15 +1970,10 @@ export function CesiumGlobe({
             <div>
               <dt>Fix</dt>
               <dd>
-                {new Date(
+                {utcClock(
                   selectedSatellitePoint?.timestampUtc ??
                     selectedSatellite.point.timestamp_utc,
-                ).toLocaleTimeString([], {
-                  hour12: false,
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  second: '2-digit',
-                })}
+                )}
               </dd>
             </div>
           </dl>

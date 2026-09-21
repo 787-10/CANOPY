@@ -1,7 +1,7 @@
 import { useEffect } from 'react'
-import { PAGES } from './TopBar'
+import { PAGES } from '../lib/pages'
 import { useEpisode } from '../hooks/useEpisode'
-import { recordOperatorDecision } from '../lib/operatorDecisions'
+import { acceptIsLocked, recordOperatorDecision } from '../lib/operatorDecisions'
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 
@@ -10,7 +10,7 @@ import { useEventStore } from '../store/eventStore'
  *  reconsiders it, F follows the latest incident again. Ignored while typing
  *  in a field and with a modifier held. Renders nothing. */
 export function Hotkeys() {
-  const { decision } = useEpisode()
+  const { attribution, decision } = useEpisode()
   const accepted = useEventStore((s) => (decision ? s.acceptedDecisionIds.has(decision.id) : false))
   const denied = useEventStore((s) => (decision ? s.deferredDecisionIds.has(decision.id) : false))
   const capture = useCaptureStore((s) => s.enabled)
@@ -31,13 +31,13 @@ export function Hotkeys() {
         return
       }
       if (!decision) return
-      if (key === 'a' && !accepted) void recordOperatorDecision(decision, 'accepted')
+      if (key === 'a' && !accepted && !acceptIsLocked(decision, attribution?.revision)) void recordOperatorDecision(decision, 'accepted')
       else if (key === 'd' && !denied) void recordOperatorDecision(decision, 'denied')
       else if (key === 'r' && (accepted || denied)) void recordOperatorDecision(decision, 'reconsidered')
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [decision, accepted, denied, capture])
+  }, [attribution, decision, accepted, denied, capture])
 
   return null
 }

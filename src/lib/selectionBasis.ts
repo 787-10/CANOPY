@@ -7,6 +7,7 @@ import type { Decision } from '../types/canopy'
 // carries its reason code after the prefix.
 export const SELECTION_BASES = [
   'recovery-routed',
+  'provisional-rule',
   'model-within-set',
   'model-outside-set-repaired',
 ] as const
@@ -14,6 +15,7 @@ export const GATE_WITHHELD_PREFIX = 'gate-withheld:'
 
 const BASIS_LABELS: Record<(typeof SELECTION_BASES)[number], string> = {
   'recovery-routed': 'recovery routed by the decision rule',
+  'provisional-rule': 'rule decision on the provisional verdict, no model call',
   'model-within-set': 'model choice within the approved set',
   'model-outside-set-repaired': 'model choice outside the set, repaired',
 }

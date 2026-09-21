@@ -306,3 +306,33 @@ describe('OperatorActionPanel — compact (overview approve/deny box)', () => {
     expect(screen.queryByText('Recovery withheld while jamming is active.')).not.toBeInTheDocument()
   })
 })
+
+describe('OperatorActionPanel — a decision behind the verdict revision (C21)', () => {
+  it('flags the stale recovery beside the title and locks Accept until the decision catches up', () => {
+    const decision = ingestRecovery()
+    render(<OperatorActionPanel decision={{ ...decision, revision: 0 }} attributionRevision={1} />)
+    expect(screen.getByTestId('stale-chip')).toHaveTextContent('based on provisional verdict · updating')
+    const accept = screen.getByRole('button', { name: 'Accept' })
+    expect(accept).toBeDisabled()
+    expect(accept).toHaveAttribute('title', 'Accept opens when the decision catches up with the final verdict')
+    expect(screen.getByRole('button', { name: 'Deny' })).toBeEnabled()
+  })
+
+  it('keeps a defensive response acceptable while it is flagged', () => {
+    render(
+      <OperatorActionPanel
+        decision={makeDecision('d-tw', { action: 'threat_warning', authority: 'local', revision: 0 })}
+        attributionRevision={1}
+      />,
+    )
+    expect(screen.getByTestId('stale-chip')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+  })
+
+  it('shows no flag when the decision matches the verdict revision', () => {
+    const decision = ingestRecovery()
+    render(<OperatorActionPanel decision={{ ...decision, revision: 1 }} attributionRevision={1} />)
+    expect(screen.queryByTestId('stale-chip')).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeEnabled()
+  })
+})

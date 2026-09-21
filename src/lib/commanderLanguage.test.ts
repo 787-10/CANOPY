@@ -9,6 +9,7 @@ import {
   domainLabel,
   eventTypeCopy,
   eventTypeWatchTier,
+  formatRate,
   gateReasonLabel,
   noVerdictCopy,
   parseGateRationale,
@@ -20,6 +21,7 @@ import {
   subsystemLabel,
   traceAnnotations,
   verdictBasisCopy,
+  verdictBasisFor,
   verdictCopy,
   verdictHeadline,
   verdictLabel,
@@ -443,5 +445,99 @@ describe('commanderLanguage — withheld recovery', () => {
         makeTrace('t', { stage: 'decide', level: 'warn', message: 'gate blocked x: y' }),
       ),
     ).toBeNull()
+  })
+})
+
+describe('commanderLanguage — formatRate never collapses a slow drift to -0.00 (V3)', () => {
+  it('keeps two decimals at ordinary rates and whole numbers at large ones', () => {
+    expect(formatRate(-0.42, 'dB/s')).toBe('-0.42 dB/s')
+    expect(formatRate(-3.52, 'dB/s')).toBe('-3.52 dB/s')
+    expect(formatRate(120.4, 'K/s')).toBe('120 K/s')
+    expect(formatRate(0, 'dB/s')).toBe('0.00 dB/s')
+    expect(formatRate(-0.42, null)).toBe('-0.42')
+  })
+
+  it('reads a per-second rate under 0.01 per minute instead', () => {
+    expect(formatRate(-0.00431192029, 'dB/s')).toBe('-0.26 dB/min')
+    expect(formatRate(-0.00504361161, 'dB/s')).toBe('-0.30 dB/min')
+    expect(formatRate(0.0083, 'rad/s')).toBe('0.50 rad/min')
+  })
+
+  it('keeps two significant figures when no per-second unit can be converted', () => {
+    expect(formatRate(-0.0043, 'dB/min')).toBe('-0.0043 dB/min')
+    expect(formatRate(-0.00004, 'dB/s')).toBe('-0.0024 dB/min')
+    expect(formatRate(0.0043, null)).toBe('0.0043')
+  })
+
+  it('the bus_health one-liner uses it', () => {
+    const slow = makeSignal('sig-slow', {
+      domain: 'bus_health',
+      payload: {
+        event_type: 'link_margin_drop',
+        summary: 'raw',
+        asset: 'SIM-01',
+        observables: { subsystem: 'comms', rate_of_change: -0.0043, rate_unit: 'dB/s', physics_consistency: 0.81 },
+      },
+    })
+    expect(commanderSignalSummary(slow).oneLine).toBe(
+      'SIM-01: link margin drop in comms at -0.26 dB/min; physics consistency 0.81.',
+    )
+  })
+})
+
+describe('commanderLanguage — source labels never mangle an id (V5, V6)', () => {
+  it('keeps acronyms in capitals when a source id is spelled out', () => {
+    const storm = makeSignal('sig-noaa', {
+      domain: 'space_weather',
+      source: 'noaa-swpc',
+      payload: { event_type: 'geomagnetic_storm', summary: 'storm', observables: { kp: 6 } },
+    })
+    expect(commanderSignalSummary(storm).sourceLabel).toBe('NOAA SWPC')
+    const rf = makeSignal('sig-rf', { domain: 'rf_ew', source: 'site-a-rf-ew-monitor' })
+    expect(commanderSignalSummary(rf).sourceLabel).toBe('Site A RF EW Monitor')
+    const c2 = makeSignal('sig-c2', { domain: 'cyber', source: 'bde-c2-sda-cell' })
+    expect(commanderSignalSummary(c2).sourceLabel).toBe('Brigade C2 SDA Cell')
+  })
+
+  it('reads a bus record as the internal diagnosis, not as the spacecraft it is about', () => {
+    const bus = makeSignal('sig-bus-src', {
+      domain: 'bus_health',
+      source: 'internal-diagnosis',
+      payload: { event_type: 'link_margin_drop', summary: 'raw', asset: 'SIM-01' },
+    })
+    expect(commanderSignalSummary(bus).sourceLabel).toBe('internal diagnosis')
+  })
+
+  it('uses the spacecraft display name when the asset or source is a synthetic spacecraft', () => {
+    const onAsset = makeSignal('sig-asset', {
+      domain: 'rf_ew',
+      source: 'site-a-spectrum-monitor',
+      payload: { event_type: 'rf_interference', summary: 'rf', asset: 'SIM-01' },
+    })
+    expect(commanderSignalSummary(onAsset).sourceLabel).toBe('SIM-01')
+    const onSource = makeSignal('sig-source', { domain: 'sda', source: 'sim-02' })
+    expect(commanderSignalSummary(onSource).sourceLabel).toBe('SIM-02')
+    const onId = makeSignal('sig-id', {
+      domain: 'orbit',
+      payload: { event_type: 'orbit', summary: 'o', asset: 'ctb://megalith.demo/sim-01' },
+    })
+    expect(commanderSignalSummary(onId).sourceLabel).toBe('SIM-01')
+  })
+})
+
+describe('commanderLanguage — verdictBasisFor (V11)', () => {
+  it('says the reasoning lane confirmed a rule verdict on a final revision', () => {
+    const final = makeAttribution('att-final', { verdict: 'internal_fault', verdict_basis: 'rule', revision: 1, provisional: false })
+    expect(verdictBasisFor(final)).toEqual({
+      label: 'Rule lane, confirmed by the reasoning lane',
+      meaning: 'The reasoning lane reviewed the evidence and kept the rule verdict.',
+    })
+  })
+
+  it('keeps the lane copy for a provisional rule verdict, a reasoning verdict, and no lane', () => {
+    expect(verdictBasisFor(makeAttribution('att-prov', { verdict_basis: 'rule', revision: 0, provisional: true }))).toBe(verdictBasisCopy.rule)
+    expect(verdictBasisFor(makeAttribution('att-legacy', { verdict_basis: 'rule' }))).toBe(verdictBasisCopy.rule)
+    expect(verdictBasisFor(makeAttribution('att-reason', { verdict_basis: 'reasoning', revision: 1 }))).toBe(verdictBasisCopy.reasoning)
+    expect(verdictBasisFor(makeAttribution('att-none', { verdict_basis: null, revision: 1 }))).toBeNull()
   })
 })

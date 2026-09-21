@@ -154,9 +154,10 @@
   letter-spacing: 0;
 }
 
-/* Make scrollable panel scrollbars visible so users can tell at a glance
-   that the column scrolls — macOS overlay scrollbars hide-on-idle which
-   leaves overflow content effectively unreachable. */
+/* Scrollbars: every scroll container draws the same thin bar (rounded thumb
+   in the muted text colour, cyan on hover, always visible so an operator can
+   tell a column scrolls). The rules live in src/styles/scrollbars.css,
+   imported after this file. */
 
 /* The Verdict section (first in the column) takes whatever height the
    decision block and the folded sections leave, and scrolls inside; the
@@ -372,7 +373,8 @@
 .satellite-detail {
   position: absolute;
   right: 14px;
-  bottom: 56px;
+  /* Above the globe controls cluster (bottom 56px, ~32px tall). */
+  bottom: 100px;
   z-index: 5;
   width: min(380px, calc(100% - 28px));
   border: 1px solid rgba(201, 164, 87, 0.42);
@@ -1233,7 +1235,10 @@
   line-height: 1.55;
   color: var(--text-primary);
   background: #050a0a;
-  scroll-behavior: smooth;
+  /* No smooth scrolling here: the panel pins itself to the newest line
+     before paint (ReasoningPanel), and with `smooth` a page load replayed
+     the whole history scrolling past on screen. */
+  scroll-behavior: auto;
 }
 
 .reasoning-panel__empty {
@@ -1629,19 +1634,12 @@
 
 /* ---- Collapsed states — translate panels off-screen ----------------- */
 
-/* ---- Cesium overlay controls — desktop offset ------------------------
-   On desktop the decision-stack sidebar overlays the right ~352px of the
-   map workspace. The Cesium floating controls (NAV/GLOBE selector,
-   satellite family filter, Orbitals toggle, satellite detail card) all
-   anchor right:14px which sits behind the sidebar. Shift them past the
-   right rail so they remain reachable. The base right:14px applies on
-   narrower viewports where the sidebar is laid out below rather than
-   overlaid. */
-@media (min-width: 1081px) {
-  .satellite-detail {
-    right: calc(var(--right-rail, 380px) + 14px);
-  }
-}
+/* ---- Cesium overlay controls ------------------------------------------
+   The original CANOPY overlaid a decision-stack sidebar on the right of the
+   map and shifted the satellite detail card left of it. The console's
+   Response column is a grid column, not an overlay, so that shift parked
+   the card in the middle of the globe, over the spacecraft (and over its
+   clicks). The card keeps the base right:14px, above the globe controls. */
 
 /* ---- Verdict panel (why fault versus attack) ---------------------------
    One badge colour per verdict, reused by the reasoning-trace chips and
@@ -4966,7 +4964,7 @@ dt,
   overflow-x: auto;
   overflow-y: hidden;
   scroll-behavior: smooth;
-  scrollbar-width: thin;
+  /* Scrollbar skin: src/styles/scrollbars.css. */
 }
 
 .report-card {
@@ -7308,4 +7306,68 @@ html[data-capture="1"] .app-header__nav [data-key]::after {
 
 .run-timings thead th {
   white-space: nowrap;
+}
+
+/* ---- Reviewer pass: clock-domain notes (V9), the pending state line (V13),
+   the stale-decision flag and a locked Accept (C21) ------------------------ */
+
+.clock-domain {
+  margin-left: 8px;
+  color: var(--text-subtle);
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.summary-card__state {
+  margin: 0;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  letter-spacing: 0.02em;
+}
+
+.summary-card__flag--stale,
+.operator-action__chip--stale {
+  padding: 2px 8px;
+  border: 1px solid var(--amber);
+  border-radius: 3px;
+  color: var(--amber);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  white-space: nowrap;
+}
+
+.operator-action__chip--stale {
+  align-self: flex-start;
+}
+
+/* A locked Accept keeps its place and its tooltip but loses the green: the
+   flat, muted face says "not yet" without reading as a second Deny. */
+.summary-card__button:disabled,
+.summary-card__button:disabled:hover,
+.operator-action__btn:disabled,
+.operator-action__btn:disabled:hover {
+  cursor: not-allowed;
+  border-color: var(--line-bright);
+  background: rgba(245, 247, 240, 0.08);
+  color: var(--text-muted);
+  box-shadow: none;
+  opacity: 0.7;
+}
+
+/* The globe's credit row (Esri imagery attribution and Cesium's logo) sat in
+   the panel's rounded corner and clipped to a dot in the S1 frame; give it
+   room inside the corner and let it read as a credit line. */
+.cesium-credits {
+  right: 18px;
+  bottom: 14px;
+  max-width: 44%;
+  line-height: 1.3;
 }

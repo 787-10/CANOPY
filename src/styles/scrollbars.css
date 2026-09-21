@@ -1,0 +1,123 @@
+/* ---- Scroll skin ----------------------------------------------------------
+   One scrollbar for every scroll container in the console, in the btop-style
+   palette: a thin gutter the colour of the panel, a rounded thumb in the muted
+   text colour that turns cyan under the pointer, no buttons, no corner. The
+   bar is always drawn, so an operator can tell at a glance that a column
+   scrolls (macOS overlay bars hide on idle). Imported after App.css.
+
+   The two scrollbar families are split by @supports on purpose. Chromium 121+
+   (and WebKit) ignore the ::-webkit-scrollbar pseudo-elements on any element
+   whose standard `scrollbar-width` or `scrollbar-color` is not `auto`, so
+   engines with the pseudo-elements get the drawn bar and nothing else, and
+   Firefox gets the standard properties in the same colours. */
+
+:root {
+  --scrollbar-size: 9px;
+  --scrollbar-track: color-mix(in srgb, var(--panel) 35%, transparent);
+  --scrollbar-thumb: color-mix(in srgb, var(--text-muted) 34%, transparent);
+  --scrollbar-thumb-hover: color-mix(in srgb, var(--cyan) 66%, transparent);
+}
+
+@supports selector(::-webkit-scrollbar) {
+  /* App.css sets `thin` on the side columns; that alone would switch the
+     pseudo-elements off for them. */
+  .side-column__body,
+  .reports-strip__track,
+  .reasoning-panel__stream,
+  .signals-page__scroll {
+    scrollbar-width: auto;
+    scrollbar-color: auto;
+  }
+
+  ::-webkit-scrollbar {
+    width: var(--scrollbar-size);
+    height: var(--scrollbar-size);
+  }
+
+  ::-webkit-scrollbar-track {
+    background: var(--scrollbar-track);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    min-width: 28px;
+    min-height: 28px;
+    border: 2px solid transparent;
+    border-radius: 999px;
+    background: var(--scrollbar-thumb);
+    background-clip: padding-box;
+  }
+
+  ::-webkit-scrollbar-thumb:hover,
+  ::-webkit-scrollbar-thumb:active {
+    background-color: var(--scrollbar-thumb-hover);
+  }
+
+  ::-webkit-scrollbar-button {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+
+  ::-webkit-scrollbar-corner {
+    background: transparent;
+  }
+}
+
+@supports not selector(::-webkit-scrollbar) {
+  /* `scrollbar-color` inherits; `scrollbar-width` does not. */
+  html {
+    scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+  }
+
+  * {
+    scrollbar-width: thin;
+  }
+}
+
+/* ---- Reasoning stream: follow the newest line -----------------------------
+   The stream opens pinned to its last line and stays there as lines arrive.
+   When the operator scrolls up it stops following and this affordance sits
+   over the bottom-right of the stream; pressing it jumps back and resumes.
+   The dock is the stream's last child, sticky and zero-height, so it takes
+   no room in the scroll height and wheel events over the button still reach
+   the stream. */
+
+.reasoning-panel__latest-dock {
+  position: sticky;
+  bottom: 0;
+  height: 0;
+  z-index: 2;
+}
+
+.reasoning-panel__latest {
+  position: absolute;
+  right: 6px;
+  bottom: 12px;
+  padding: 3px 10px;
+  border: 1px solid var(--line-bright);
+  border-radius: 3px;
+  background: var(--frame-bg, #060a0a);
+  color: var(--cyan);
+  font-family: var(--font-mono, ui-monospace, Menlo, monospace);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.5;
+  white-space: nowrap;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.65);
+  cursor: pointer;
+}
+
+.reasoning-panel__latest:hover,
+.reasoning-panel__latest:focus-visible {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 14%, var(--frame-bg, #060a0a));
+  outline: none;
+}
+
+.reasoning-panel--compact .reasoning-panel__latest {
+  bottom: 8px;
+  padding: 2px 8px;
+  font-size: 0.66rem;
+}

@@ -14,6 +14,7 @@ import { formatMs, stageTimings } from '../lib/timing'
 import { useCaptureStore } from '../store/captureStore'
 import { useEventStore } from '../store/eventStore'
 import { selectEpisodeAttribution } from '../lib/episode'
+import '../styles/run.css'
 
 /** One row of `GET /archive` (docs/C2-API.md section 8): the headline of a
  *  bundle's run.json. Not a bus event, so not in the generated types. */
@@ -137,59 +138,61 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             <h2>Run</h2>
             <span>{lastRun ? `run ${lastRun.run}` : 'from console state'}</span>
           </div>
-          <dl className="run-facts">
-            <div>
-              <dt>Scenario</dt>
-              <dd data-testid="run-scenario">{scenarioId}</dd>
-            </div>
-            <div>
-              <dt>Spacecraft</dt>
-              <dd>
-                {attribution?.satellite_id
-                  ? spacecraftDisplayName(attribution.satellite_id)
-                  : 'not identified'}
-              </dd>
-            </div>
-            <div>
-              <dt>Verdict</dt>
-              <dd data-testid="run-verdict">
-                {attribution
-                  ? `${verdictLabel(attribution.verdict)} · ${Math.round(attribution.confidence * 100)}% · rev ${attribution.revision ?? 0}${attribution.provisional ? ' (provisional)' : ''}`
-                  : 'none yet'}
-              </dd>
-            </div>
-            <div>
-              <dt>Actor</dt>
-              <dd>{attribution?.actor ?? 'n/a'}</dd>
-            </div>
-            <div>
-              <dt>Decision</dt>
-              <dd>
-                {decision ? `${actionLabel(decision.action)} · ${decision.authority} authority` : 'none yet'}
-              </dd>
-            </div>
-            {decision?.withheld_recovery ? (
-              <div className="run-facts__wide">
-                <dt>Withheld</dt>
-                <dd>{withheldRecoveryLabel(decision.withheld_recovery)}</dd>
+          <div className="run-panel__body">
+            <dl className="run-facts">
+              <div>
+                <dt>Scenario</dt>
+                <dd data-testid="run-scenario">{scenarioId}</dd>
               </div>
-            ) : null}
-            <div>
-              <dt>Model provider</dt>
-              <dd data-testid="run-provider">
-                {health ? health.provider : healthError ? `gateway ${healthError}` : 'loading…'}
-                {health?.llm ? <small> {health.llm}</small> : null}
-              </dd>
-            </div>
-            <div>
-              <dt>Knowledge base</dt>
-              <dd>{health?.kbEntries !== null && health?.kbEntries !== undefined ? `${health.kbEntries} entries` : 'n/a'}</dd>
-            </div>
-            <div>
-              <dt>Console</dt>
-              <dd>{signals.length} signals · {traces.length} trace lines</dd>
-            </div>
-          </dl>
+              <div>
+                <dt>Spacecraft</dt>
+                <dd>
+                  {attribution?.satellite_id
+                    ? spacecraftDisplayName(attribution.satellite_id)
+                    : 'not identified'}
+                </dd>
+              </div>
+              <div>
+                <dt>Verdict</dt>
+                <dd data-testid="run-verdict">
+                  {attribution
+                    ? `${verdictLabel(attribution.verdict)} · ${Math.round(attribution.confidence * 100)}% · rev ${attribution.revision ?? 0}${attribution.provisional ? ' (provisional)' : ''}`
+                    : 'none yet'}
+                </dd>
+              </div>
+              <div>
+                <dt>Actor</dt>
+                <dd>{attribution?.actor ?? 'n/a'}</dd>
+              </div>
+              <div>
+                <dt>Decision</dt>
+                <dd>
+                  {decision ? `${actionLabel(decision.action)} · ${decision.authority} authority` : 'none yet'}
+                </dd>
+              </div>
+              {decision?.withheld_recovery ? (
+                <div className="run-facts__wide">
+                  <dt>Withheld</dt>
+                  <dd>{withheldRecoveryLabel(decision.withheld_recovery)}</dd>
+                </div>
+              ) : null}
+              <div>
+                <dt>Model provider</dt>
+                <dd data-testid="run-provider">
+                  {health ? health.provider : healthError ? `gateway ${healthError}` : 'loading…'}
+                  {health?.llm ? <small> {health.llm}</small> : null}
+                </dd>
+              </div>
+              <div>
+                <dt>Knowledge base</dt>
+                <dd>{health?.kbEntries !== null && health?.kbEntries !== undefined ? `${health.kbEntries} entries` : 'n/a'}</dd>
+              </div>
+              <div>
+                <dt>Console</dt>
+                <dd>{signals.length} signals · {traces.length} trace lines</dd>
+              </div>
+            </dl>
+          </div>
         </section>
 
         <section className="panel run-panel run-panel--timings">
@@ -197,53 +200,56 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
             <h2>Stage timings</h2>
             <span>from the reasoning trace</span>
           </div>
-          <table className="run-timings" data-testid="run-timings">
-            <thead>
-              <tr>
-                <th>Stage</th>
-                <th>Since first anomaly</th>
-                <th>Stage duration</th>
-                <th>Note</th>
-              </tr>
-            </thead>
-            <tbody>
-              {timings.map((timing) => (
-                <tr key={timing.stage} data-stage={timing.stage}>
-                  <th scope="row">{timing.label}</th>
-                  <td className="num" data-testid={`timing-${timing.stage}-latency`}>
-                    {formatMs(timing.latencyMs)}
-                  </td>
-                  <td className="num" data-testid={`timing-${timing.stage}-stage`}>
-                    {formatMs(timing.stageMs)}
-                  </td>
-                  <td>
-                    {timing.note}
-                    {!capture && timing.traceIds.length ? (
-                      <code className="run-timings__ids" data-capture-hide>
-                        {timing.traceIds.join(', ')}
-                      </code>
-                    ) : null}
-                  </td>
+          <div className="run-panel__body">
+            <table className="run-timings run-timings--stages" data-testid="run-timings">
+              <thead>
+                <tr>
+                  <th>Stage</th>
+                  <th>Since first anomaly</th>
+                  <th>Stage duration</th>
+                  <th>Note</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-          <details className="run-more">
-            <summary>About these numbers</summary>
-            <p className="run-note">
-              Wall-clock milliseconds stamped by the engine on each trace: the time since the
-              cluster's first anomaly arrived and the emitting stage's own duration. Current
-              prototype timings; nothing is rounded to a target.
-            </p>
-          </details>
+              </thead>
+              <tbody>
+                {timings.map((timing) => (
+                  <tr key={timing.stage} data-stage={timing.stage}>
+                    <th scope="row">{timing.label}</th>
+                    <td className="num" data-testid={`timing-${timing.stage}-latency`}>
+                      {formatMs(timing.latencyMs)}
+                    </td>
+                    <td className="num" data-testid={`timing-${timing.stage}-stage`}>
+                      {formatMs(timing.stageMs)}
+                    </td>
+                    <td>
+                      {timing.note}
+                      {!capture && timing.traceIds.length ? (
+                        // One line; a long list is cut with an ellipsis and kept in the tooltip.
+                        <code
+                          className="run-timings__ids"
+                          data-capture-hide
+                          title={timing.traceIds.join(', ')}
+                        >
+                          {timing.traceIds.join(', ')}
+                        </code>
+                      ) : null}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <details className="run-more">
+              <summary>About these numbers</summary>
+              <p className="run-note">
+                Wall-clock milliseconds stamped by the engine on each trace: the time since the
+                cluster's first anomaly arrived and the emitting stage's own duration. Current
+                prototype timings; nothing is rounded to a target.
+              </p>
+            </details>
+          </div>
         </section>
 
         {!capture ? (
-          <section
-            className="panel run-panel run-panel--archive"
-            style={{ gridArea: 'bundle' }}
-            data-testid="run-archive"
-          >
+          <section className="panel run-panel run-panel--archive" data-testid="run-archive">
             <div className="panel__header">
               <h2>Archived runs</h2>
               <span>
@@ -254,45 +260,51 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
                     : 'loading…'}
               </span>
             </div>
-            {archive && archive.length ? (
-              <table className="run-timings" data-testid="run-archive-table">
-                <thead>
-                  <tr>
-                    <th>Recorded</th>
-                    <th>Run</th>
-                    <th>Scenario</th>
-                    <th>Model</th>
-                    <th>Verdict</th>
-                    <th>Decision</th>
-                    <th>Bundle</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {archive.map((row) => (
-                    <tr key={row.run_id} data-run-id={row.run_id}>
-                      <td>{recordedAt(row.created_at)}</td>
-                      <td>{row.run ?? 'n/a'}</td>
-                      <td>{row.scenario_id ?? 'n/a'}</td>
-                      <td>{[row.provider, row.model].filter(Boolean).join(' · ') || 'n/a'}</td>
-                      <td>
-                        {(row.verdict ?? 'none').replaceAll('_', ' ')} <small>{scoreLabel(row)}</small>
-                      </td>
-                      <td>{(row.decision ?? 'none').replaceAll('_', ' ')}</td>
-                      <td>
-                        <code>{row.run_id}</code>
-                      </td>
+            <div className="run-panel__body">
+              {archive && archive.length ? (
+                <table className="run-timings run-timings--archive" data-testid="run-archive-table">
+                  <thead>
+                    <tr>
+                      <th>Recorded</th>
+                      <th>Run</th>
+                      <th>Scenario</th>
+                      <th>Model</th>
+                      <th>Verdict</th>
+                      <th>Decision</th>
+                      <th>Bundle</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
-            ) : archive ? (
-              <p className="run-note">No bundles in the archive directory yet.</p>
-            ) : null}
-            <p className="run-note">
-              Each row is one bundle written by <code>make demo-run</code> and served read-only by
-              the gateway (<code>GET /archive/&lt;run-id&gt;</code> for the run record, scorecard,
-              timings and files). The bundle is the retention unit; nothing here is editable.
-            </p>
+                  </thead>
+                  <tbody>
+                    {archive.map((row) => {
+                      const model = [row.provider, row.model].filter(Boolean).join(' · ') || 'n/a'
+                      const scenario = row.scenario_id ?? 'n/a'
+                      return (
+                        <tr key={row.run_id} data-run-id={row.run_id}>
+                          <td>{recordedAt(row.created_at)}</td>
+                          <td>{row.run ?? 'n/a'}</td>
+                          <td title={scenario}>{scenario}</td>
+                          <td title={model}>{model}</td>
+                          <td>
+                            {(row.verdict ?? 'none').replaceAll('_', ' ')} <small>{scoreLabel(row)}</small>
+                          </td>
+                          <td>{(row.decision ?? 'none').replaceAll('_', ' ')}</td>
+                          <td title={row.run_id}>
+                            <code>{row.run_id}</code>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              ) : archive ? (
+                <p className="run-note">No bundles in the archive directory yet.</p>
+              ) : null}
+              <p className="run-note">
+                Each row is one bundle written by <code>make demo-run</code> and served read-only by
+                the gateway (<code>GET /archive/&lt;run-id&gt;</code> for the run record, scorecard,
+                timings and files). The bundle is the retention unit; nothing here is editable.
+              </p>
+            </div>
           </section>
         ) : null}
       </section>

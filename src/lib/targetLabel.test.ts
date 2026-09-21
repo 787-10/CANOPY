@@ -6,7 +6,9 @@ describe('targetLabel', () => {
     expect(targetLabel('ctb://megalith.demo/sim-01')).toBe('SIM-01')
     expect(targetLabel('SIM-01')).toBe('SIM-01')
     expect(targetLabel('comms')).toBe('Comms')
-    expect(targetLabel('brigade-c2')).toBe('Brigade C2')
+    expect(targetLabel('space-ops-c2')).toBe('Space Ops C2 (SIM)')
+    expect(targetLabel('SPACE-OPS-C2')).toBe('Space Ops C2 (SIM)')
+    expect(targetLabel('brigade-c2')).toBe('Brigade C2') // archived bundles
   })
 
   it('counts a run of signal or anomaly ids instead of printing them', () => {

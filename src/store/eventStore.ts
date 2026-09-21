@@ -235,10 +235,23 @@ export const useEventStore = create<EventState>()(
       if (held && (decision.revision ?? 0) < (held.revision ?? 0)) {
         return {}
       }
-      return {
+      const next = {
         decisions: pushBounded(state.decisions, decision),
         decisionsById: { ...state.decisionsById, [decision.id]: decision },
+      };
+      if (!held || (decision.revision ?? 0) <= (held.revision ?? 0)) {
+        return next;
       }
+      // A higher revision is a new decision under the same id, made on the
+      // final verdict: an Accept or Deny given to the earlier revision does
+      // not carry over, the operator confirms again (C21).
+      const acceptedDecisionIds = new Set(state.acceptedDecisionIds);
+      acceptedDecisionIds.delete(decision.id);
+      const deferredDecisionIds = new Set(state.deferredDecisionIds);
+      deferredDecisionIds.delete(decision.id);
+      const decisionStatusAt = { ...state.decisionStatusAt };
+      delete decisionStatusAt[decision.id];
+      return { ...next, acceptedDecisionIds, deferredDecisionIds, decisionStatusAt };
     }),
 
   ingestTrace: (trace) =>
