@@ -23,10 +23,17 @@ export type Tag = {
   explodeScale?: number
 }
 
+/** Primary structure: drawn and dimmed behind a selection, never tinted. */
+export type StructureMesh = THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial> & {
+  userData: { baseColor: number }
+}
+
 export type BuiltModel = {
   root: THREE.Group
   /** Subsystem-tagged meshes; primary structure is excluded. */
   meshes: TaggedMesh[]
+  /** Untagged meshes, kept so a selection can dim the whole body around it. */
+  structure: StructureMesh[]
   anchors: Partial<Record<Subsystem, THREE.Object3D>>
   cameraDistance: number
   /** Acknowledgement line for archive geometry. */
@@ -84,10 +91,13 @@ function meshFor(part: Part): TaggedMesh {
 export function buildProceduralModel(): BuiltModel {
   const root = new THREE.Group()
   const meshes: TaggedMesh[] = []
+  const structure: StructureMesh[] = []
   const anchors: Partial<Record<Subsystem, THREE.Object3D>> = {}
   for (const part of SIM01_PARTS) {
     const mesh = meshFor(part)
     if (part.subsystem === null) {
+      mesh.userData = { baseColor: mesh.material.color.getHex() }
+      structure.push(mesh as StructureMesh)
       if (part.kind === 'box') {
         const edges = new THREE.LineSegments(
           new THREE.EdgesGeometry(mesh.geometry),
@@ -112,7 +122,7 @@ export function buildProceduralModel(): BuiltModel {
     meshes.push(mesh)
     if (ANCHOR_PART[part.subsystem] === part.id) anchors[part.subsystem] = mesh
   }
-  return { root, meshes, anchors, cameraDistance: 8.2, source: 'procedural' }
+  return { root, meshes, structure, anchors, cameraDistance: 8.2, source: 'procedural' }
 }
 
 /** 0 = assembled, 1 = every subsystem part pushed out along its own radial. */
@@ -123,12 +133,23 @@ export function setExplode(built: BuiltModel, factor: number): void {
   }
 }
 
+/** Linear-light factor applied to everything outside a selection. Colours
+ *  are linear in three.js, so 0.1 reads as roughly a third of the brightness
+ *  on screen. The environment reflection is cut with it, or white dielectric
+ *  panels would stay bright regardless of their colour. */
+const DIMMED = 0.1
+const DIMMED_ENV = 0.2
+
+/** Apply health tints, then the selection: the chosen assembly glows in its
+ *  health colour (the neutral selection colour when nominal) and pulses,
+ *  while every other mesh, structure included, is dimmed so the highlight
+ *  reads on white and grey materials as well as dark ones. */
 export function applyHealth(
   built: BuiltModel,
   states: SubsystemState[],
   selected: Subsystem | null,
   palette: HealthPalette,
-  /** 0..1, drives the withheld-recovery pulse. */
+  /** 0..1, drives the withheld-recovery and selection pulses. */
   pulse: number,
 ): void {
   const byId = new Map(states.map((state) => [state.subsystem, state.health]))
@@ -147,14 +168,23 @@ export function applyHealth(
       material.emissiveIntensity =
         health === 'withheld-recovery' ? 0.18 + 0.3 * pulse : health === 'faulted' ? 0.32 : 0.22
     }
-    if (selected) {
-      if (tag.subsystem === selected) {
-        material.emissive.lerp(palette.selected, 0.6)
-        material.emissiveIntensity = Math.max(material.emissiveIntensity, 0.42)
-      } else {
-        material.color.multiplyScalar(0.82)
-      }
+    material.envMapIntensity = 1
+    if (!selected) continue
+    if (tag.subsystem === selected) {
+      const glow = health === 'nominal' ? palette.selected : palette[health]
+      material.color.lerp(glow, 0.3)
+      material.emissive.copy(glow)
+      material.emissiveIntensity = 0.5 + 0.35 * pulse
+    } else {
+      material.color.multiplyScalar(DIMMED)
+      material.emissiveIntensity = 0
+      material.envMapIntensity = DIMMED_ENV
     }
+  }
+  for (const mesh of built.structure) {
+    mesh.material.color.setHex(mesh.userData.baseColor)
+    mesh.material.envMapIntensity = selected ? DIMMED_ENV : 1
+    if (selected) mesh.material.color.multiplyScalar(DIMMED)
   }
 }
 

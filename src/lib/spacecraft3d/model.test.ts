@@ -64,14 +64,34 @@ describe('procedural spacecraft model', () => {
     disposeModel(built.root)
   })
 
-  it('selection brightens the selected subsystem and dims the rest', () => {
+  it('selection spotlights the chosen subsystem and dims everything else, structure included', () => {
     const built = buildProceduralModel()
     const palette = readHealthPalette()
     const comms = built.meshes.find((mesh) => (mesh.userData as Tag).partId === 'transponder')!
     const wing = built.meshes.find((mesh) => (mesh.userData as Tag).partId === 'wing_px')!
-    applyHealth(built, nominal, 'comms', palette, 0)
-    expect(comms.material.emissiveIntensity).toBeGreaterThan(0)
-    expect(wing.material.color.getHex()).not.toBe((wing.userData as Tag).baseColor)
+    const bus = built.structure[0]!
+    const brightness = (hex: number) => ((hex >> 16) & 255) + ((hex >> 8) & 255) + (hex & 255)
+
+    applyHealth(built, nominal, 'comms', palette, 0.5)
+    expect(comms.material.emissiveIntensity).toBeGreaterThan(0.5)
+    expect(brightness(wing.material.color.getHex())).toBeLessThan(brightness((wing.userData as Tag).baseColor) * 0.5)
+    expect(brightness(bus.material.color.getHex())).toBeLessThan(brightness(bus.userData.baseColor) * 0.5)
+
+    // Clearing the selection restores every colour.
+    applyHealth(built, nominal, null, palette, 0.5)
+    expect(comms.material.emissiveIntensity).toBe(0)
+    expect(wing.material.color.getHex()).toBe((wing.userData as Tag).baseColor)
+    expect(bus.material.color.getHex()).toBe(bus.userData.baseColor)
+    disposeModel(built.root)
+  })
+
+  it('a selected faulted subsystem glows in the fault colour, not the neutral one', () => {
+    const built = buildProceduralModel()
+    const palette = readHealthPalette()
+    const comms = built.meshes.find((mesh) => (mesh.userData as Tag).partId === 'transponder')!
+    const states = nominal.map((item) => (item.subsystem === 'comms' ? state('comms', 'faulted') : item))
+    applyHealth(built, states, 'comms', palette, 0)
+    expect(comms.material.emissive.getHex()).toBe(palette.faulted.getHex())
     disposeModel(built.root)
   })
 

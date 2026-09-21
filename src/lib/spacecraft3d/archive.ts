@@ -10,7 +10,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Subsystem } from '../spacecraftHealth'
-import { buildProceduralModel, type BuiltModel, type Tag, type TaggedMesh } from './model'
+import { buildProceduralModel, type BuiltModel, type StructureMesh, type Tag, type TaggedMesh } from './model'
 
 /** A welded, spatially connected piece of one mesh, in the normalised frame. */
 export type Component = { centre: THREE.Vector3; size: THREE.Vector3; tris: number }
@@ -231,8 +231,14 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
   root.updateMatrixWorld(true)
 
   const meshes: TaggedMesh[] = []
+  const structure: StructureMesh[] = []
   const groups = new Map<Subsystem, { host: TaggedMesh; hostVolume: number; box: THREE.Box3 }>()
   const origin = new THREE.Vector3()
+
+  const keepAsStructure = (mesh: THREE.Mesh, material: THREE.MeshStandardMaterial) => {
+    mesh.userData = { baseColor: material.color.getHex() }
+    structure.push(mesh as StructureMesh)
+  }
 
   const tagMesh = (mesh: THREE.Mesh, material: THREE.MeshStandardMaterial, subsystem: Subsystem) => {
     const tagged = mesh as unknown as TaggedMesh
@@ -277,7 +283,10 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
     material.name = source.name
     object.material = material
     const rule = classify(spec, object, material.name)
-    if (!rule) continue
+    if (!rule) {
+      keepAsStructure(object, material)
+      continue
+    }
     if (!rule.split) {
       tagMesh(object, material, rule.subsystem)
       continue
@@ -305,6 +314,7 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
       piece.scale.copy(object.scale)
       parent.add(piece)
       if (target) tagMesh(piece, pieceMaterial, target)
+      else keepAsStructure(piece, pieceMaterial)
     }
     parent.remove(object)
     object.geometry.dispose()
@@ -319,7 +329,7 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
     group.host.add(anchor)
     anchors[subsystem] = anchor
   }
-  return { root, meshes, anchors, cameraDistance: spec.cameraDistance, credit: spec.credit, source: 'archive' }
+  return { root, meshes, structure, anchors, cameraDistance: spec.cameraDistance, credit: spec.credit, source: 'archive' }
 }
 
 /** The body the page shows: the archive file, else the procedural fallback. */
