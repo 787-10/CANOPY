@@ -12,18 +12,9 @@ import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Subsystem } from '../spacecraftHealth'
 import { buildProceduralModel, type BuiltModel, type StructureMesh, type Tag, type TaggedMesh } from './model'
 
-/** A welded, spatially connected piece of one mesh, in the normalised frame. */
-export type Component = { centre: THREE.Vector3; size: THREE.Vector3; tris: number }
-
-type MapRule = {
-  by: 'material' | 'node'
-  match: RegExp
-  subsystem: Subsystem
-  /** When set, the mesh is split into spatial components and each is
-   *  assigned by this predicate (null = primary structure). Used where the
-   *  archive shares one material across several assemblies. */
-  split?: (component: Component) => Subsystem | null
-}
+/** A welded, spatially connected piece of one mesh, in the normalised frame
+ *  (arrays along X, +Y zenith, the bus along Z with the aft module at +Z). */
+export type Component = { centre: THREE.Vector3; size: THREE.Vector3; tris: number; material: string }
 
 export type ArchiveModelSpec = {
   file: string
@@ -32,59 +23,53 @@ export type ArchiveModelSpec = {
   fit: number
   /** Rotation applied after normalisation so the solar arrays run along X. */
   rotation: [number, number, number]
-  rules: MapRule[]
   cameraDistance: number
+  /** Which subsystem a component belongs to; null is primary structure. */
+  assign: (component: Component) => Subsystem | null
 }
 
+type Range = readonly [number, number]
+const within = (value: number, [low, high]: Range) => value >= low && value <= high
+const inBox = (c: Component, x: Range, y: Range, z: Range) =>
+  within(c.centre.x, x) && within(c.centre.y, y) && within(c.centre.z, z)
+const longest = (c: Component) => Math.max(c.size.x, c.size.y, c.size.z)
+
+/** The GPM Core Observatory body. Assignment is by region, read off the
+ *  geometry with each material lit in turn and from a dump of the largest
+ *  welded components (public/models/PROVENANCE.md), so a highlight lights a
+ *  body rather than the faces that happen to share a material. Materials
+ *  decide only the two subsystems that really are surfaces: solar cells and
+ *  radiator panels. Order matters; the first match wins. */
 export const ARCHIVE_MODEL: ArchiveModelSpec = {
   file: '/models/gpm.glb',
   credit: 'Geometry: NASA 3D Resources (public domain)',
   fit: 6.4,
   rotation: [0, Math.PI / 2, 0],
   cameraDistance: 8.6,
-  // Read off the archive body with each material lit in turn (normalised
-  // frame: arrays along X, +Y zenith). Shared materials split by component.
-  rules: [
-    // The white dish at the top of the mast is the high-gain antenna; the
-    // same material covers the instrument drum lower down.
-    {
-      by: 'material',
-      match: /^Dish-White-sm$/,
-      subsystem: 'comms',
-      split: (c) => (c.centre.y > 1.5 ? 'comms' : c.centre.y > 0.9 ? 'payload' : null),
-    },
-    // The tall thin mast shares grey with the launch-adapter ring and fittings.
-    {
-      by: 'material',
-      match: /^Grey-sm-notex$/,
-      subsystem: 'comms',
-      split: (c) => (c.size.y > 0.8 && Math.max(c.size.x, c.size.z) < 0.3 ? 'comms' : null),
-    },
-    // White rods: the array yokes run along X; the mast segments stand up.
-    {
-      by: 'material',
-      match: /^White-sm$/,
-      subsystem: 'power',
-      split: (c) => (c.size.x > 0.5 ? 'power' : c.size.y > 0.4 ? 'comms' : null),
-    },
-    // Two identical black boxes on the forward deck: the star-tracker stand-in.
-    {
-      by: 'material',
-      match: /^Mainbody-Black-sm$/,
-      subsystem: 'adcs',
-      split: (c) => (c.centre.z > 1.0 ? 'adcs' : null),
-    },
-    { by: 'material', match: /^Gold-fl-instruments-[345]$/, subsystem: 'adcs' },
-    // Spinning platform, its tripod truss, fittings, and the boxes under the bus.
-    { by: 'material', match: /^spinningdish-top$|^MainDishRails|^GreyLight|^Silver-sm-bottombox/, subsystem: 'payload' },
-    // The aft module behind the adapter ring.
-    { by: 'material', match: /^Mainbody-backsection/, subsystem: 'propulsion' },
-    // Large flat reflective panels on the bus sides.
-    { by: 'material', match: /^Reflector$/, subsystem: 'thermal' },
-    // One distinct black box on the forward face: the avionics-bay stand-in.
-    { by: 'material', match: /^Mainbody-Black-fl$/, subsystem: 'cdh' },
-    { by: 'material', match: /^Solar|^SolarPanel/, subsystem: 'power' },
-  ],
+  assign: (c) => {
+    // Radiator panels: the reflective flat panels on the bus sides. The same
+    // material under the bus is the skin of the radar boxes, not a radiator.
+    if (c.material === 'Reflector' && c.centre.y > -0.6) return 'thermal'
+    // Everything beyond the bus in X is a wing, its yoke or its hinges.
+    if (c.centre.x > -0.15 || c.centre.x < -1.55) return 'power'
+    // The high-gain antenna: the dish and upper mast above the bus, and the
+    // thin mast column down to the deck.
+    if (inBox(c, [-1.05, -0.5], [0.75, 2.2], [-0.62, 0.05])) return 'comms'
+    if (inBox(c, [-0.92, -0.68], [0.3, 0.75], [-0.32, -0.04]) && Math.min(c.size.x, c.size.z) < 0.3) return 'comms'
+    // The instrument: the spinning platform, its dish, drum and tripod on the
+    // forward end above the deck, and the radar boxes hung under the bus.
+    if (inBox(c, [-1.3, -0.45], [0.26, 1.5], [-1.4, -0.55])) return 'payload'
+    if (c.centre.y < -0.62 && within(c.centre.x, [-1.6, -0.15])) return 'payload'
+    // Small sensors on the aft deck: two identical boxes, a boom and fittings.
+    if (inBox(c, [-1.45, -0.45], [0.36, 0.95], [0.4, 1.36]) && longest(c) < 0.35) return 'adcs'
+    // The aft module behind the adapter ring, all of its skins.
+    if (inBox(c, [-1.5, -0.3], [-0.65, 0.8], [0.42, 1.4])) return 'propulsion'
+    // The avionics stand-in: the forward compartment under the instrument,
+    // and the mid-body equipment bay with its four boxes.
+    if (inBox(c, [-1.45, -0.3], [-0.62, 0.26], [-1.4, -0.55])) return 'cdh'
+    if (inBox(c, [-1.45, -0.3], [-0.4, 0.2], [-0.02, 0.37])) return 'cdh'
+    return null
+  },
 }
 
 let draco: DRACOLoader | null = null
@@ -99,29 +84,11 @@ function gltfLoader(): GLTFLoader {
   return loader
 }
 
-function nodeChain(object: THREE.Object3D): string {
-  const names: string[] = []
-  let current: THREE.Object3D | null = object
-  while (current) {
-    if (current.name) names.push(current.name)
-    current = current.parent
-  }
-  return names.join(' / ')
-}
-
-function classify(spec: ArchiveModelSpec, mesh: THREE.Mesh, materialName: string): MapRule | null {
-  const chain = nodeChain(mesh)
-  for (const rule of spec.rules) {
-    if (rule.match.test(rule.by === 'material' ? materialName : chain)) return rule
-  }
-  return null
-}
-
 /** Split a mesh into spatially connected components: vertices are welded by
  *  quantised world position (archive exports are flat-shaded and share no
  *  indices), triangles are unioned through welded vertices, and each
  *  component becomes its own geometry. Returns [geometry, component] pairs. */
-function splitComponents(mesh: THREE.Mesh, cell = 0.002): Array<[THREE.BufferGeometry, Component]> {
+function splitComponents(mesh: THREE.Mesh, material: string, cell = 0.002): Array<[THREE.BufferGeometry, Component]> {
   const geometry = mesh.geometry
   const position = geometry.attributes.position as THREE.BufferAttribute
   const index = geometry.index
@@ -199,7 +166,7 @@ function splitComponents(mesh: THREE.Mesh, cell = 0.002): Array<[THREE.BufferGeo
         sum.add(v)
       }
     }
-    out.push([piece, { centre: sum.divideScalar(tris.length * 3), size: box.getSize(new THREE.Vector3()), tris: tris.length }])
+    out.push([piece, { centre: sum.divideScalar(tris.length * 3), size: box.getSize(new THREE.Vector3()), tris: tris.length, material }])
   }
   return out
 }
@@ -282,21 +249,13 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
     const material = source.clone()
     material.name = source.name
     object.material = material
-    const rule = classify(spec, object, material.name)
-    if (!rule) {
-      keepAsStructure(object, material)
-      continue
-    }
-    if (!rule.split) {
-      tagMesh(object, material, rule.subsystem)
-      continue
-    }
-    // Shared material: split into welded components, each with its own mesh
-    // and material clone, assigned by the rule's predicate.
+    // Every mesh is split into welded components and each component is
+    // assigned on its own, so one archive material can serve several bodies
+    // and one body can gather several materials.
     const parent = object.parent ?? scene
     const byTarget = new Map<Subsystem | null, THREE.BufferGeometry[]>()
-    for (const [geometry, component] of splitComponents(object)) {
-      const target = rule.split(component)
+    for (const [geometry, component] of splitComponents(object, material.name)) {
+      const target = spec.assign(component)
       const list = byTarget.get(target)
       if (list) list.push(geometry)
       else byTarget.set(target, [geometry])
@@ -308,7 +267,7 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
       const pieceMaterial = material.clone()
       pieceMaterial.name = material.name
       const piece = new THREE.Mesh(merged, pieceMaterial)
-      piece.name = `${object.name || material.name}·${target ?? 'structure'}`
+      piece.name = `${material.name}·${target ?? 'structure'}`
       piece.position.copy(object.position)
       piece.quaternion.copy(object.quaternion)
       piece.scale.copy(object.scale)
@@ -324,6 +283,16 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
 
   const anchors: Partial<Record<Subsystem, THREE.Object3D>> = {}
   for (const [subsystem, group] of groups) {
+    if (subsystem !== 'power') {
+      const host = group.host
+      const parent = host.parent ?? root
+      const dir = parent.worldToLocal(group.box.getCenter(new THREE.Vector3())).sub(parent.worldToLocal(origin.clone()))
+      if (dir.lengthSq() > 0) dir.normalize()
+      for (const mesh of meshes) {
+        const tag = mesh.userData as Tag
+        if (tag.subsystem === subsystem) tag.dir.copy(dir)
+      }
+    }
     const anchor = new THREE.Object3D()
     anchor.position.copy(group.host.worldToLocal(group.box.getCenter(new THREE.Vector3())))
     group.host.add(anchor)

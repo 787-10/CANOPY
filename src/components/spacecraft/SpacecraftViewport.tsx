@@ -170,6 +170,8 @@ export default function SpacecraftViewport(props: SpacecraftViewportProps) {
       frameCamera(stage, built)
       setCredit(built.credit ?? null)
       setStatus(fallback ? 'fallback' : 'ready')
+      // Dev-only handle for the mapping scripts that read the body's geometry.
+      if (import.meta.env.DEV) (window as unknown as { __spacecraftBuilt?: BuiltModel }).__spacecraftBuilt = built
     })
 
     let frame = 0

@@ -57,31 +57,32 @@ alternate during the prototype and not adopted; see the CANOPY branch
 ## Subsystem mapping
 
 MEGALITH's seven subsystems are attached in `src/lib/spacecraft3d/archive.ts`.
-The archive files carry no functional part names, so the map was read off
-the geometry with each material lit in turn (scripts kept on the CANOPY branch `prototype/cad-variants`). Where the archive shares one material across assemblies,
-the mesh is split into spatially connected components (vertices welded by
-position, since the exports share no indices) and each component is assigned
-by position or shape:
+The archive file carries artist material names, not part names, and one
+material spans several assemblies, so assignment is by region rather than by
+material: every mesh is split into spatially connected components (vertices
+welded by position, since the export shares no indices) and each component
+is claimed by the region it sits in, so a highlight lights a body rather
+than the faces that happen to share a material. Materials decide only the
+two subsystems that really are surfaces. The regions were read off the
+geometry with each material lit in turn and from a dump of the largest
+components (scripts on the CANOPY branch `prototype/cad-variants`). Frame:
+arrays along X, +Y zenith, the bus along Z with the aft module at +Z.
 
-| GPM material | Reading | Subsystem |
+| Region | Reading | Subsystem |
 | --- | --- | --- |
-| `Dish-White-sm`, components above the bus | The dish at the top of the mast | comms (high-gain antenna) |
-| `Dish-White-sm`, drum-height components | Instrument drum cover | payload |
-| `Grey-sm-notex`, the one tall thin component | The antenna mast | comms |
-| `White-sm`, long horizontal rods | Array yokes | power |
-| `White-sm`, vertical rods | Mast segments | comms |
-| `Solar-*`, `SolarPanel*` | Array cells and backs | power |
-| `spinningdish-top`, `MainDishRails-smds`, `GreyLight-*`, `Silver-sm-bottombox*` | Spinning platform, its tripod, fittings, boxes under the bus | payload |
-| `Mainbody-backsection-*` | Aft module behind the adapter ring | propulsion |
-| `Reflector` | Large flat reflective side panels | thermal |
-| `Mainbody-Black-sm`, forward-deck components | Two identical boxes | adcs (star-tracker stand-in) |
-| `Gold-fl-instruments-3/4/5` | Small deck-mounted sensors | adcs |
-| `Mainbody-Black-fl` | One distinct box on the forward face | cdh (avionics stand-in) |
-| everything else | Structure, MLI, fittings | never tinted |
+| Beyond the bus in X | Solar wings, yokes, hinges | power |
+| `Reflector` material above the bus underside | Flat reflective panels on the bus | thermal |
+| Above the bus near its middle, plus the thin column to the deck | High-gain dish and its mast | comms |
+| Forward end above the deck | Spinning platform, dish, drum, tripod | payload |
+| Under the bus | Radar boxes | payload |
+| Small parts on the aft deck | Two identical boxes, a boom, fittings | adcs (star-tracker stand-in) |
+| Aft module behind the adapter ring | All of its skins and the ring | propulsion |
+| Forward compartment under the instrument; mid-body bay | Avionics stand-in | cdh |
+| Everything else | Bus mid-body structure | never tinted |
 
 The map is a reading of an artist's model, not an engineering drawing; it is
-good enough to light the right assembly for a verdict and no more. When the
-file cannot be loaded the page falls back to a procedural reference body
+good enough to light the right body for a verdict and no more. When the file
+cannot be loaded the page falls back to a procedural reference body
 (`src/lib/spacecraft3d/parts.ts`).
 
 ## Draco decoder
