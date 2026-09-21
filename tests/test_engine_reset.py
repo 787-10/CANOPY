@@ -412,6 +412,28 @@ def test_reset_reports_what_it_cleared_and_empties_the_caches(client: TestClient
     assert client.app.state.replay_task is None
 
 
+def test_reset_tells_every_connected_console(client: TestClient) -> None:
+    """``POST /reset`` sends a ``reset`` control envelope to every WebSocket
+    (spec §10, 1.4.2); the console clears its store on it, so a run started
+    by another client never mixes with the one before it."""
+    with client.websocket_connect("/ws") as ws:
+        response = client.post("/reset")
+        assert response.status_code == 200
+        kinds: list[str | None] = []
+        deadline = time.time() + 10.0
+        while time.time() < deadline:
+            envelope = ws.receive_json()
+            kinds.append(envelope.get("kind"))
+            if envelope.get("kind") == "reset":
+                break
+        else:
+            pytest.fail(f"no reset envelope within 10 s; kinds={kinds}")
+        assert envelope["topic"] == "control.reset"
+        assert set(envelope["data"]) == {"ts", "replay_cancelled", "cleared"}
+        assert envelope["data"]["ts"].endswith("Z")
+        assert envelope["data"]["cleared"].keys() == response.json()["cleared"].keys()
+
+
 def test_reset_cancels_an_in_flight_replay(client: TestClient) -> None:
     # A crawl: the first pause is capped at 100 s, so the replay is mid-flight.
     response = client.post("/scenarios/beat47.jsonl/replay?speed=0.001&max_delay_s=100")

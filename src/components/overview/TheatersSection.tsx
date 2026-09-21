@@ -17,9 +17,10 @@ const CLOCK_MS = 30_000
  *  pin until "Follow latest" clears it. */
 export function TheatersSection({ open, onToggle }: TheatersSectionProps) {
   const attributions = useEventStore((s) => s.attributions)
+  const anomalies = useEventStore((s) => s.anomalies)
   const pinned = useEventStore((s) => s.pinnedSatelliteId)
   const pinEpisode = useEventStore((s) => s.pinEpisode)
-  const incidents = deriveIncidents(attributions)
+  const incidents = deriveIncidents(attributions, anomalies)
   const [now, setNow] = useState(() => Date.now())
 
   // Relative times drift; refresh them on a slow clock while the section is open.

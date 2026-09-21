@@ -7,7 +7,8 @@ Endpoints:
 * ``POST /scenarios/{name}/replay``    — start a ScenarioReplayService for that beat
                                          (``speed``, ``max_delay_s`` query parameters)
 * ``POST /reset``                      — cancel a running replay and clear every
-                                         service's in-process state between runs
+                                         service's in-process state between runs Every connected WebSocket then receives a ``reset`` control envelope
+  (``{"kind": "reset", "topic": "control.reset", ...}``) so consoles clear their state.
 * ``POST /signals``                    — accept a Signal and publish to the bus
 * ``GET  /schemas``                    — JSON Schema of every event kind, from the
                                          pydantic models (``canopy.api.schemas``)
@@ -38,6 +39,7 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, get_args
@@ -272,6 +274,16 @@ async def _lifespan(app: FastAPI):
         await engine.bus.close()
 
 
+async def _broadcast(clients: set[WebSocket], envelope: dict[str, Any]) -> None:
+    """Send one envelope to every connected client; a failed send drops the client."""
+    # Iterate over a snapshot — clients can disconnect mid-fanout.
+    for ws in list(clients):
+        try:
+            await ws.send_json(envelope)
+        except Exception:
+            clients.discard(ws)
+
+
 async def _fanout(bus, pattern: str, clients: set[WebSocket]) -> None:
     """Forward every bus event matching *pattern* to every connected client."""
     async for topic, event in bus.subscribe(pattern):
@@ -282,12 +294,18 @@ async def _fanout(bus, pattern: str, clients: set[WebSocket]) -> None:
                 "fanout: dropping unregistered event on %s: %r", topic, type(event)
             )
             continue
-        # Iterate over a snapshot — clients can disconnect mid-fanout.
-        for ws in list(clients):
-            try:
-                await ws.send_json(envelope)
-            except Exception:
-                clients.discard(ws)
+        await _broadcast(clients, envelope)
+
+
+def control_envelope(kind: str, data: dict[str, Any]) -> dict[str, Any]:
+    """A gateway control message in the fan-out envelope shape (spec §10, 1.4.2).
+
+    Not a bus event: it describes this gateway's own state. ``control.*``
+    topics are reserved for it; the only kind so far is ``reset``, which every
+    console answers by clearing its event store so a run started by another
+    client never mixes with the run before it.
+    """
+    return {"kind": kind, "topic": f"control.{kind}", "data": data}
 
 
 def create_app(
@@ -458,6 +476,19 @@ def create_app(
             cleared = await reset_engine(app.state.engine)
             cleared["operator"] = {"decisions": len(app.state.operator_decisions)}
             app.state.operator_decisions.clear()
+            # Tell every console, inside the lock so the marker precedes any
+            # event of the replay that follows on the same connection.
+            await _broadcast(
+                app.state.clients,
+                control_envelope(
+                    "reset",
+                    {
+                        "ts": datetime.now(UTC).isoformat().replace("+00:00", "Z"),
+                        "replay_cancelled": cancelled,
+                        "cleared": cleared,
+                    },
+                ),
+            )
         log.info("engine reset (replay_cancelled=%s): %s", cancelled, cleared)
         return {"status": "reset", "replay_cancelled": cancelled, "cleared": cleared}
 

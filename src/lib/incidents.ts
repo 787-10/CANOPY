@@ -4,8 +4,9 @@ import { utcClock } from './timing'
 // it could not key to a satellite but narrowed to a candidate set (closely
 // spaced objects, docs/INTERFACE-SPEC.md §5.4). Pure functions over the
 // store's attribution buffer so the list has a unit test for every shape.
-import type { Attribution } from '../types/canopy'
+import type { Anomaly, Attribution } from '../types/canopy'
 import { spacecraftDisplayName } from './commanderLanguage'
+import { selectEpisodeAttribution } from './episode'
 
 export type Incident = {
   /** Stable row key: the satellite id, or `unresolved:<attribution id>`. */
@@ -14,38 +15,41 @@ export type Incident = {
   satelliteId: string | null
   /** Operator-facing name: `SIM-01`, or `SIM-01 or SIM-02, unresolved`. */
   label: string
-  /** The highest revision (then latest ts) the cluster has published. */
+  /** The satellite's episode attribution: the same selection the status
+   *  line and the pages make (`selectEpisodeAttribution` scoped to the
+   *  satellite), so the row never disagrees with the rest of the screen. */
   attribution: Attribution
   unresolved: boolean
 }
 
-const newer = (a: Attribution, b: Attribution): boolean => {
-  const rev = a.revision ?? 0
-  const bestRev = b.revision ?? 0
-  if (rev !== bestRev) return rev > bestRev
-  return a.ts.localeCompare(b.ts) >= 0
-}
-
 /** Rows for the Theaters section, newest activity first. Attributions with a
- *  satellite id are grouped by it and the highest revision wins; an
- *  attribution with no satellite id but a candidate set is its own row; an
- *  attribution with neither (the global space-weather cluster) is not an
+ *  satellite id are grouped by it and the row shows that satellite's episode
+ *  attribution (INTERFACE-SPEC §5.0: the attribution covering the latest bus
+ *  anomaly, then the highest revision), the same pick the status line makes.
+ *  Revision numbers restart with every run, so "the highest revision the
+ *  satellite ever published" would name an earlier run when a console holds
+ *  two. An attribution with no satellite id but a candidate set is its own
+ *  row; one with neither (the global space-weather cluster) is not an
  *  incident and is left out. */
-export function deriveIncidents(attributions: readonly Attribution[]): Incident[] {
-  const bySatellite = new Map<string, Attribution>()
+export function deriveIncidents(
+  attributions: readonly Attribution[],
+  anomalies: readonly Anomaly[] = [],
+): Incident[] {
+  const satelliteIds: string[] = []
   const unresolved: Attribution[] = []
   for (const attribution of attributions) {
     const satelliteId = attribution.satellite_id ?? null
     if (satelliteId) {
-      const held = bySatellite.get(satelliteId)
-      if (!held || newer(attribution, held)) bySatellite.set(satelliteId, attribution)
+      if (!satelliteIds.includes(satelliteId)) satelliteIds.push(satelliteId)
       continue
     }
     if (attribution.candidate_satellite_ids?.length) unresolved.push(attribution)
   }
 
   const rows: Incident[] = []
-  for (const [satelliteId, attribution] of bySatellite) {
+  for (const satelliteId of satelliteIds) {
+    const attribution = selectEpisodeAttribution(attributions, anomalies, satelliteId)
+    if (!attribution) continue
     rows.push({
       key: satelliteId,
       satelliteId,

@@ -297,6 +297,16 @@ export type UIEvent = {
   recommendation?: Recommendation | null
 }
 
+/** Gateway control envelope sent to every connected console when
+ *  `POST /reset` has run (docs/INTERFACE-SPEC.md §10, 1.4.2). Not a bus
+ *  event: the console clears its event store on it so the run that follows,
+ *  started by any client, never mixes with the run before it. */
+export type ResetMarker = {
+  ts: string
+  replay_cancelled?: boolean
+  cleared?: Record<string, Record<string, number>>
+}
+
 export type CanopyMessage =
   | { type: 'signal'; topic?: string; data: Signal }
   | { type: 'anomaly'; topic?: string; data: Anomaly }
@@ -305,6 +315,7 @@ export type CanopyMessage =
   | { type: 'ui_event'; topic?: string; data: UIEvent }
   | { type: 'trace'; topic?: string; data: ReasoningTrace }
   | { type: 'embedding'; topic?: string; data: OsintEmbeddingSnapshot }
+  | { type: 'reset'; topic?: string; data: ResetMarker }
 
 export type CanopySocketState = {
   signals: Signal[]
@@ -357,3 +368,4 @@ export type WSEnvelope =
   | { topic: string; kind: 'ui_event'; data: UIEvent }
   | { topic: string; kind: 'trace'; data: ReasoningTrace }
   | { topic: string; kind: 'embedding'; data: OsintEmbeddingSnapshot }
+  | { topic: string; kind: 'reset'; data: ResetMarker }

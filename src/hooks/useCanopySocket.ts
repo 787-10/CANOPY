@@ -62,6 +62,7 @@ function normalizeMessage(value: unknown): CanopyMessage | null {
       'ui_event',
       'trace',
       'embedding',
+      'reset',
     ].includes(discriminator)
   ) {
     return null
@@ -100,6 +101,12 @@ function ingestIntoStore(message: CanopyMessage): void {
     case 'trace':
       store.ingestTrace(message.data as ReasoningTrace)
       return
+    case 'reset':
+      // The gateway cleared its engine (POST /reset from this console, a
+      // second console or the film script): drop every event of the run
+      // before so the next run's verdicts are the only ones on screen.
+      store.reset()
+      break
     case 'embedding':
       store.ingestEmbeddingSnapshot(message.data as OsintEmbeddingSnapshot)
       return
@@ -127,6 +134,8 @@ function mirrorMessage(state: CanopySocketState, message: CanopyMessage): Canopy
         ...state,
         traces: [...state.traces, message.data as ReasoningTrace].slice(-500),
       }
+    case 'reset':
+      return { ...initialState, isConnected: state.isConnected, lastError: state.lastError }
     case 'embedding':
       // Snapshots replace wholesale; the store holds the current one.
       return state

@@ -207,6 +207,38 @@ describe('useCanopySocket', () => {
     expect(result.current).toBe(before)
   })
 
+  it('clears the global store and the local mirror on a reset control envelope', () => {
+    const { result } = renderHook(() => useCanopySocket(TEST_URL))
+    const signal = makeSignal('sig-1')
+    const attribution = makeAttribution('att-1')
+    act(() => {
+      MockWebSocket.last!.emitOpen()
+      MockWebSocket.last!.emitMessage({ kind: 'signal', data: signal })
+      MockWebSocket.last!.emitMessage({ kind: 'attribution', data: attribution })
+    })
+    useEventStore.getState().pinEpisode(attribution.satellite_id ?? 'ctb://megalith.demo/sim-01')
+    expect(result.current.signals).toHaveLength(1)
+    expect(useEventStore.getState().attributions).toHaveLength(1)
+
+    // The gateway reset its engine (POST /reset from any client): the run
+    // before is gone from this console, the connection state is kept.
+    act(() =>
+      MockWebSocket.last!.emitMessage({
+        kind: 'reset',
+        topic: 'control.reset',
+        data: { ts: '2026-09-21T00:00:00Z', replay_cancelled: false, cleared: {} },
+      }),
+    )
+
+    expect(result.current.signals).toEqual([])
+    expect(result.current.attributions).toEqual([])
+    expect(result.current.isConnected).toBe(true)
+    const store = useEventStore.getState()
+    expect(store.signals).toEqual([])
+    expect(store.attributions).toEqual([])
+    expect(store.pinnedSatelliteId).toBeNull()
+  })
+
   it('accepts the legacy {type:...} envelope identically to {kind:...}', () => {
     const { result } = renderHook(() => useCanopySocket(TEST_URL))
     const signal = makeSignal('legacy-1')

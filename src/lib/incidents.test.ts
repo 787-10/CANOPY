@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest'
 import { deriveIncidents, relativeTime } from './incidents'
-import { makeAttribution, SIM01 } from '../test/factories'
+import { selectEpisodeAttribution } from './episode'
+import { makeAnomaly, makeAttribution, SIM01 } from '../test/factories'
 
 const SIM02 = 'ctb://megalith.demo/sim-02'
 
 describe('deriveIncidents', () => {
-  it('groups attributions by satellite and keeps the highest revision per satellite', () => {
+  it("groups attributions by satellite and keeps the episode's highest revision per satellite", () => {
     const rows = deriveIncidents([
       makeAttribution('a1', { satellite_id: SIM01, revision: 1, provisional: false, verdict: 'hostile_external', ts: '2026-09-20T15:05:00Z' }),
       makeAttribution('a1', { satellite_id: SIM01, revision: 0, provisional: true, verdict: 'unknown', ts: '2026-09-20T15:06:00Z' }),
@@ -25,6 +26,29 @@ describe('deriveIncidents', () => {
     ])
     expect(rows).toHaveLength(1)
     expect(rows[0].attribution.id).toBe('new')
+  })
+
+  it('follows the episode the rest of the screen shows, not a higher revision from an earlier run', () => {
+    // Run B (hostile) reached revision 2 on SIM-01; run A (internal fault)
+    // came after it and ended at revision 1. The status line reads the
+    // attribution covering the latest bus anomaly; the row must agree.
+    const runB = makeAttribution('run-b', {
+      satellite_id: SIM01, revision: 2, verdict: 'hostile_external',
+      anomaly_ids: ['anom-b'], ts: '2026-09-20T15:13:42Z',
+    })
+    const runA = makeAttribution('run-a', {
+      satellite_id: SIM01, revision: 1, verdict: 'internal_fault',
+      anomaly_ids: ['anom-a'], ts: '2026-09-20T15:13:00Z',
+    })
+    const anomalies = [
+      makeAnomaly('anom-b', { kind: 'bus_link_margin', ts: '2026-09-20T15:13:42Z' }),
+      makeAnomaly('anom-a', { kind: 'bus_link_margin', ts: '2026-09-20T15:13:50Z' }),
+    ]
+    const rows = deriveIncidents([runB, runA], anomalies)
+    expect(rows).toHaveLength(1)
+    expect(rows[0].attribution.id).toBe('run-a')
+    expect(rows[0].attribution.verdict).toBe('internal_fault')
+    expect(rows[0].attribution).toBe(selectEpisodeAttribution([runB, runA], anomalies))
   })
 
   it('adds one unresolved row per attribution with candidates and no satellite id', () => {
