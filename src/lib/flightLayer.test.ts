@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId } from './flightLayer'
+import { LABEL_OFFSETS, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
 import type { N2YOLayerState } from './n2yoSatelliteLayer'
 import type { N2YOPositionCache } from './positionCache'
 
@@ -64,5 +64,16 @@ describe('flight readout', () => {
     const noSite = flightBodyFor({ ...layer, cache: { ...cache, synthetic: { ...cache.synthetic, pass: undefined } } })!
     expect(noSite.site).toBeNull()
     expect(flightReadout(noSite, passMs)).toBeNull()
+  })
+})
+
+describe('label placement for N bodies', () => {
+  it('cycles above, below, right, left so closely-spaced marks keep their names apart', () => {
+    expect(LABEL_OFFSETS).toHaveLength(4)
+    expect([labelOffsetFor(0).x, labelOffsetFor(0).y]).toEqual([0, -42])
+    expect([labelOffsetFor(1).x, labelOffsetFor(1).y]).toEqual([0, 46])
+    expect(labelOffsetFor(2).x).toBeGreaterThan(0)
+    expect(labelOffsetFor(3).x).toBeLessThan(0)
+    expect([labelOffsetFor(4).x, labelOffsetFor(4).y]).toEqual([0, -42])
   })
 })

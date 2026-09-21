@@ -13,6 +13,9 @@ export type SyntheticSatelliteConfig = {
   synthetic: true
   /** `ctb://` spacecraft id the track belongs to (docs/INTERFACE-SPEC.md §1). */
   satelliteId: string
+  /** Drawn in flight (and in pass view only when the stream names it): the
+   *  closely-spaced object must not appear pinned in the storyboard's frames. */
+  flightOnly?: boolean
 }
 
 // Position files are produced by the demo-scenario lane in the exact shape
@@ -33,6 +36,18 @@ export const SYNTHETIC_SATELLITES: SyntheticSatelliteConfig[] = [
     cacheUrl: '/orbital/sim02_positions.json',
     synthetic: true,
     satelliteId: 'ctb://megalith.demo/sim-02',
+  },
+  {
+    // The closely-spaced object (docs/MEGALITH-Flight-Plan.md stage 5): a
+    // second body in SIM-01's plane 3 s behind it, about 2.4° apart from
+    // Site A at the pass.
+    family: 'SIM',
+    id: 900003,
+    label: 'OBJ-1',
+    cacheUrl: '/orbital/obj01_positions.json',
+    synthetic: true,
+    satelliteId: 'ctb://megalith.demo/obj-01',
+    flightOnly: true,
   },
 ]
 

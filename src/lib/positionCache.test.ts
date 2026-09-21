@@ -25,12 +25,15 @@ afterEach(() => {
 })
 
 describe('synthetic satellite layer entries', () => {
-  it('registers SIM-01 and SIM-02 with synthetic ids, display names and the demo position files', () => {
-    expect(SYNTHETIC_SATELLITES.map((satellite) => satellite.label)).toEqual(['SIM-01', 'SIM-02'])
+  it('registers SIM-01, SIM-02 and the flight-only OBJ-1 with synthetic ids, display names and the demo position files', () => {
+    expect(SYNTHETIC_SATELLITES.map((satellite) => satellite.label)).toEqual(['SIM-01', 'SIM-02', 'OBJ-1'])
     expect(SYNTHETIC_SATELLITES.map((satellite) => satellite.cacheUrl)).toEqual([
       '/orbital/sim01_positions.json',
       '/orbital/sim02_positions.json',
+      '/orbital/obj01_positions.json',
     ])
+    // Only the closely-spaced object stays out of the pinned frame by default.
+    expect(SYNTHETIC_SATELLITES.filter((satellite) => satellite.flightOnly).map((s) => s.label)).toEqual(['OBJ-1'])
     for (const satellite of SYNTHETIC_SATELLITES) {
       expect(satellite.synthetic).toBe(true)
       expect(satellite.family).toBe('SIM')
@@ -63,7 +66,7 @@ describe('loadN2YOPositionCaches — missing file guard', () => {
     vi.stubGlobal('fetch', fetchMock)
 
     const result = await loadN2YOPositionCaches(SYNTHETIC_SATELLITES)
-    expect(result.loaded.map(({ config }) => config.label)).toEqual(['SIM-01'])
+    expect(result.loaded.map(({ config }) => config.label)).toEqual(['SIM-01', 'OBJ-1'])
     expect(result.loaded[0].cache.track).toHaveLength(2)
     expect(result.missing.map(({ config }) => config.label)).toEqual(['SIM-02'])
     expect(result.missing[0].error).toMatch(/synthetic track not present: HTTP 404/)
@@ -80,9 +83,10 @@ describe('loadN2YOPositionCaches — missing file guard', () => {
     )
     const result = await loadN2YOPositionCaches(SYNTHETIC_SATELLITES)
     expect(result.loaded).toEqual([])
-    expect(result.missing).toHaveLength(2)
+    expect(result.missing).toHaveLength(3)
     expect(result.missing[0].error).toMatch(/did not contain track points/)
     expect(result.missing[1].error).toBe('offline')
+    expect(result.missing[2].error).toBe('offline')
   })
 
   it('caches a parsed file so a second fetch of the same url does not hit the network', async () => {

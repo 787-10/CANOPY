@@ -14,6 +14,7 @@ const load = (name: string): N2YOPositionCache =>
 
 const SIM01 = load('sim01')
 const SIM02 = load('sim02')
+const OBJ1 = load('obj01')
 const SITE_A = { lat: -27.5, lng: 128.5, altM: 310 }
 
 // From the generator, python: tracks._gmst_rad(spec.pass_time), spec._raan_rad(),
@@ -21,6 +22,11 @@ const SITE_A = { lat: -27.5, lng: 128.5, altM: 310 }
 const PY = {
   sim01: { gmst: 3.9535542996500417, raan: 6.126787942532909, u0: -0.48458454065884854, plus1000: [34.70871654680497, 115.0361804579635] },
   sim02: { gmst: 3.9666801074207183, raan: 6.2487352713657875, u0: -0.47046521021360765, plus1000: [35.507052123051224, 121.11131605238711] },
+  // OBJ-1: SIM-01's plane, 3 s behind (tracks.in_plane_follower). Constants from an
+  // OrbitSpec rebuilt from the file's own pass point (pass_lng is written to 6 decimals,
+  // so the node differs from the generator's exact spec by 4e-9 rad; the port reproduces
+  // the file, which is what it is given).
+  obj01: { gmst: 3.953773061948909, raan: 6.126787945263332, u0: -0.48458454065884854, plus1000: [34.70871654680497, 115.02364645895693] },
 }
 
 const orbitOf = (cache: N2YOPositionCache) => {
@@ -53,6 +59,7 @@ describe('gmst and modulo', () => {
 describe.each([
   ['SIM-01', SIM01, PY.sim01],
   ['SIM-02', SIM02, PY.sim02],
+  ['OBJ-1', OBJ1, PY.obj01],
 ])('circular orbit port: %s', (_name, cache, py) => {
   const orbit = orbitOf(cache)
 
@@ -118,5 +125,23 @@ describe('footprint', () => {
     expect(footprintRadiusKm(550, 0)).toBeCloseTo(2557, 0)
     expect(footprintRadiusKm(550, 5)).toBeCloseTo(2058, 0)
     expect(footprintRadiusKm(550, 10)).toBeCloseTo(1664, 0)
+  })
+})
+
+describe('the closely-spaced pair', () => {
+  it('OBJ-1 shares SIM-01\'s plane and trails it by 3 s', () => {
+    const lead = orbitOf(SIM01)
+    const follow = orbitOf(OBJ1)
+    // The file rounds the pass point to 6 decimals: the planes agree to 1e-8 rad.
+    expect(Math.abs(follow.raan - lead.raan)).toBeLessThan(1e-8)
+    expect(follow.argumentOfLatitudeAtPass).toBeCloseTo(lead.argumentOfLatitudeAtPass, 12)
+    expect(follow.elements.passUtcMs - lead.elements.passUtcMs).toBe(3000)
+    // From Site A at SIM-01's pass the two are about 2.5 degrees apart.
+    const at = lead.elements.passUtcMs
+    const a = lookAngles(lead.subpointAt(at), SITE_A)
+    const b = lookAngles(follow.subpointAt(at), SITE_A)
+    expect(a.elevationDeg).toBeCloseTo(90, 0)
+    expect(90 - b.elevationDeg).toBeGreaterThan(2)
+    expect(90 - b.elevationDeg).toBeLessThan(3)
   })
 })

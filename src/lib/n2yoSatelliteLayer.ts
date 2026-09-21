@@ -41,6 +41,8 @@ export type N2YOSatelliteConfig = {
   synthetic?: boolean
   /** `ctb://` spacecraft id the track belongs to (docs/INTERFACE-SPEC.md §1). */
   satelliteId?: string
+  /** Loaded only for flight, or when the stream names it (syntheticSatellites.ts). */
+  flightOnly?: boolean
 }
 
 export type N2YOSatelliteFamily =

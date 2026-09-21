@@ -91,7 +91,22 @@ export function setLayerEntitiesShown(viewer: Viewer, layer: N2YOLayerState, sho
   }
 }
 
-export function addFlightBody(viewer: Viewer, body: FlightBody): void {
+/** Where a body's name sits relative to its mark, by the body's index: two
+ *  closely-spaced objects (SIM-01 and OBJ-1, 23 km apart) would otherwise
+ *  print one label over the other. Above, below, right, left, then repeat. */
+export const LABEL_OFFSETS: readonly (readonly [number, number])[] = [
+  [0, -42],
+  [0, 46],
+  [64, 0],
+  [-64, 0],
+]
+
+export function labelOffsetFor(index: number): Cartesian2 {
+  const [x, y] = LABEL_OFFSETS[index % LABEL_OFFSETS.length]!
+  return new Cartesian2(x, y)
+}
+
+export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void {
   removeFlightBody(viewer, body)
   const scratch: Subpoint = { lat: 0, lng: 0, altKm: 0 }
   const position = new CallbackPositionProperty((time, result) => {
@@ -119,7 +134,7 @@ export function addFlightBody(viewer: Viewer, body: FlightBody): void {
       disableDepthTestDistance: 0,
       fillColor: Color.WHITE,
       font: MAP_FONT,
-      pixelOffset: new Cartesian2(0, -42),
+      pixelOffset: labelOffsetFor(index),
       scaleByDistance: new NearFarScalar(1500000, 1, 25000000, 0.58),
       show: true,
       showBackground: true,

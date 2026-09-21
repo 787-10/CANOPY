@@ -1058,7 +1058,7 @@ export function CesiumGlobe({
   const ensureN2YOSatellitesLoaded = useCallback(
     (
       normalizedSelection: SatelliteFamilySelection,
-      options: { flyTo?: boolean } = {},
+      options: { flyTo?: boolean; includeFlightOnly?: boolean } = {},
     ) => {
       const viewer = viewerRef.current
       if (!viewer || viewer.isDestroyed()) {
@@ -1068,10 +1068,13 @@ export function CesiumGlobe({
       viewer.dataSources.removeAll()
       const selectedFamilies =
         normalizedSelection === 'all' ? ALL_N2YO_FAMILIES : normalizedSelection
+      // A flight-only body (the closely-spaced OBJ-1) loads for flight, or when
+      // the stream names it; never into the storyboard's pinned frame otherwise.
       const satellitesToLoad = N2YO_SATELLITES.filter(
         (satellite) =>
           selectedFamilies.includes(satellite.family) &&
-          !loadedN2yoSatelliteIdsRef.current.has(satellite.id),
+          !loadedN2yoSatelliteIdsRef.current.has(satellite.id) &&
+          (!satellite.flightOnly || options.includeFlightOnly === true),
       )
 
       syncN2YOLayerVisibility(viewer, normalizedSelection)
@@ -1223,7 +1226,10 @@ export function CesiumGlobe({
     // no real catalog objects); the family selection is fixed to SIM.
     const next: SatelliteFamilySelection = ['SIM']
     satelliteFamilySelectionRef.current = next
-    void ensureN2YOSatellitesLoaded(next).then(() => {
+    const namesFlightOnly = signalsRef.current.some(
+      (signal) => syntheticSatelliteFor(signal.payload.satellite_id ?? null)?.flightOnly === true,
+    )
+    void ensureN2YOSatellitesLoaded(next, { includeFlightOnly: namesFlightOnly }).then(() => {
       if (viewer.isDestroyed()) return
       // Signals name the station in the hostile run; the natural and internal
       // runs have no ground-segment signal, so fall back to the pass site the
@@ -1293,6 +1299,8 @@ export function CesiumGlobe({
     viewer.scene.requestRender()
   }, [pinnedSatellite, displayMode, n2yoLayerCount, flyCamera, stopFollowing, followLayer])
 
+  const configFor = (layer: N2YOLayerState) => N2YO_SATELLITES.find((candidate) => candidate.id === layer.satelliteId) ?? null
+
   // Flight view: switching views ends any follow (the followed entity changes).
   useEffect(() => {
     stopFollowing()
@@ -1345,13 +1353,14 @@ export function CesiumGlobe({
     })
     const inStream = flightStreamKey ? new Set(flightStreamKey.split('|')) : null
     const simLayers = n2yoLayersRef.current.filter((layer) => layer.satelliteFamily === 'SIM')
-    if (simLayers.length === 0) {
+    const flightOnlyLoaded = simLayers.some((layer) => configFor(layer)?.flightOnly)
+    if (simLayers.length === 0 || !flightOnlyLoaded) {
       // Pass view loads the spacecraft when the stream names one; free flight
-      // with an empty stream shows every synthetic body, so load them here
-      // (the layer count then re-runs this effect with the bodies).
+      // with an empty stream shows every synthetic body, the flight-only ones
+      // included, so load them here (the layer count then re-runs this effect).
       const next: SatelliteFamilySelection = ['SIM']
       satelliteFamilySelectionRef.current = next
-      void ensureN2YOSatellitesLoaded(next)
+      void ensureN2YOSatellitesLoaded(next, { includeFlightOnly: true })
     }
     const bodies = simLayers
       .filter(
@@ -1364,7 +1373,7 @@ export function CesiumGlobe({
       .map(flightBodyFor)
       .filter((body): body is FlightBody => body !== null)
     simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, false))
-    bodies.forEach((body) => addFlightBody(viewer, body))
+    bodies.forEach((body, index) => addFlightBody(viewer, body, index))
     flightBodiesRef.current = bodies
     const tick = () => {
       if (viewer.isDestroyed()) return
@@ -1382,7 +1391,12 @@ export function CesiumGlobe({
       removeTick()
       if (viewer.isDestroyed()) return
       bodies.forEach((body) => removeFlightBody(viewer, body))
-      simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, true))
+      // Back to pass view: a flight-only body stays hidden unless the stream names it.
+      simLayers.forEach((layer) => {
+        const config = configFor(layer)
+        const named = inStream?.has(config?.satelliteId ?? '') === true
+        setLayerEntitiesShown(viewer, layer, !config?.flightOnly || named)
+      })
       flightBodiesRef.current = []
       viewer.clock.shouldAnimate = true
       viewer.scene.requestRender()
