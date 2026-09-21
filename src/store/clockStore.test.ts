@@ -1,6 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import type { ReplayMarker } from '../types/canopy'
-import { DRIFT_TOLERANCE_WALL_MS, clockText, driftIsNotable, flightClockLabel, useClockStore } from './clockStore'
+import { useCaptureStore } from './captureStore'
+import {
+  DRIFT_TOLERANCE_WALL_MS,
+  FLIGHT_VIEW_STORAGE_KEY,
+  clockText,
+  driftIsNotable,
+  flightClockLabel,
+  initialiseFlightView,
+  readInitialFlightView,
+  useClockStore,
+} from './clockStore'
 
 const T0 = Date.parse('2026-09-21T10:00:00.000Z') // wall
 const S0 = Date.parse('2026-09-20T14:48:28Z') // scenario
@@ -172,5 +182,34 @@ describe('labels', () => {
     useClockStore.getState().resume(T0)
     useClockStore.getState().applyReplay(marker({ state: 'finished', now_ts: '2026-09-20T15:14:42Z' }), T0)
     expect(flightClockLabel(useClockStore.getState(), T0)).toBe('15:14:42Z · holding · 2026-09-20')
+  })
+})
+
+describe('view persistence', () => {
+  it('reads ?flight=, then the session flag, else pass view', () => {
+    sessionStorage.clear()
+    expect(readInitialFlightView('')).toBe('pass')
+    expect(readInitialFlightView('?flight=1')).toBe('flight')
+    expect(readInitialFlightView('?flight=0')).toBe('pass')
+    sessionStorage.setItem(FLIGHT_VIEW_STORAGE_KEY, 'flight')
+    expect(readInitialFlightView('')).toBe('flight')
+    expect(readInitialFlightView('?flight=off')).toBe('pass')
+  })
+
+  it('setView persists across a page load and a capture forces pass view', () => {
+    sessionStorage.clear()
+    useCaptureStore.getState().setEnabled(false)
+    useClockStore.getState().setView('flight')
+    expect(sessionStorage.getItem(FLIGHT_VIEW_STORAGE_KEY)).toBe('flight')
+    fresh()
+    initialiseFlightView('')
+    expect(useClockStore.getState().view).toBe('flight')
+    useCaptureStore.getState().setEnabled(true)
+    fresh()
+    initialiseFlightView('?flight=1')
+    expect(useClockStore.getState().view).toBe('pass')
+    useCaptureStore.getState().setEnabled(false)
+    useClockStore.getState().setView('pass')
+    expect(sessionStorage.getItem(FLIGHT_VIEW_STORAGE_KEY)).toBeNull()
   })
 })

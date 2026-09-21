@@ -466,6 +466,9 @@ export type N2YOLayerState = {
 export const orbitEntityIdForSatellite = (satelliteId: number) =>
   `n2yo-${satelliteId}-orbit`
 
+/** The spacecraft marker image, shared with the flight layer (lib/flightLayer.ts). */
+export const n2yoMarkerImage = (colorHex: string, family: N2YOSatelliteFamily) => realSatelliteMarker(colorHex, family)
+
 const realSatelliteMarker = (colorHex: string, family: N2YOSatelliteFamily) =>
   `data:image/svg+xml;utf8,${encodeURIComponent(
     `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="58" viewBox="0 0 64 58">

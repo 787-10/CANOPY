@@ -2,6 +2,7 @@
 // `/demo?run=A|B|C`. Kept out of the page component so the fetch and the
 // navigation can be unit-tested with doubles.
 import { useCaptureStore, withCapture } from '../store/captureStore'
+import { useClockStore, type FlightRate } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import { apiUrl, fetchGateway } from './gateway'
 
@@ -73,12 +74,16 @@ export function resetUrl(apiUrl: string = DEMO_API_URL): string {
   return `${apiUrl}${RESET_PATH}`
 }
 
-export function replayPath(spec: DemoRunSpec): string {
+export function replayPath(spec: DemoRunSpec, flight: FlightRate | null = null): string {
+  // A flight run (docs/MEGALITH-Flight-Plan.md §2.3): the replay is paced by
+  // the flight clock, speed = rate and no inter-signal cap, so signals land at
+  // their scenario times. The default path is the storyboard's.
+  if (flight) return `/scenarios/${encodeURIComponent(spec.stem)}/replay?speed=${flight}&no_cap=1`
   return `/scenarios/${encodeURIComponent(spec.stem)}/replay?speed=${REPLAY_SPEED}&max_delay_s=${REPLAY_MAX_DELAY_S}`
 }
 
-export function replayUrl(spec: DemoRunSpec, apiUrl: string = DEMO_API_URL): string {
-  return `${apiUrl}${replayPath(spec)}`
+export function replayUrl(spec: DemoRunSpec, apiUrl: string = DEMO_API_URL, flight: FlightRate | null = null): string {
+  return `${apiUrl}${replayPath(spec, flight)}`
 }
 
 export function parseRun(value: string | null | undefined): DemoRun | null {
@@ -92,6 +97,8 @@ export type StartDemoRunOptions = {
   apiUrl?: string
   /** Clear the console's event buffers first (default true). */
   clearState?: boolean
+  /** Fly the run on the scenario clock at this rate (10, 60 or 600); null is the storyboard's pacing. */
+  flight?: FlightRate | null
 }
 
 /** POST the replay and move to the Brigade view in capture mode. Returns
@@ -103,6 +110,7 @@ export async function startDemoRun(
     navigate = (url) => window.location.assign(url),
     apiUrl = DEMO_API_URL,
     clearState = true,
+    flight = null,
   }: StartDemoRunOptions = {},
 ): Promise<unknown> {
   const spec = DEMO_RUNS[run]
@@ -134,7 +142,7 @@ export async function startDemoRun(
     // unreachable or slow gateway: the replay call below reports it
   }
   try {
-    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run, stem: spec.stem }))
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run, stem: spec.stem, flight }))
     sessionStorage.setItem(
       LAST_RUN_KEY,
       JSON.stringify({ run, stem: spec.stem, startedAt: new Date().toISOString() }),
@@ -142,12 +150,18 @@ export async function startDemoRun(
   } catch {
     // storage unavailable: the console cannot pick the replay up; start it by hand
   }
-  useCaptureStore.getState().setEnabled(true)
-  navigate(withCapture(`/brigade?run=${run}`, true))
-  return { status: 'pending', run, stem: spec.stem }
+  // A flight run opens the console flying and out of capture mode (a capture
+  // is always the pass view); the storyboard's path is unchanged.
+  useClockStore.getState().setView(flight ? 'flight' : 'pass')
+  useCaptureStore.getState().setEnabled(!flight)
+  navigate(flight ? `/brigade?run=${run}&flight=1` : withCapture(`/brigade?run=${run}`, true))
+  return { status: 'pending', run, stem: spec.stem, flight }
 }
 
-type PendingReplay = { run: DemoRun; stem: string }
+type PendingReplay = { run: DemoRun; stem: string; flight: FlightRate | null }
+
+const parseFlight = (value: unknown): FlightRate | null =>
+  value === 10 || value === 60 || value === 600 ? value : null
 
 export function readPendingReplay(): PendingReplay | null {
   try {
@@ -155,7 +169,7 @@ export function readPendingReplay(): PendingReplay | null {
     if (!raw) return null
     const parsed = JSON.parse(raw) as Partial<PendingReplay>
     const run = parseRun(parsed.run ?? null)
-    return run ? { run, stem: DEMO_RUNS[run].stem } : null
+    return run ? { run, stem: DEMO_RUNS[run].stem, flight: parseFlight(parsed.flight) } : null
   } catch {
     return null
   }
@@ -179,7 +193,7 @@ export async function startPendingReplay({
   }
   const spec = DEMO_RUNS[pending.run]
   const response = await fetchGateway(
-    replayPath(spec),
+    replayPath(spec, pending.flight),
     { method: 'POST' },
     { fetchImpl, baseUrl: apiUrl },
   )

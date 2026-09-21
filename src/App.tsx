@@ -9,13 +9,18 @@ import { Spacecraft } from './pages/Spacecraft'
 import { VerdictPage } from './pages/VerdictPage'
 import { resolveRoute } from './lib/routes'
 import { initialiseCaptureMode } from './store/captureStore'
+import { initialiseFlightView } from './store/clockStore'
 import './App.css'
 import './styles/scrollbars.css'
 import './styles/spacecraft.css'
+import './styles/flight.css'
 
 // Capture mode (fixed 1920x1080 layout) is read from `?capture=1` /
 // sessionStorage before the first render.
 initialiseCaptureMode()
+// The flight view (docs/MEGALITH-Flight-Plan.md) follows: `?flight=1` or the
+// session flag, never in capture mode.
+initialiseFlightView()
 
 function pageFor(route: ReturnType<typeof resolveRoute>) {
   switch (route.page) {
@@ -30,7 +35,7 @@ function pageFor(route: ReturnType<typeof resolveRoute>) {
     case 'signal':
       return <SignalZoom signalId={route.id} />
     case 'demo':
-      return <DemoLauncher run={route.run} autostart={route.autostart} />
+      return <DemoLauncher run={route.run} autostart={route.autostart} flight={route.flight} />
     case 'run':
       return <RunSummary />
     default:

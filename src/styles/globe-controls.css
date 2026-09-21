@@ -17,6 +17,17 @@
   box-shadow: none;
 }
 
+/* The flight clock's cluster (GlobeControls `flight` prop) sits one row above
+   the camera cluster; both share the skin. Its rate buttons are label-only. */
+.globe-controls--flight {
+  bottom: 94px;
+}
+
+.globe-controls__btn--rate {
+  min-width: 40px;
+  padding: 0 8px;
+}
+
 .globe-controls__btn {
   display: inline-flex;
   align-items: center;

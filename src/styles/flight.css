@@ -1,0 +1,62 @@
+/* Flight view (docs/MEGALITH-Flight-Plan.md): the readout sits bottom-left
+   over the globe; the flight cluster's placement is in globe-controls.css.
+   Both are gone in capture mode, which is always the pass view. */
+
+.flight-readout {
+  position: absolute;
+  left: 14px;
+  bottom: 56px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 340px;
+  padding: 8px 10px;
+  border: 1px solid var(--frame, var(--line-bright));
+  border-radius: 6px;
+  background: var(--frame-bg, #060a0a);
+  color: var(--text-muted);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.66rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+.flight-readout__clock {
+  color: var(--text-primary);
+  font-size: 0.78rem;
+}
+
+.flight-readout__clock em {
+  color: var(--amber);
+  font-style: normal;
+}
+
+.flight-readout__body {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.flight-readout__body strong {
+  color: var(--text-primary);
+}
+
+.flight-readout__body--visible .flight-readout__state {
+  color: var(--green);
+}
+
+.flight-readout__state {
+  color: var(--text-subtle);
+}
+
+.flight-readout__drift {
+  color: var(--amber);
+}
+
+html[data-capture="1"] .globe-controls--flight,
+html[data-capture="1"] .flight-readout {
+  display: none;
+}

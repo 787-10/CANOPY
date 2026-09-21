@@ -14,6 +14,10 @@
 //     paused   the operator paused: held; resuming a run jumps to its time
 import { create } from 'zustand'
 import type { ReplayMarker } from '../types/canopy'
+import { useCaptureStore } from './captureStore'
+
+export const FLIGHT_QUERY_PARAM = 'flight'
+export const FLIGHT_VIEW_STORAGE_KEY = 'megalith-flight-view'
 
 export type ClockView = 'pass' | 'flight'
 export type ClockMode = 'free' | 'flight' | 'holding' | 'stale' | 'paused'
@@ -63,6 +67,34 @@ export type ClockState = {
 
 const now = () => Date.now()
 
+const hasWindow = () => typeof window !== 'undefined'
+
+function persistView(view: ClockView) {
+  if (!hasWindow()) return
+  try {
+    if (view === 'flight') window.sessionStorage.setItem(FLIGHT_VIEW_STORAGE_KEY, 'flight')
+    else window.sessionStorage.removeItem(FLIGHT_VIEW_STORAGE_KEY)
+  } catch {
+    // Storage disabled: the view lives for this page only.
+  }
+}
+
+/** `?flight=1` wins, then `?flight=0`, then the sessionStorage flag, else pass view.
+ *  Header links are full-page loads, so the view has to survive them. */
+export function readInitialFlightView(search: string = hasWindow() ? window.location.search : ''): ClockView {
+  const params = new URLSearchParams(search)
+  const fromQuery = params.get(FLIGHT_QUERY_PARAM)
+  if (fromQuery !== null) {
+    return fromQuery === '1' || fromQuery === 'true' || fromQuery === 'on' ? 'flight' : 'pass'
+  }
+  if (!hasWindow()) return 'pass'
+  try {
+    return window.sessionStorage.getItem(FLIGHT_VIEW_STORAGE_KEY) === 'flight' ? 'flight' : 'pass'
+  } catch {
+    return 'pass'
+  }
+}
+
 const prefersReducedMotion = (): boolean =>
   typeof window !== 'undefined' &&
   typeof window.matchMedia === 'function' &&
@@ -89,6 +121,8 @@ export const useClockStore = create<ClockState>()((set, get) => ({
 
   setView: (view) => {
     const state = get()
+    // Persist even when unchanged: a capture forcing pass view clears the flag.
+    persistView(view)
     if (view === state.view) return
     if (view === 'flight' && state.reducedMotion && state.mode !== 'paused') {
       // Reduced motion: flight opens paused, at the time it would show.
@@ -212,4 +246,11 @@ export function flightClockLabel(state: Pick<ClockState, 'mode' | 'rate' | 'time
   const wallDate = new Date(wallMs).toISOString().slice(0, 10)
   if (flightDate !== wallDate) parts.push(flightDate)
   return parts.join(' · ')
+}
+
+/** Read the URL / storage once and apply it. Called by App on mount, after
+ *  capture mode: a capture is always the pass view (decision 1). */
+export function initialiseFlightView(search?: string) {
+  const view = useCaptureStore.getState().enabled ? 'pass' : readInitialFlightView(search)
+  useClockStore.getState().setView(view)
 }

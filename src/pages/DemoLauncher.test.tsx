@@ -14,6 +14,7 @@ import {
   startPendingReplay,
 } from '../lib/demoRuns'
 import { useCaptureStore } from '../store/captureStore'
+import { useClockStore } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import { makeSignal } from '../test/factories'
 
@@ -57,9 +58,9 @@ describe('demo runs', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0][0]).toBe('http://gw:8000/reset')
     expect(fetchImpl.mock.calls[0][1]).toMatchObject({ method: 'POST' })
-    expect(body).toEqual({ status: 'pending', run: 'B', stem: 'megalith_link_margin_b.jsonl' })
+    expect(body).toEqual({ status: 'pending', run: 'B', stem: 'megalith_link_margin_b.jsonl', flight: null })
     expect(useEventStore.getState().signals).toEqual([])
-    expect(readPendingReplay()).toEqual({ run: 'B', stem: 'megalith_link_margin_b.jsonl' })
+    expect(readPendingReplay()).toEqual({ run: 'B', stem: 'megalith_link_margin_b.jsonl', flight: null })
     expect(JSON.parse(sessionStorage.getItem(LAST_RUN_KEY)!)).toMatchObject({
       run: 'B',
       stem: 'megalith_link_margin_b.jsonl',
@@ -99,6 +100,32 @@ describe('demo runs', () => {
     )
   })
 
+  it('a flight run paces the replay by the rate with no cap, opens the console flying and out of capture mode', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ status: 'reset' }))
+    const navigate = vi.fn()
+    const body = await startDemoRun('A', { fetchImpl, navigate, apiUrl: 'http://gw:8000', flight: 60 })
+    expect(body).toEqual({ status: 'pending', run: 'A', stem: 'megalith_link_margin_a.jsonl', flight: 60 })
+    expect(readPendingReplay()).toEqual({ run: 'A', stem: 'megalith_link_margin_a.jsonl', flight: 60 })
+    expect(useCaptureStore.getState().enabled).toBe(false)
+    expect(useClockStore.getState().view).toBe('flight')
+    expect(navigate).toHaveBeenCalledWith('/brigade?run=A&flight=1')
+    await startPendingReplay({ fetchImpl, apiUrl: 'http://gw:8000' })
+    expect(fetchImpl).toHaveBeenLastCalledWith(
+      'http://gw:8000/scenarios/megalith_link_margin_a.jsonl/replay?speed=60&no_cap=1',
+      { method: 'POST' },
+    )
+    expect(replayUrl(DEMO_RUNS.B, 'http://gw:8000', 600)).toBe(
+      'http://gw:8000/scenarios/megalith_link_margin_b.jsonl/replay?speed=600&no_cap=1',
+    )
+    // The storyboard's path is unchanged by the option existing.
+    useClockStore.getState().setView('pass')
+  })
+
+  it('a pending flight rate outside 10/60/600 falls back to the storyboard pacing', async () => {
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'C', flight: 7 }))
+    expect(readPendingReplay()).toEqual({ run: 'C', stem: DEMO_RUNS.C.stem, flight: null })
+  })
+
   it('startPendingReplay throws on a non-2xx gateway response', async () => {
     sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'C' }))
     const fetchImpl = vi.fn().mockResolvedValue({ ok: false, status: 404, json: () => Promise.resolve({}) })
@@ -123,8 +150,23 @@ describe('DemoLauncher route', () => {
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/brigade?run=A&capture=1'))
     expect(fetchImpl).toHaveBeenCalledTimes(1)
     expect(fetchImpl.mock.calls[0][0]).toMatch(/\/reset$/)
-    expect(readPendingReplay()).toEqual({ run: 'A', stem: 'megalith_link_margin_a.jsonl' })
+    expect(readPendingReplay()).toEqual({ run: 'A', stem: 'megalith_link_margin_a.jsonl', flight: null })
     expect(screen.getByTestId('demo-start')).toHaveTextContent('Started')
+  })
+
+  it('offers the flight rates, reads ?flight= and passes the rate to the start', async () => {
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse())
+    const navigate = vi.fn()
+    render(<DemoLauncher run="A" flight="60" fetchImpl={fetchImpl} navigate={navigate} />)
+    expect(screen.getByTestId('demo-flight-60')).toHaveAttribute('aria-checked', 'true')
+    expect(screen.getByTestId('demo-pacing')).toHaveTextContent('flight at 60x scenario time, no cap')
+    fireEvent.click(screen.getByTestId('demo-flight-off'))
+    expect(screen.getByTestId('demo-pacing')).toHaveTextContent('speed 20x, gaps capped at 6 s')
+    fireEvent.click(screen.getByTestId('demo-flight-600'))
+    fireEvent.click(screen.getByTestId('demo-start'))
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/brigade?run=A&flight=1'))
+    expect(readPendingReplay()).toEqual({ run: 'A', stem: 'megalith_link_margin_a.jsonl', flight: 600 })
+    useClockStore.getState().setView('pass')
   })
 
   it('switches run with the radio group before starting', async () => {

@@ -7,7 +7,7 @@ export type Route =
   | { page: 'signals' }
   | { page: 'spacecraft'; sat: string | null }
   | { page: 'signal'; id: string | null }
-  | { page: 'demo'; run: string | null; autostart: boolean }
+  | { page: 'demo'; run: string | null; autostart: boolean; flight: string | null }
   | { page: 'run' }
 
 /** Unknown paths (the retired /operator among them) fall back to the console. */
@@ -25,6 +25,7 @@ export function resolveRoute(pathname: string, search: string): Route {
       page: 'demo',
       run: params.get('run'),
       autostart: params.get('autostart') === '1',
+      flight: params.get('flight'),
     }
   }
   if (pathname.startsWith('/runs')) return { page: 'run' }

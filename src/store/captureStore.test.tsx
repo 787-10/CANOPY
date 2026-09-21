@@ -61,7 +61,7 @@ describe('capture mode — flag', () => {
 
   it('documents what it hides, one entry per component that checks the store', () => {
     const components = new Set(CAPTURE_HIDES.map((entry) => entry.component))
-    for (const name of ['BusHealthCard', 'RunSummary']) {
+    for (const name of ['BusHealthCard', 'RunSummary', 'GlobeControls']) {
       expect([...components].some((component) => component.includes(name)), name).toBe(true)
     }
     expect(CAPTURE_HIDES.every((entry) => entry.hides.length > 0)).toBe(true)

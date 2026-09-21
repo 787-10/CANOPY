@@ -60,3 +60,49 @@ describe('GlobeControls', () => {
     expect(screen.getByRole('button', { name: 'Stop following' })).toBeEnabled()
   })
 })
+
+describe('GlobeControls with the flight clock', () => {
+  const flight = () => ({
+    view: 'flight' as const,
+    mode: 'free' as const,
+    rate: 60,
+    rateLocked: false,
+    onToggleView: vi.fn(),
+    onSetRate: vi.fn(),
+    onTogglePause: vi.fn(),
+  })
+
+  it('renders a second toolbar with the view toggle, pause and the four rates, and leaves the camera cluster at four buttons', () => {
+    const controls = flight()
+    setup({ flight: controls })
+    expect(screen.getByRole('toolbar', { name: 'Globe controls' }).querySelectorAll('button')).toHaveLength(4)
+    const flightBar = screen.getByRole('toolbar', { name: 'Flight controls' })
+    expect(flightBar.querySelectorAll('button')).toHaveLength(6)
+    fireEvent.click(screen.getByTestId('flight-view'))
+    fireEvent.click(screen.getByTestId('flight-pause'))
+    fireEvent.click(screen.getByTestId('flight-rate-600'))
+    expect(controls.onToggleView).toHaveBeenCalledTimes(1)
+    expect(controls.onTogglePause).toHaveBeenCalledTimes(1)
+    expect(controls.onSetRate).toHaveBeenCalledWith(600)
+    expect(screen.getByTestId('flight-rate-60')).toHaveAttribute('aria-pressed', 'true')
+  })
+
+  it('locks the rate while a run is live and disables pause and rates in pass view', () => {
+    setup({ flight: { ...flight(), rateLocked: true } })
+    expect(screen.getByTestId('flight-rate-10')).toBeDisabled()
+    expect(screen.getByTestId('flight-rate-10').title).toMatch(/the run's/)
+    expect(screen.getByTestId('flight-pause')).toBeEnabled()
+  })
+
+  it('in pass view only the view toggle is live', () => {
+    setup({ flight: { ...flight(), view: 'pass' } })
+    expect(screen.getByTestId('flight-view')).toHaveTextContent('Pass view')
+    expect(screen.getByTestId('flight-pause')).toBeDisabled()
+    expect(screen.getByTestId('flight-rate-60')).toBeDisabled()
+  })
+
+  it('renders no flight toolbar without the prop', () => {
+    setup()
+    expect(screen.queryByRole('toolbar', { name: 'Flight controls' })).toBeNull()
+  })
+})

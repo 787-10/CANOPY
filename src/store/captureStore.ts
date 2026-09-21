@@ -25,6 +25,10 @@ export const CAPTURE_HIDES: ReadonlyArray<{ component: string; hides: string }> 
     component: 'SideColumn',
     hides: 'the collapse toggles of the Situation and Response columns (both forced expanded)',
   },
+  {
+    component: 'GlobeControls',
+    hides: 'the flight clock cluster and the flight readout (a capture is always the pass view)',
+  },
 ]
 
 type CaptureState = {

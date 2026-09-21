@@ -7,6 +7,7 @@ import {
   CallbackProperty,
   Cartesian2,
   Cartesian3,
+  JulianDate,
   Color,
   ConstantProperty,
   createWorldImageryAsync,
@@ -50,6 +51,21 @@ import {
   type N2YOSatelliteFamily,
 } from '../lib/n2yoSatelliteLayer'
 import { GlobeControls } from './GlobeControls'
+import {
+  addFlightBody,
+  flightBodyFor,
+  flightReadout,
+  flightSatelliteId,
+  flightSatelliteNumber,
+  flightSubpoint,
+  isFlightSatelliteEntityId,
+  removeFlightBody,
+  setLayerEntitiesShown,
+  updateFlightRing,
+  type FlightBody,
+  type FlightReadout,
+} from '../lib/flightLayer'
+import { FLIGHT_RATES, clockText, driftIsNotable, flightClockLabel, useClockStore, type FlightRate } from '../store/clockStore'
 import { toPoint as mgrsToPoint } from 'mgrs'
 import { commanderSignalSummary } from '../lib/commanderLanguage'
 import { utcClock } from '../lib/timing'
@@ -194,7 +210,7 @@ const ZOOM_OUT_FACTOR = 1 / ZOOM_IN_FACTOR
 const CLICK_MAX_TRAVEL_PX = 6
 const CLICK_MAX_HOLD_MS = 600
 
-type PointerPress = { x: number; y: number; at: number; moved: boolean }
+type PointerPress = { x: number; y: number; at: number; moved: boolean; pickedId?: string | null }
 
 // Select a track in place: label on and orbit drawn, camera untouched. (The
 // layer library's selectN2YOSatellite used to fly to the centred Earth as
@@ -349,6 +365,21 @@ export function CesiumGlobe({
   const showAllOrbitsRef = useRef(false)
   const satelliteFamilySelectionRef = useRef<SatelliteFamilySelection>([])
   const maneuverDemo = useEventStore((s) => s.maneuverDemo)
+  // Flight view (docs/MEGALITH-Flight-Plan.md): the clock store owns time;
+  // the globe mirrors it and flies the synthetic spacecraft on it.
+  const flightView = useClockStore((s) => s.view === 'flight')
+  const clockMode = useClockStore((s) => s.mode)
+  const clockRate = useClockStore((s) => s.rate)
+  const clockRunLive = useClockStore((s) => s.run?.state === 'started')
+  const flightViewRef = useRef(false)
+  const flightBodiesRef = useRef<FlightBody[]>([])
+  const hasFramedOnceRef = useRef(false)
+  const [flightReadouts, setFlightReadouts] = useState<Array<{ name: string; readout: FlightReadout | null }>>([])
+  const [flightClock, setFlightClock] = useState('')
+  const [flightDriftMs, setFlightDriftMs] = useState<number | null>(null)
+  // Drift is measured when a signal lands (its ts against the clock then), not
+  // continuously: between sparse signals the newest one is simply old.
+  const flightDriftRef = useRef<{ ts: string | null; driftMs: number | null }>({ ts: null, driftMs: null })
   const endManeuverDemo = useEventStore((s) => s.endManeuverDemo)
   const [maneuverProgress, setManeuverProgress] = useState(0)
   const [maneuverPair, setManeuverPair] = useState<{
@@ -370,17 +401,28 @@ export function CesiumGlobe({
     }
 
     const updateSelectedSatellitePoint = () => {
+      const body = flightBodiesRef.current.find((candidate) => candidate.layer === selectedSatellite)
+      if (flightViewRef.current && body) {
+        const ms = useClockStore.getState().timeAt()
+        const sub = flightSubpoint(body, ms)
+        setSelectedSatellitePoint({ lat: sub.lat, lng: sub.lng, timestampUtc: new Date(ms).toISOString() })
+        return
+      }
       setSelectedSatellitePoint(currentN2YODisplayPoint(selectedSatellite))
     }
 
     updateSelectedSatellitePoint()
     const interval = window.setInterval(updateSelectedSatellitePoint, 500)
     return () => window.clearInterval(interval)
-  }, [selectedSatellite])
+  }, [selectedSatellite, flightView])
 
   useEffect(() => {
     signalsRef.current = signals
   }, [signals])
+
+  useEffect(() => {
+    flightViewRef.current = flightView
+  }, [flightView])
 
   /** Stop tracking a spacecraft; the camera stays where it is. */
   const stopFollowing = useCallback(() => {
@@ -417,7 +459,9 @@ export function CesiumGlobe({
   const followLayer = useCallback((layer: N2YOLayerState) => {
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) return
-    const entity = viewer.entities.getById(layer.entityIds[0])
+    const entity = viewer.entities.getById(
+      flightViewRef.current ? flightSatelliteId(layer.satelliteId) : layer.entityIds[0],
+    )
     const position = entity?.position?.getValue(viewer.clock.currentTime)
     if (!entity || !position) return
     const camera = viewer.camera
@@ -560,11 +604,31 @@ export function CesiumGlobe({
     // Pointer state: data-driven flights wait for the operator to let go, and
     // the mouse-up that ends a drag (or a long press) is not a click.
     const canvas = viewer.scene.canvas
+    const isSatelliteEntityId = (id: string) =>
+      (id.startsWith('n2yo-') && id.endsWith('-satellite')) || isFlightSatelliteEntityId(id)
+    const layerForEntityId = (id: string) =>
+      n2yoLayersRef.current.find(
+        (candidate) => candidate.entityIds.includes(id) || flightSatelliteNumber(id) === candidate.satelliteId,
+      ) ?? null
     const onPointerDown = (event: PointerEvent) => {
       pointerDownRef.current = true
+      // In flight the mark moves under the pointer: pick where it was pressed,
+      // not where it is by the time the button comes up.
+      let pickedId: string | null | undefined
+      if (event.button === 0 && flightViewRef.current) {
+        const rect = canvas.getBoundingClientRect()
+        const picked = viewer.scene.drillPick(
+          new Cartesian2(event.clientX - rect.left, event.clientY - rect.top),
+          8,
+        ) as Array<{ id?: { id?: unknown } }>
+        pickedId =
+          picked
+            .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
+            .find((id): id is string => id !== null && isSatelliteEntityId(id)) ?? null
+      }
       pressRef.current =
         event.button === 0
-          ? { x: event.clientX, y: event.clientY, at: performance.now(), moved: false }
+          ? { x: event.clientX, y: event.clientY, at: performance.now(), moved: false, pickedId }
           : null
     }
     const onPointerMove = (event: PointerEvent) => {
@@ -602,10 +666,11 @@ export function CesiumGlobe({
       // selection instead of making one. The spacecraft mark wins.
       const picked = viewer.scene.drillPick(event.position, 8) as Array<{ id?: { id?: unknown } }>
       const pickedId =
-        picked
-          .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
-          .find((id): id is string => id !== null && id.startsWith('n2yo-') && id.endsWith('-satellite')) ??
-        null
+        press?.pickedId !== undefined
+          ? press.pickedId
+          : (picked
+              .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
+              .find((id): id is string => id !== null && isSatelliteEntityId(id)) ?? null)
       if (!pickedId) {
         // Empty space clears a click-selection and leaves the camera where the
         // operator put it. The operator's pin is not a click-selection: the
@@ -624,9 +689,7 @@ export function CesiumGlobe({
         return
       }
 
-      const layer = n2yoLayersRef.current.find((candidate) =>
-        candidate.entityIds.includes(pickedId),
-      )
+      const layer = layerForEntityId(pickedId)
       if (!layer) {
         return
       }
@@ -659,10 +722,7 @@ export function CesiumGlobe({
         const ids = picked
           .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
           .filter((id): id is string => id !== null)
-        const layer =
-          n2yoLayersRef.current.find((candidate) =>
-            ids.some((id) => candidate.entityIds.includes(id)),
-          ) ?? null
+        const layer = ids.map(layerForEntityId).find((candidate) => candidate !== null) ?? null
         if (!layer) {
           // A marker (a report, the station) is not empty space: nothing.
           if (ids.length === 0) resetView()
@@ -836,7 +896,9 @@ export function CesiumGlobe({
       // The spacecraft label names the mark already; the marker and the
       // pulse ring still draw.
       const onSpacecraft =
-        point !== null && isN2YOSpacecraftDrawnAt(n2yoLayersRef.current, point.lat, point.lon)
+        !flightViewRef.current &&
+        point !== null &&
+        isN2YOSpacecraftDrawnAt(n2yoLayersRef.current, point.lat, point.lon)
       const shouldLabel = isRf || (isFocus && signals.length <= 8 && !onSpacecraft)
       const markerKind = markerKindForSignal(signal)
 
@@ -925,7 +987,8 @@ export function CesiumGlobe({
     setSatelliteFamilySelection([])
     showAllOrbitsRef.current = false
     setShowAllOrbits(false)
-    viewer.clock.shouldAnimate = true
+    // In flight the clock is the store's (mirrored each frame), not Cesium's.
+    viewer.clock.shouldAnimate = !flightViewRef.current
     setActiveLayer('baseline')
     stopFollowing()
     viewer.camera.flyTo({
@@ -1063,7 +1126,7 @@ export function CesiumGlobe({
               duration: 0.8,
             })
           }
-          viewer.clock.shouldAnimate = true
+          viewer.clock.shouldAnimate = !flightViewRef.current
           setActiveLayer('real-satellite')
           setRealSatelliteStatus(
             realMissing.length && !payloads.length ? 'Sats unavailable' : 'Satellites',
@@ -1179,6 +1242,10 @@ export function CesiumGlobe({
       // where Reset view and "Follow latest" return to.
       if (framedStreamRef.current) return
       framedStreamRef.current = true
+      // A reset clears the stream and the next run frames itself again; in
+      // flight the camera never moves on data, so only the first framing flies.
+      if (flightViewRef.current && hasFramedOnceRef.current) return
+      hasFramedOnceRef.current = true
       flyCamera(anchor, 0.9)
     })
   }, [displayMode, framingKey, ensureN2YOSatellitesLoaded, flyCamera])
@@ -1202,8 +1269,13 @@ export function CesiumGlobe({
       selectedN2yoLayerRef.current = layer
       selectTrackInPlace(viewer, layer)
       setSelectedSatellite(layer)
-      const point = currentN2YODisplayPoint(layer)
-      flyCamera(Cartesian3.fromDegrees(point.lng, point.lat, PIN_CAMERA_HEIGHT_M), 0.9)
+      if (flightViewRef.current && flightBodiesRef.current.some((body) => body.layer === layer)) {
+        // A pinned spacecraft in flight is followed: it will not stay where a flight lands.
+        followLayer(layer)
+      } else {
+        const point = currentN2YODisplayPoint(layer)
+        flyCamera(Cartesian3.fromDegrees(point.lng, point.lat, PIN_CAMERA_HEIGHT_M), 0.9)
+      }
     } else if (!pinnedSatellite && engagedPinRef.current) {
       engagedPinRef.current = null
       if (selectedN2yoLayerRef.current) {
@@ -1218,7 +1290,103 @@ export function CesiumGlobe({
       }
     }
     viewer.scene.requestRender()
-  }, [pinnedSatellite, displayMode, n2yoLayerCount, flyCamera, stopFollowing])
+  }, [pinnedSatellite, displayMode, n2yoLayerCount, flyCamera, stopFollowing, followLayer])
+
+  // Flight view: switching views ends any follow (the followed entity changes).
+  useEffect(() => {
+    stopFollowing()
+  }, [flightView, stopFollowing])
+
+  // Spacecraft named by the stream: in flight only those fly (a held-out
+  // stream about another spacecraft must not show SIM-01 flying); with no
+  // satellite-bearing signal at all, free flight shows every synthetic body.
+  const flightStreamKey = useMemo(
+    () =>
+      [
+        ...new Set(
+          signals
+            .map((signal) => signal.payload.satellite_id ?? '')
+            .filter(Boolean)
+            .map((id) => syntheticSatelliteFor(id)?.satelliteId ?? id),
+        ),
+      ]
+        .sort()
+        .join('|'),
+    [signals],
+  )
+
+  // A signal's drift from the flight clock, taken as it lands.
+  useEffect(() => {
+    if (!flightView) {
+      flightDriftRef.current = { ts: null, driftMs: null }
+      setFlightDriftMs(null)
+      return
+    }
+    const newest = signals.reduce<string | null>((acc, signal) => (!acc || signal.ts > acc ? signal.ts : acc), null)
+    if (newest === flightDriftRef.current.ts) return
+    const clock = useClockStore.getState()
+    const driftMs = newest && clock.mode !== 'free' ? clock.driftMs(newest) : null
+    flightDriftRef.current = { ts: newest, driftMs }
+    setFlightDriftMs(driftMs)
+  }, [signals, flightView])
+
+  // Flight: the viewer's clock mirrors the store every frame (Cesium samples
+  // positions at it), the pinned spacecraft hide, and the bodies with a
+  // defining pass fly; rings and the readout refresh once a second.
+  useEffect(() => {
+    const viewer = viewerRef.current
+    if (!viewer || viewer.isDestroyed() || displayMode !== 'globe' || !flightView) return
+    viewer.clock.shouldAnimate = false
+    const scratchDate = new Date()
+    const removeTick = viewer.scene.preRender.addEventListener(() => {
+      scratchDate.setTime(useClockStore.getState().timeAt())
+      viewer.clock.currentTime = JulianDate.fromDate(scratchDate)
+    })
+    const inStream = flightStreamKey ? new Set(flightStreamKey.split('|')) : null
+    const simLayers = n2yoLayersRef.current.filter((layer) => layer.satelliteFamily === 'SIM')
+    if (simLayers.length === 0) {
+      // Pass view loads the spacecraft when the stream names one; free flight
+      // with an empty stream shows every synthetic body, so load them here
+      // (the layer count then re-runs this effect with the bodies).
+      const next: SatelliteFamilySelection = ['SIM']
+      satelliteFamilySelectionRef.current = next
+      void ensureN2YOSatellitesLoaded(next)
+    }
+    const bodies = simLayers
+      .filter(
+        (layer) =>
+          !inStream ||
+          inStream.has(
+            syntheticSatelliteFor(layer.satelliteName)?.satelliteId ?? layer.cache.synthetic?.satellite_id ?? '',
+          ),
+      )
+      .map(flightBodyFor)
+      .filter((body): body is FlightBody => body !== null)
+    simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, false))
+    bodies.forEach((body) => addFlightBody(viewer, body))
+    flightBodiesRef.current = bodies
+    const tick = () => {
+      if (viewer.isDestroyed()) return
+      const clock = useClockStore.getState()
+      const ms = clock.timeAt()
+      bodies.forEach((body) => updateFlightRing(viewer, body, ms))
+      setFlightReadouts(bodies.map((body) => ({ name: body.layer.satelliteName, readout: flightReadout(body, ms) })))
+      setFlightClock(flightClockLabel(clock))
+      viewer.scene.requestRender()
+    }
+    tick()
+    const interval = window.setInterval(tick, 1000)
+    return () => {
+      window.clearInterval(interval)
+      removeTick()
+      if (viewer.isDestroyed()) return
+      bodies.forEach((body) => removeFlightBody(viewer, body))
+      simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, true))
+      flightBodiesRef.current = []
+      viewer.clock.shouldAnimate = true
+      viewer.scene.requestRender()
+    }
+  }, [flightView, displayMode, n2yoLayerCount, flightStreamKey, ensureN2YOSatellitesLoaded])
 
   // Keys: + or = zooms in, - zooms out, Esc stops following (only then, so
   // the key keeps its meaning elsewhere). Same guards as Hotkeys.tsx, whose
@@ -1242,6 +1410,18 @@ export function CesiumGlobe({
         zoomBy(ZOOM_OUT_FACTOR)
       } else if (event.key === 'Escape' && followingRef.current && !event.repeat) {
         stopFollowing()
+      } else if (flightViewRef.current && (event.key === 'p' || event.key === 'P') && !event.repeat) {
+        // Pause the flight clock (decision 6); the stream continues.
+        event.preventDefault()
+        const clock = useClockStore.getState()
+        if (clock.mode === 'paused') clock.resume()
+        else clock.pause()
+      } else if (flightViewRef.current && (event.key === ',' || event.key === '.')) {
+        const clock = useClockStore.getState()
+        if (clock.run?.state === 'started') return
+        const index = FLIGHT_RATES.indexOf(clock.rate as FlightRate)
+        const next = FLIGHT_RATES[Math.min(FLIGHT_RATES.length - 1, Math.max(0, index + (event.key === '.' ? 1 : -1)))]
+        if (next !== undefined && next !== clock.rate) clock.setRate(next)
       }
     }
     window.addEventListener('keydown', onKey)
@@ -1259,7 +1439,9 @@ export function CesiumGlobe({
   // Both satellites continue along their real orbits the entire time —
   // only the friendly's orbital plane changes, and only after the burn.
   useEffect(() => {
-    if (!maneuverDemo) {
+    // Not drawn in flight (decision 7): its burn and tail run on wall time at
+    // their own rate until they are re-tuned onto the flight clock.
+    if (!maneuverDemo || flightView) {
       return
     }
 
@@ -1949,7 +2131,7 @@ export function CesiumGlobe({
       }
       setManeuverPair(null)
     }
-  }, [maneuverDemo, endManeuverDemo, n2yoLayerCount, ensureN2YOSatellitesLoaded])
+  }, [maneuverDemo, endManeuverDemo, n2yoLayerCount, ensureN2YOSatellitesLoaded, flightView])
 
   return (
     <>
@@ -1957,13 +2139,65 @@ export function CesiumGlobe({
       {displayMode === 'globe' ? (
         <GlobeControls
           following={following}
-          canFollow={Boolean(selectedSatellite) || n2yoLayerCount === 1}
+          canFollow={(Boolean(selectedSatellite) || n2yoLayerCount === 1) && !(flightView && clockRate >= 600)}
           followTarget={selectedSatellite?.satelliteName ?? null}
           onZoomIn={() => zoomBy(ZOOM_IN_FACTOR)}
           onZoomOut={() => zoomBy(ZOOM_OUT_FACTOR)}
           onResetView={resetView}
           onToggleFollow={toggleFollow}
+          flight={{
+            view: flightView ? 'flight' : 'pass',
+            mode: clockMode,
+            rate: clockRate,
+            rateLocked: clockRunLive,
+            onToggleView: () => useClockStore.getState().setView(flightView ? 'pass' : 'flight'),
+            onSetRate: (rate) => useClockStore.getState().setRate(rate),
+            onTogglePause: () => {
+              const clock = useClockStore.getState()
+              if (clock.mode === 'paused') clock.resume()
+              else clock.pause()
+            },
+          }}
         />
+      ) : null}
+      {displayMode === 'globe' && flightView ? (
+        <aside className="flight-readout" aria-label="Flight clock" data-testid="flight-readout">
+          <span className="flight-readout__clock">
+            scenario clock <em>{flightClock}</em>
+          </span>
+          {flightReadouts.map(({ name, readout }) => (
+            <span
+              key={name}
+              className={`flight-readout__body${readout?.visible ? ' flight-readout__body--visible' : ''}`}
+            >
+              <strong>{name}</strong>
+              {readout ? (
+                readout.visible ? (
+                  <>
+                    <span>
+                      el {readout.elevationDeg.toFixed(0)}° · az {readout.azimuthDeg.toFixed(0)}°
+                    </span>
+                    <span className="flight-readout__state">
+                      {readout.losMs !== null ? `sets ${clockText(readout.losMs)}` : 'in view'}
+                    </span>
+                  </>
+                ) : (
+                  <span className="flight-readout__state">
+                    below horizon{readout.nextAosMs !== null ? ` · next pass ${clockText(readout.nextAosMs)}` : ''}
+                  </span>
+                )
+              ) : (
+                <span className="flight-readout__state">no station in the file</span>
+              )}
+            </span>
+          ))}
+          {flightDriftMs !== null && driftIsNotable(flightDriftMs, clockRate) ? (
+            <span className="flight-readout__drift">
+              stream {flightDriftMs > 0 ? '+' : '−'}
+              {Math.round(Math.abs(flightDriftMs) / 1000)} s from the clock
+            </span>
+          ) : null}
+        </aside>
       ) : null}
       {selectedSatellite ? (
         <aside className="satellite-detail" aria-label="Selected satellite">
@@ -1993,7 +2227,7 @@ export function CesiumGlobe({
               </dd>
             </div>
             <div>
-              <dt>Fix</dt>
+              <dt>{flightView ? 'Clock' : 'Fix'}</dt>
               <dd>
                 {utcClock(
                   selectedSatellitePoint?.timestampUtc ??

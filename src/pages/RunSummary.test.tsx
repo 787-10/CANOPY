@@ -90,7 +90,8 @@ describe('run summary helpers', () => {
 
   it('routes /run, /demo, /spacecraft, /signal and falls back to the Brigade view', () => {
     expect(resolveRoute('/runs', '')).toEqual({ page: 'run' })
-    expect(resolveRoute('/demo', '?run=B&autostart=1')).toEqual({ page: 'demo', run: 'B', autostart: true })
+    expect(resolveRoute('/demo', '?run=B&autostart=1')).toEqual({ page: 'demo', run: 'B', autostart: true, flight: null })
+    expect(resolveRoute('/demo', '?run=A&flight=60')).toEqual({ page: 'demo', run: 'A', autostart: false, flight: '60' })
     expect(resolveRoute('/spacecraft', '?sat=SIM-01')).toEqual({ page: 'spacecraft', sat: 'SIM-01' })
     expect(resolveRoute('/signal', '?id=sig-1')).toEqual({ page: 'signal', id: 'sig-1' })
     expect(resolveRoute('/operator', '')).toEqual({ page: 'brigade' })
