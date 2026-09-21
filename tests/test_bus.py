@@ -202,6 +202,50 @@ async def test_close_is_awaitable_and_still_closes_synchronously() -> None:
     assert len(bus._subs) == 0  # type: ignore[attr-defined]
 
 
+async def test_close_ends_a_subscriber_blocked_on_an_empty_queue() -> None:
+    """close() must end an ``async for`` parked on ``queue.get``, not leave it hanging."""
+    bus = InProcessBus()
+    ended = asyncio.Event()
+
+    async def consumer() -> None:
+        async for _ in bus.subscribe("signals.*"):
+            pass
+        ended.set()
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+    await bus.close()
+    await asyncio.wait_for(ended.wait(), timeout=1.0)
+    await task
+
+
+async def test_close_ends_a_busy_subscriber_after_its_current_item() -> None:
+    """A consumer mid-item at close() finishes that item, then its loop ends.
+
+    Its queue is not empty at close (no wake-up item is needed) and nothing
+    queued behind the current item is delivered: ``closed`` is re-checked
+    before every ``get``.
+    """
+    bus = InProcessBus()
+    seen: list[str] = []
+    gate = asyncio.Event()
+
+    async def consumer() -> None:
+        async for topic, _ in bus.subscribe("signals.*"):
+            seen.append(topic)
+            await gate.wait()
+
+    task = asyncio.create_task(consumer())
+    await asyncio.sleep(0)
+    await bus.publish("signals.a", _signal())
+    await bus.publish("signals.b", _signal())
+    await asyncio.sleep(0)
+    await bus.close()
+    gate.set()
+    await asyncio.wait_for(task, timeout=1.0)
+    assert seen == ["signals.a"]
+
+
 async def test_drain_on_idle_bus_returns() -> None:
     bus = InProcessBus()
     await asyncio.wait_for(bus.drain(), timeout=1.0)

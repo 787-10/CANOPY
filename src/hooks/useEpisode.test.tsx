@@ -50,11 +50,12 @@ describe('pinning an episode', () => {
     expect(result.current.attribution?.id).toBe('att-2')
   })
 
-  it('a pin on a satellite with no attribution falls back to the unpinned selection', () => {
+  it('a pin on a satellite with no attribution is standing by, not another satellite\'s verdict', () => {
     const store = useEventStore.getState()
     store.ingestAttribution(makeAttribution('att-1', { satellite_id: SIM01, verdict: 'internal_fault' }))
     store.pinEpisode('ctb://megalith.demo/sim-99')
     const { result } = renderHook(() => useEpisode())
-    expect(result.current.attribution?.id).toBe('att-1')
+    expect(result.current.attribution).toBeNull()
+    expect(result.current.pinnedSatelliteId).toBe('ctb://megalith.demo/sim-99')
   })
 })

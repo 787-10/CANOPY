@@ -503,19 +503,28 @@ class AttribService:
             "clusters": len(self._clusters),
             "errors": len(self.errors),
         }
-        pending: list[asyncio.Task] = []
-        if self._flush_task is not None and not self._flush_task.done():
-            self._flush_task.cancel()
-            pending.append(self._flush_task)
-        self._flush_task = None
-        for cluster in list(self._clusters.values()):
-            cluster.closing = True
-            cluster.closed = True
-            if cluster.task is not None and not cluster.task.done():
-                cluster.task.cancel()
-                pending.append(cluster.task)
-        if pending:
+        while True:
+            pending: list[asyncio.Task] = []
+            if self._flush_task is not None and not self._flush_task.done():
+                self._flush_task.cancel()
+                pending.append(self._flush_task)
+            self._flush_task = None
+            for cluster in list(self._clusters.values()):
+                cluster.closing = True
+                cluster.closed = True
+                if cluster.task is not None and not cluster.task.done():
+                    cluster.task.cancel()
+                    pending.append(cluster.task)
+            self._clusters.clear()
+            if not pending:
+                break
             await asyncio.gather(*pending, return_exceptions=True)
+            # The consumer loop kept running while we waited: an anomaly it
+            # took from the bus meanwhile may have opened a fresh cluster (its
+            # predecessor was already closed) with a reasoning task of its own.
+            # Go round again until nothing is left, or that task would survive
+            # the reset and publish the previous run's final revision into the
+            # next one.
         self._buffer.clear()
         self._recent.clear()
         self._latest_ts = None
@@ -1052,6 +1061,13 @@ class AttribService:
                     "revision": cluster.revision,
                 }
             )
+        elif attribution.id != primary.id:
+            # Every client builds the reconciled attribution as a fresh event,
+            # so it arrives under a new id while the primary and red-team
+            # traces above (and the challenge) reference ``primary.id``. Publish
+            # the batch under that id so the whole chain joins to one card, as
+            # it already does for a fast-lane cluster.
+            attribution = attribution.model_copy(update={"id": primary.id})
 
         if self._tracer is not None and t0 is not None:
             self._tracer.mark(attribution.id, t0)

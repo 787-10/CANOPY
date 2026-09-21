@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { renderHook, act } from '@testing-library/react'
-import { useCanopySocket } from './useCanopySocket'
+import { RECONNECT_BASE_MS, RECONNECT_MAX_MS, useCanopySocket } from './useCanopySocket'
 import { useEventStore } from '../store/eventStore'
 import { MockWebSocket } from '../test/mockWebSocket'
 import {
@@ -8,6 +8,7 @@ import {
   makeAttribution,
   makeDecision,
   makeEmbeddingSnapshot,
+  makeKBEntry,
   makeSignal,
   makeTrace,
   makeUIEvent,
@@ -217,6 +218,7 @@ describe('useCanopySocket', () => {
       MockWebSocket.last!.emitMessage({ kind: 'attribution', data: attribution })
     })
     useEventStore.getState().pinEpisode(attribution.satellite_id ?? 'ctb://megalith.demo/sim-01')
+    useEventStore.getState().setKB([makeKBEntry('kb-1')])
     expect(result.current.signals).toHaveLength(1)
     expect(useEventStore.getState().attributions).toHaveLength(1)
 
@@ -237,6 +239,11 @@ describe('useCanopySocket', () => {
     expect(store.signals).toEqual([])
     expect(store.attributions).toEqual([])
     expect(store.pinnedSatelliteId).toBeNull()
+    // The socket that carried the marker is still open: the header must keep
+    // reading "engine live", and the knowledge base (fetched once at mount)
+    // must still resolve the next run's citations.
+    expect(store.connection).toBe('live')
+    expect(store.kb['kb-1']).toBeDefined()
   })
 
   it('accepts the legacy {type:...} envelope identically to {kind:...}', () => {
@@ -417,5 +424,99 @@ describe('useCanopySocket — attribution receipt stamps (F3)', () => {
 
     expect(useEventStore.getState().attributionArrivals['att-1']).toEqual({ 0: 1000, 1: 1500 })
     now.mockRestore()
+  })
+})
+
+describe('useCanopySocket — reconnect after a close', () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
+  it('opens a new socket after the backoff and reports connecting, then live again', () => {
+    const { result } = renderHook(() => useCanopySocket(TEST_URL))
+    act(() => MockWebSocket.last!.emitOpen())
+    expect(MockWebSocket.instances).toHaveLength(1)
+
+    // The gateway restarted: the socket closes.
+    act(() => MockWebSocket.last!.emitClose())
+    expect(result.current.isConnected).toBe(false)
+    expect(useEventStore.getState().connection).toBe('offline')
+
+    // Nothing happens before the first backoff elapses.
+    act(() => vi.advanceTimersByTime(RECONNECT_BASE_MS - 1))
+    expect(MockWebSocket.instances).toHaveLength(1)
+
+    act(() => vi.advanceTimersByTime(1))
+    expect(MockWebSocket.instances).toHaveLength(2)
+    expect(MockWebSocket.last?.url).toBe(TEST_URL)
+    expect(useEventStore.getState().connection).toBe('connecting')
+
+    act(() => MockWebSocket.last!.emitOpen())
+    expect(result.current.isConnected).toBe(true)
+    expect(useEventStore.getState().connection).toBe('live')
+
+    // The new socket feeds the same store and mirror.
+    const signal = makeSignal('after-reconnect')
+    act(() => MockWebSocket.last!.emitMessage({ kind: 'signal', data: signal }))
+    expect(result.current.signals).toEqual([signal])
+    expect(useEventStore.getState().signalsById['after-reconnect']).toEqual(signal)
+  })
+
+  it('doubles the delay up to the cap while the gateway stays down and starts over after an open', () => {
+    renderHook(() => useCanopySocket(TEST_URL))
+    const expectRetryAfter = (delay: number) => {
+      const before = MockWebSocket.instances.length
+      act(() => MockWebSocket.last!.emitClose())
+      act(() => vi.advanceTimersByTime(delay - 1))
+      expect(MockWebSocket.instances).toHaveLength(before)
+      act(() => vi.advanceTimersByTime(1))
+      expect(MockWebSocket.instances).toHaveLength(before + 1)
+    }
+    expectRetryAfter(RECONNECT_BASE_MS)
+    expectRetryAfter(RECONNECT_BASE_MS * 2)
+    expectRetryAfter(RECONNECT_BASE_MS * 4)
+    // Keep failing: the delay never exceeds the cap.
+    for (let i = 0; i < 6; i += 1) {
+      const before = MockWebSocket.instances.length
+      act(() => MockWebSocket.last!.emitClose())
+      act(() => vi.advanceTimersByTime(RECONNECT_MAX_MS))
+      expect(MockWebSocket.instances).toHaveLength(before + 1)
+    }
+    // A successful open resets the backoff to the base delay.
+    act(() => MockWebSocket.last!.emitOpen())
+    expectRetryAfter(RECONNECT_BASE_MS)
+  })
+
+  it('does not reconnect once the hook has unmounted', () => {
+    const { unmount } = renderHook(() => useCanopySocket(TEST_URL))
+    act(() => MockWebSocket.last!.emitOpen())
+    act(() => MockWebSocket.last!.emitClose())
+    unmount()
+    act(() => vi.advanceTimersByTime(RECONNECT_MAX_MS * 4))
+    expect(MockWebSocket.instances).toHaveLength(1)
+  })
+
+  it('ignores the late close of a socket the cleanup closed, so it neither reconnects nor marks the store offline', () => {
+    // A real close() fires its close event asynchronously; in development
+    // React mounts, unmounts and remounts the effect, so the first socket's
+    // close lands after the second socket is live.
+    const { unmount } = renderHook(() => useCanopySocket(TEST_URL))
+    const first = MockWebSocket.last!
+    unmount()
+    expect(first.closed).toBe(true)
+
+    renderHook(() => useCanopySocket(TEST_URL))
+    const second = MockWebSocket.last!
+    expect(second).not.toBe(first)
+    act(() => second.emitOpen())
+    expect(useEventStore.getState().connection).toBe('live')
+
+    act(() => first.emitClose())
+    expect(useEventStore.getState().connection).toBe('live')
+    act(() => vi.advanceTimersByTime(RECONNECT_MAX_MS * 4))
+    expect(MockWebSocket.instances).toHaveLength(2)
   })
 })

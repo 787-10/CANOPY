@@ -7,6 +7,9 @@ import { useEventStore } from '../store/eventStore'
 
 export type { ConsolePage }
 
+/** Chip text when an attribution carries a marking the grammar rejects. */
+export const MARKING_INVALID = 'marking invalid'
+
 type TopBarProps = {
   /** Page title next to the MEGALITH mark. */
   title: string
@@ -26,10 +29,16 @@ export function TopBar({ title, current, right }: TopBarProps) {
   const capture = useCaptureStore((s) => s.enabled)
   const connection = useEventStore((s) => s.connection)
   const attributions = useEventStore((s) => s.attributions)
-  const marking = useMemo(
-    () => mostRestrictiveMarking(attributions.map((a) => a.marking)),
-    [attributions],
-  )
+  const marking = useMemo(() => {
+    try {
+      return mostRestrictiveMarking(attributions.map((a) => a.marking))
+    } catch {
+      // A malformed marking must not take every page down (the attributions
+      // come back from sessionStorage on each load), and it must not read as
+      // a milder level than it might be: the chip names the problem instead.
+      return MARKING_INVALID
+    }
+  }, [attributions])
 
   return (
     <header className="app-header app-header--megalith" data-page={current}>

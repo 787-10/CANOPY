@@ -146,6 +146,26 @@ async def cancel_replay(task: asyncio.Task | None) -> bool:
     return True
 
 
+def _log_replay_outcome(task: asyncio.Task) -> None:
+    """Done-callback for the replay task: log a replay that raised.
+
+    Nothing else reads the task's outcome. The route that started it answered
+    ``replaying`` long before, and ``cancel_replay`` returns early on a task
+    that is already done without touching its exception, so a scenario that
+    failed half-way (a record the input transform rejects, a bus error) left
+    no line in the log while the console simply stopped receiving events.
+    Reading the exception here also keeps asyncio from reporting it as never
+    retrieved at garbage collection, minutes later.
+    """
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.error(
+            "%s failed: %s: %s", task.get_name(), type(exc).__name__, exc, exc_info=exc
+        )
+
+
 RESET_DRAIN_TIMEOUT_S = 3.0
 
 
@@ -452,9 +472,9 @@ def create_app(
                 signal_filter=case.includes_as_input,
                 signal_transform=case.sanitize_input,
             )
-            app.state.replay_task = asyncio.create_task(
-                replay.run(), name=f"replay-{name}"
-            )
+            task = asyncio.create_task(replay.run(), name=f"replay-{name}")
+            task.add_done_callback(_log_replay_outcome)
+            app.state.replay_task = task
         return {
             "status": "replaying",
             "scenario": name,
@@ -538,7 +558,11 @@ def create_app(
             raise HTTPException(
                 status_code=400, detail="blocked_domains must be a list"
             )
-        invalid = [d for d in raw if d not in _ALLOWED_DOMAINS]
+        # ``isinstance`` first: an unhashable entry (an object, a list) would
+        # otherwise raise inside the membership test and turn a client error
+        # into a 500. docs/C2-API.md promises 400 for anything outside the
+        # vocabulary.
+        invalid = [d for d in raw if not isinstance(d, str) or d not in _ALLOWED_DOMAINS]
         if invalid:
             raise HTTPException(
                 status_code=400, detail=f"unknown domains: {invalid}"
@@ -568,6 +592,11 @@ def create_app(
                 status_code=400,
                 detail=f"status must be one of {list(OPERATOR_STATUSES)}",
             )
+        attribution_id = payload.get("attribution_id")
+        if attribution_id is not None and not isinstance(attribution_id, str):
+            # It keys the tracer's arrival marks below; an unhashable value
+            # would raise there and answer a malformed body with a 500.
+            raise HTTPException(status_code=400, detail="attribution_id must be a string")
         from datetime import datetime, timezone
 
         action = str(payload.get("action") or "decision")
@@ -579,7 +608,7 @@ def create_app(
             "authority": payload.get("authority"),
             "target": target,
             "satellite_id": payload.get("satellite_id"),
-            "attribution_id": payload.get("attribution_id"),
+            "attribution_id": attribution_id,
             "operator": "console",
             "ts": datetime.now(timezone.utc).isoformat(),
         }
@@ -592,7 +621,7 @@ def create_app(
             "decision" if status == "accepted" else "info",
             message,
             ref_id=decision_id,
-            t0=tracer.t0_for(decision_id, payload.get("attribution_id")),
+            t0=tracer.t0_for(decision_id, attribution_id),
             **{key: value for key, value in record.items() if key != "ts"},
         )
         return {"status": "recorded", "trace": message, "record": record}

@@ -33,3 +33,13 @@ def test_stress_rejects_unknown_domain(client: TestClient) -> None:
     assert response.status_code == 400
     assert "telemetry" in response.json()["detail"]
     assert client.get("/stress").json()["blocked_domains"] == []
+
+
+def test_stress_rejects_non_string_entries_with_400(client: TestClient) -> None:
+    # An unhashable entry used to raise inside the membership test and answer
+    # 500; docs/C2-API.md promises 400 for anything outside the vocabulary.
+    for bad in ([{"domain": "rf_ew"}], [["rf_ew"]], [7], ["rf_ew", None]):
+        response = client.post("/stress", json={"blocked_domains": bad})
+        assert response.status_code == 400, (bad, response.status_code, response.text)
+        assert "unknown domains" in response.json()["detail"]
+    assert client.get("/stress").json()["blocked_domains"] == []

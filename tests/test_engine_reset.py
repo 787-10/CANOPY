@@ -216,6 +216,74 @@ async def test_attrib_reset_cancels_fast_lane_clusters_and_the_next_run_starts_c
         bus.close()
 
 
+class _HeldStub(StubLLMClient):
+    """A stub whose primary call waits to be released, so a reset can land mid-reasoning."""
+
+    def __init__(self, kb: KB) -> None:
+        super().__init__(kb)
+        self.release = asyncio.Event()
+
+    async def attribute_primary(self, anomalies, kb_context=(), *, rule_verdict=None):  # type: ignore[override]
+        await self.release.wait()
+        return await super().attribute_primary(anomalies, kb_context, rule_verdict=rule_verdict)
+
+
+async def test_attrib_reset_also_cancels_a_cluster_opened_while_it_waited() -> None:
+    """An anomaly the consumer loop takes during reset() must not outlive the reset.
+
+    reset() cancels the open cluster's reasoning task and awaits it. While it
+    waits, the consumer loop keeps draining the bus; a same-satellite anomaly
+    already queued there finds the old cluster closed, opens a new one and
+    starts a new reasoning task. Clearing ``_clusters`` afterwards used to
+    orphan that task, which then published the previous run's final revision
+    into the next run (and a second reset() could no longer see it).
+    """
+    pytest.importorskip("megalith")
+    bus = InProcessBus()
+    kb = KB.load_from_json(KB_FILE)
+    llm = _HeldStub(kb)
+    attrib = AttribService(bus, llm, kb, window_s=60.0)
+    attributions: list[Attribution] = []
+
+    async def sniff() -> None:
+        async for _, event in bus.subscribe("attributions.*"):
+            if isinstance(event, Attribution):
+                attributions.append(event)
+
+    tasks = [asyncio.create_task(attrib.run()), asyncio.create_task(sniff())]
+    try:
+        await _spin()
+        await bus.publish(
+            "anomalies.bus_link_margin",
+            _anomaly("bus_link_margin", "sig-bus-1", offset_s=0, subsystem="comms", physics_consistency=0.83),
+        )
+        await _spin()
+        assert [a.provisional for a in attributions] == [True]
+        # Queue the next anomaly and reset without yielding in between: the
+        # consumer loop picks it up while reset() awaits the cancelled task.
+        await bus.publish(
+            "anomalies.bus_link_margin",
+            _anomaly("bus_link_margin", "sig-bus-2", offset_s=100, subsystem="comms", physics_consistency=0.83),
+        )
+        await attrib.reset()
+
+        assert attrib.open_clusters == {} and attrib._clusters == {}
+        reasoning = [
+            t for t in asyncio.all_tasks() if t.get_name().startswith("attrib-reasoning-") and not t.done()
+        ]
+        assert reasoning == [], "a reasoning task survived the reset"
+        seen_before = len(attributions)
+        llm.release.set()
+        await asyncio.sleep(0.05)
+        await bus.drain()
+        assert [a for a in attributions[seen_before:] if not a.provisional] == []
+    finally:
+        for task in tasks:
+            task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
+        bus.close()
+
+
 async def test_decide_reset_forgets_the_anomaly_cache_and_decision_ids() -> None:
     bus = InProcessBus()
     decide = DecideService(bus, StubLLMClient(KB(entries=[])), gate=policy_gate)

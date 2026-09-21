@@ -96,6 +96,46 @@ async def test_attrib_service_emits_three_stage_traces():
 
 
 @pytest.mark.asyncio
+async def test_legacy_batch_traces_and_attribution_share_one_id():
+    """The primary and red-team traces reference the id the batch is published under.
+
+    Each client returns the reconciled attribution as a fresh event with a new
+    id; on the windowed path the service must republish it under the primary's
+    id, or the console (which joins traces to a card by ``ref_id``) sees only
+    the reconcile line for a legacy batch such as the global space-weather
+    cluster.
+    """
+    kb = KB.load_from_json(KB_FILE)
+    bus = InProcessBus()
+    tracer = Tracer(bus)
+    attrib = AttribService(bus, StubLLMClient(kb), kb, window_s=0.0, tracer=tracer)
+    traces: list[ReasoningTrace] = []
+    published: list[Attribution] = []
+
+    async def consume() -> None:
+        async for _, event in bus.subscribe("*"):
+            if isinstance(event, ReasoningTrace):
+                traces.append(event)
+            elif isinstance(event, Attribution):
+                published.append(event)
+
+    consumer = asyncio.create_task(consume())
+    runner = asyncio.create_task(attrib.run())
+    await asyncio.sleep(0)
+    await bus.publish("anomalies.orbital_rpo_risk", _anomaly())
+    await bus.drain()
+    for task in (runner, consumer):
+        task.cancel()
+    await asyncio.gather(runner, consumer, return_exceptions=True)
+
+    assert len(published) == 1
+    final = published[0]
+    by_stage = {t.stage: t.ref_id for t in traces if t.stage.startswith("attrib_")}
+    assert set(by_stage) == {"attrib_primary", "attrib_redteam", "attrib_reconcile"}
+    assert set(by_stage.values()) == {final.id}
+
+
+@pytest.mark.asyncio
 async def test_attrib_publishes_only_final_attribution():
     kb = KB.load_from_json(KB_FILE)
     bus = InProcessBus()

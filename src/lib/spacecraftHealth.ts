@@ -2,7 +2,8 @@
 // symptom series for the sparkline, and the recovery state. Pure functions
 // over store data so the page itself is a thin renderer and every state has
 // a unit test.
-import type { Attribution, Decision, Signal } from '../types/canopy'
+import { selectEpisodeAttribution } from './episode'
+import type { Anomaly, Attribution, Decision, Signal } from '../types/canopy'
 import { busHealthRecords, type BusHealthRecord } from './busHealth'
 import { parseGateRationale } from './commanderLanguage'
 
@@ -350,11 +351,13 @@ export function latestVerdictFor(
   attributions: Attribution[],
   decisions: Decision[],
   satelliteId: string | null,
+  anomalies: readonly Anomaly[] = [],
 ): { attribution: Attribution | null; decision: Decision | null } {
-  const attribution =
-    (satelliteId
-      ? attributions.find((candidate) => candidate.satellite_id === satelliteId)
-      : attributions[0]) ?? null
+  // The same selection the status line, the Verdict page and the Theaters
+  // row make (INTERFACE-SPEC §5.0, scoped to the satellite), so the pages
+  // never disagree; the store keeps attributions oldest-first, so the first
+  // match would be the earliest cluster, not the episode.
+  const attribution = selectEpisodeAttribution(attributions, anomalies, satelliteId)
   const decision = attribution
     ? (decisions.find((candidate) => candidate.attribution_id === attribution.id) ?? null)
     : null

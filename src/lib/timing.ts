@@ -28,6 +28,12 @@ const revisionOf = (trace: ReasoningTrace): number =>
 const isProvisionalTrace = (trace: ReasoningTrace): boolean =>
   trace.payload?.provisional === true
 
+/** Epoch ms of a trace; a timestamp that does not parse sorts first. */
+const traceTime = (trace: ReasoningTrace): number => {
+  const parsed = Date.parse(trace.ts)
+  return Number.isFinite(parsed) ? parsed : -Infinity
+}
+
 /** Provisional and final latencies for one attribution id. */
 export function attributionTimings(
   traces: ReasoningTrace[],
@@ -95,22 +101,26 @@ export function stageTimings(
   const timings = attributionTimings(traces, attribution?.id)
   const anomalyIds = new Set(attribution?.anomaly_ids ?? [])
   // Anomaly ids are deterministic per scenario, so a tab that replayed the
-  // same run twice holds two `new anomaly` traces per id; the store is
-  // newest first, so the first trace seen per id is the current run's.
-  const seenAnomaly = new Set<string>()
-  const fusion = traces.filter((trace) => {
+  // same run twice holds two `new anomaly` traces per id. The store keeps
+  // traces oldest first (the reasoning page reads them top to bottom), so
+  // the current run's trace is the one with the latest timestamp, whatever
+  // the buffer order; a tie goes to the later arrival.
+  const newestFusionById = new Map<string, ReasoningTrace>()
+  for (const trace of traces) {
     if (
       trace.stage !== 'fusion' ||
       trace.ref_id === null ||
       !anomalyIds.has(trace.ref_id) ||
-      !trace.message.startsWith('new anomaly') ||
-      seenAnomaly.has(trace.ref_id)
+      !trace.message.startsWith('new anomaly')
     ) {
-      return false
+      continue
     }
-    seenAnomaly.add(trace.ref_id)
-    return true
-  })
+    const held = newestFusionById.get(trace.ref_id)
+    if (!held || traceTime(trace) >= traceTime(held)) {
+      newestFusionById.set(trace.ref_id, trace)
+    }
+  }
+  const fusion = [...newestFusionById.values()]
   const fusionTimes = fusion
     .map((trace) => Date.parse(trace.ts))
     .filter((time) => Number.isFinite(time))

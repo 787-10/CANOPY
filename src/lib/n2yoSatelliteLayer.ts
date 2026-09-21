@@ -73,6 +73,11 @@ export const isN2YOGeostationaryFamily = (family: N2YOSatelliteFamily) =>
 export const isN2YOStaticDisplayFamily = (family: N2YOSatelliteFamily) =>
   isN2YOGeostationaryFamily(family) || family === 'SIM'
 
+/** Whether a family's label is on when the spacecraft is not selected: the
+ *  synthetic demo spacecraft carry their name in every frame; a catalogue
+ *  object is labelled only while selected. Deselecting restores this. */
+export const isN2YOLabelShownByDefault = (family: N2YOSatelliteFamily) => family === 'SIM'
+
 export const N2YO_SATELLITES: N2YOSatelliteConfig[] = [
   {
     family: 'AEHF',
@@ -441,9 +446,6 @@ const ORBIT_SAMPLE_COUNT = 240
 const ORBIT_MOTION_PLAYBACK_SPEED = 45
 const EARTH_RADIUS_M = 6371000
 const EARTH_GRAVITATIONAL_PARAMETER = 3.986004418e14
-const RESET_CAMERA_LONGITUDE_DEG = 0
-const RESET_CAMERA_LATITUDE_DEG = 0
-const RESET_CAMERA_ALTITUDE_M = 22000000
 
 export type N2YODisplayPoint = {
   lat: number
@@ -745,7 +747,7 @@ export function addN2YOSatellite(
       font: MAP_FONT,
       pixelOffset: new Cartesian2(0, -42),
       scaleByDistance: new NearFarScalar(1500000, 1, 25000000, 0.58),
-      show: config.synthetic === true,
+      show: isN2YOLabelShownByDefault(config.family),
       showBackground: true,
       style: LabelStyle.FILL,
       text: `${config.family} · ${FAMILY_SHORT_LABEL[config.family]}\n${satelliteName}\n${idLabel}\nTRUE ALT ${Math.round(point.alt_km).toLocaleString()} km\n${formatUtcTime(point.timestamp_utc)}`,
@@ -789,6 +791,9 @@ export function clearN2YOSatelliteLayers(
   })
 }
 
+/** Select a track: label on and orbit drawn. The camera is not touched; the
+ *  original CANOPY flew to the centred Earth here, which in the console
+ *  fought the operator's framing on every layer resync. */
 export function selectN2YOSatellite(
   viewer: Viewer,
   layer: N2YOLayerState,
@@ -802,26 +807,36 @@ export function selectN2YOSatellite(
 
   showN2YOOrbit(viewer, layer)
 
-  viewer.camera.flyTo({
-    destination: Cartesian3.fromDegrees(
-      RESET_CAMERA_LONGITUDE_DEG,
-      RESET_CAMERA_LATITUDE_DEG,
-      RESET_CAMERA_ALTITUDE_M,
-    ),
-    duration: 0.6,
-  })
-
   return isN2YOGeostationaryFamily(layer.satelliteFamily)
     ? []
     : [orbitEntityIdForSatellite(layer.satelliteId)]
 }
 
+/** Deselect a track: orbit gone, label back to the family's default (the
+ *  synthetic spacecraft keep theirs; forcing it off left SIM-01 unnamed for
+ *  the rest of a run after a pin was cleared). */
 export function deselectN2YOSatellite(viewer: Viewer, layer: N2YOLayerState) {
   const entity = viewer.entities.getById(layer.entityIds[0])
   if (entity?.label) {
-    entity.label.show = new ConstantProperty(false)
+    entity.label.show = new ConstantProperty(isN2YOLabelShownByDefault(layer.satelliteFamily))
   }
   hideN2YOOrbit(viewer, layer)
+}
+
+/** Whether a loaded layer draws its spacecraft at (lat, lng): a report placed
+ *  at the spacecraft (a pass footprint over its ground station) shares the
+ *  spacecraft's screen anchor, so its own label would sit on the
+ *  spacecraft's. Tolerance in degrees; 0.05 is about 5 km. */
+export function isN2YOSpacecraftDrawnAt(
+  layers: Array<Pick<N2YOLayerState, 'cache' | 'satelliteFamily'>>,
+  lat: number,
+  lng: number,
+  toleranceDeg = 0.05,
+) {
+  return layers.some((layer) => {
+    const drawn = currentN2YODisplayPoint(layer)
+    return Math.abs(drawn.lat - lat) <= toleranceDeg && Math.abs(drawn.lng - lng) <= toleranceDeg
+  })
 }
 
 export function showN2YOOrbit(viewer: Viewer, layer: N2YOLayerState) {

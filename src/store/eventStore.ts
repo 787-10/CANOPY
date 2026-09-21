@@ -141,6 +141,11 @@ interface EventState {
   closeTakeover: () => void;
   pinEpisode: (satelliteId: string | null) => void;
   setKB: (entries: KBEntry[]) => void;
+  /** Forget the run: every event buffer and lookup, the arrival stamps, the
+   *  operator's calls and the pin. Keeps what is not run state: the socket's
+   *  `connection` (the socket hook owns it; the gateway's `reset` envelope
+   *  arrives on a socket that stays open) and `kb` (fetched once at mount;
+   *  the next run's citations resolve against the same file). */
   reset: () => void;
 }
 
@@ -354,7 +359,8 @@ export const useEventStore = create<EventState>()(
         set({
           kb: Object.fromEntries(entries.map((e) => [e.id, e])),
         }),
-      reset: () => set(initialState()),
+      reset: () =>
+        set((state) => ({ ...initialState(), connection: state.connection, kb: state.kb })),
     }),
     {
       // Survives full-page navigations (the Brigade ↔ Operator header link

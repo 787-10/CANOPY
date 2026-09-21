@@ -121,8 +121,9 @@ describe('stageTimings', () => {
 
 describe('stageTimings on a tab that holds more than one run', () => {
   it('spans only the newest anomaly trace per id, not an earlier replay of the same scenario', () => {
-    // Newest first, as the store keeps them: the current run's two anomaly
-    // traces, then the same two ids from a replay an hour earlier.
+    // The current run's two anomaly traces, then the same two ids from a
+    // replay an hour earlier: the newest trace per id must win whatever the
+    // buffer order.
     const replayed = [
       makeTrace('f-now-2', { stage: 'fusion', ref_id: 'anom-2', ts: '2026-09-20T15:10:20.000Z', message: 'new anomaly: bus_link_margin @ severity 0.9' }),
       makeTrace('f-now-1', { stage: 'fusion', ref_id: 'anom-1', ts: '2026-09-20T15:10:00.000Z', message: 'new anomaly: bus_link_margin @ severity 0.8' }),
@@ -132,6 +133,21 @@ describe('stageTimings on a tab that holds more than one run', () => {
     const fusion = stageTimings(replayed, makeAttribution('att-1', { anomaly_ids: ['anom-1', 'anom-2'] }), null)[0]
     expect(fusion.traceIds).toEqual(['f-now-2', 'f-now-1'])
     expect(fusion.stageMs).toBe(20_000)
+  })
+
+  it('picks the newest anomaly trace per id when the buffer is oldest first, as the store keeps traces', () => {
+    // eventStore appends traces oldest first (newest at the end). The earlier
+    // replay's traces come first here; a first-seen-wins walk would measure it.
+    const replayed = [
+      makeTrace('f-old-1', { stage: 'fusion', ref_id: 'anom-1', ts: '2026-09-20T14:10:00.000Z', message: 'new anomaly: bus_link_margin @ severity 0.8' }),
+      makeTrace('f-old-2', { stage: 'fusion', ref_id: 'anom-2', ts: '2026-09-20T14:10:20.000Z', message: 'new anomaly: bus_link_margin @ severity 0.9' }),
+      makeTrace('f-now-1', { stage: 'fusion', ref_id: 'anom-1', ts: '2026-09-20T15:10:00.000Z', message: 'new anomaly: bus_link_margin @ severity 0.8' }),
+      makeTrace('f-now-2', { stage: 'fusion', ref_id: 'anom-2', ts: '2026-09-20T15:10:20.000Z', message: 'new anomaly: bus_link_margin @ severity 0.9' }),
+    ]
+    const fusion = stageTimings(replayed, makeAttribution('att-1', { anomaly_ids: ['anom-1', 'anom-2'] }), null)[0]
+    expect([...fusion.traceIds].sort()).toEqual(['f-now-1', 'f-now-2'])
+    expect(fusion.stageMs).toBe(20_000)
+    expect(fusion.note).toBe('2 anomaly traces; span of trace timestamps')
   })
 
   it("reads the decide stage's own line, not the operator's Accept on the same decision", () => {

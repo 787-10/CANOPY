@@ -5,6 +5,7 @@ import { TopBar } from '../components/TopBar'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName } from '../lib/commanderLanguage'
 import { withCapture } from '../store/captureStore'
+import { selectEpisodeAttribution } from '../lib/episode'
 import { useEventStore } from '../store/eventStore'
 
 type SignalZoomProps = {
@@ -22,15 +23,17 @@ export function SignalZoom({ signalId = null }: SignalZoomProps) {
   const signalsById = useEventStore((s) => s.signalsById)
   const decisions = useEventStore((s) => s.decisions)
   const attributions = useEventStore((s) => s.attributions)
+  const anomalies = useEventStore((s) => s.anomalies)
 
   const signal =
     (signalId ? signalsById[signalId] : undefined) ??
     signals.find((candidate) => candidate.domain === 'bus_health') ??
     null
   const satelliteId = signal?.payload.satellite_id ?? null
-  const attribution = satelliteId
-    ? attributions.find((candidate) => candidate.satellite_id === satelliteId) ?? null
-    : null
+  // The episode attribution for this spacecraft (INTERFACE-SPEC §5.0), the
+  // same pick as every other page; the buffer is oldest-first, so a plain
+  // find would return the earliest cluster.
+  const attribution = satelliteId ? selectEpisodeAttribution(attributions, anomalies, satelliteId) : null
   const decision = attribution
     ? decisions.find((candidate) => candidate.attribution_id === attribution.id) ?? null
     : null

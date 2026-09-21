@@ -5,7 +5,10 @@ import { useEventStore } from '../store/eventStore'
 import { makeKBEntry } from '../test/factories'
 
 beforeEach(() => {
+  // reset() keeps the knowledge base (it is not run state); clear it so one
+  // test's entries never satisfy the next.
   useEventStore.getState().reset()
+  useEventStore.getState().setKB([])
 })
 
 afterEach(() => {

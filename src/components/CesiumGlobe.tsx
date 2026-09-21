@@ -33,6 +33,7 @@ import {
   FAMILY_SHORT_LABEL,
   getN2YOOrbitMotion,
   isN2YOGeostationaryFamily,
+  isN2YOSpacecraftDrawnAt,
   latestN2YOAltitudeKm,
   loadN2YOPositionCaches,
   N2YO_SATELLITES,
@@ -195,10 +196,9 @@ const CLICK_MAX_HOLD_MS = 600
 
 type PointerPress = { x: number; y: number; at: number; moved: boolean }
 
-// Select a track in place: label on and orbit drawn, camera untouched. The
-// layer library's selectN2YOSatellite also flies to the centred Earth (the
-// original CANOPY framed the whole catalogue that way); in the console that
-// flight fired on every layer resync, which ran once per incoming signal.
+// Select a track in place: label on and orbit drawn, camera untouched. (The
+// layer library's selectN2YOSatellite used to fly to the centred Earth as
+// well; that flight is gone, and the console keeps this camera-free form.)
 const selectTrackInPlace = (viewer: Viewer, layer: N2YOLayerState) => {
   const entity = viewer.entities.getById(layer.entityIds[0])
   if (entity?.label) {
@@ -595,9 +595,18 @@ export function CesiumGlobe({
       if (press && (press.moved || performance.now() - press.at > CLICK_MAX_HOLD_MS)) {
         return
       }
-      const picked = viewer.scene.pick(event.position)
-      const pickedId = typeof picked?.id?.id === 'string' ? picked.id.id : null
-      if (!pickedId?.startsWith('n2yo-') || !pickedId.endsWith('-satellite')) {
+      // Everything under the cursor, front to back: at the home framing the
+      // focus report's marker sits on the spacecraft (a pass footprint over
+      // the station is drawn at the spacecraft's anchor), and scene.pick
+      // returned that marker, so a click on the spacecraft cleared the
+      // selection instead of making one. The spacecraft mark wins.
+      const picked = viewer.scene.drillPick(event.position, 8) as Array<{ id?: { id?: unknown } }>
+      const pickedId =
+        picked
+          .map((candidate) => (typeof candidate?.id?.id === 'string' ? candidate.id.id : null))
+          .find((id): id is string => id !== null && id.startsWith('n2yo-') && id.endsWith('-satellite')) ??
+        null
+      if (!pickedId) {
         // Empty space clears a click-selection and leaves the camera where the
         // operator put it. The operator's pin is not a click-selection: the
         // Situation column owns it, and "Follow latest" clears it.
@@ -774,6 +783,12 @@ export function CesiumGlobe({
       window.removeEventListener('pointercancel', onPointerUp)
       window.removeEventListener('blur', onPointerUp)
       viewerRef.current = null
+      if (import.meta.env.DEV) {
+        // The probe handle must not keep a destroyed viewer (and its scene)
+        // alive after the unmount, nor point a probe at a dead one.
+        const probe = window as unknown as { __megalithViewer?: Viewer }
+        if (probe.__megalithViewer === viewer) delete probe.__megalithViewer
+      }
       if (!viewer.isDestroyed()) {
         viewer.destroy()
       }
@@ -814,7 +829,15 @@ export function CesiumGlobe({
         typeof bearing === 'number'
           ? `RF interference\nemitter estimate, bearing ${Math.round(bearing)}°`
           : 'RF interference\nemitter estimate'
-      const shouldLabel = isRf || (isFocus && signals.length <= 8)
+      // A focus report placed at a drawn spacecraft (the bus records sit on
+      // the pass footprint, straight over SIM-01 at the home framing) shares
+      // the spacecraft's screen anchor: its FOCUS box landed on the
+      // spacecraft's own label and read "TRU FOCUS 0 km" (storyboard P4).
+      // The spacecraft label names the mark already; the marker and the
+      // pulse ring still draw.
+      const onSpacecraft =
+        point !== null && isN2YOSpacecraftDrawnAt(n2yoLayersRef.current, point.lat, point.lon)
+      const shouldLabel = isRf || (isFocus && signals.length <= 8 && !onSpacecraft)
       const markerKind = markerKindForSignal(signal)
 
       if (point) {
@@ -877,7 +900,9 @@ export function CesiumGlobe({
     })
 
     viewer.scene.requestRender()
-  }, [correlatedSignalIds, focusSignalId, signals])
+    // n2yoLayerCount: a spacecraft that loads after its focus report arrived
+    // takes the FOCUS label off that report.
+  }, [correlatedSignalIds, focusSignalId, signals, n2yoLayerCount])
 
   const resetDynamicSources = useCallback(() => {
     const viewer = viewerRef.current

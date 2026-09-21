@@ -3,6 +3,7 @@ generated TypeScript types it feeds (docs/C2-API.md)."""
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import time
 from datetime import UTC, datetime
@@ -156,6 +157,43 @@ def test_replay_honours_speed_and_max_delay_s(
     assert client.post("/scenarios/beat47.jsonl/replay?max_delay_s=-1").status_code == 422
     assert client.post("/scenarios/beat47.jsonl/replay?speed=0").status_code == 422
     assert len(calls) == 3
+
+
+def test_a_replay_that_dies_mid_run_is_logged(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The route answers ``replaying`` and nothing awaits the task afterwards
+    (``cancel_replay`` skips a finished task), so a scenario that raised
+    half-way used to leave no line in the log while the console went quiet."""
+    import canopy.api as api_module
+
+    class ExplodingReplay:
+        def __init__(self, *args, **kwargs) -> None:
+            pass
+
+        async def run(self) -> None:
+            raise RuntimeError("bad record on line 3")
+
+    monkeypatch.setattr(api_module, "ScenarioReplayService", ExplodingReplay)
+
+    def failures() -> list[logging.LogRecord]:
+        return [
+            r for r in caplog.records
+            if r.levelno == logging.ERROR and "bad record on line 3" in r.getMessage()
+        ]
+
+    with caplog.at_level(logging.ERROR, logger="canopy.api"):
+        assert client.post("/scenarios/beat47.jsonl/replay").status_code == 200
+        deadline = time.time() + 5.0
+        while time.time() < deadline and not failures():
+            time.sleep(0.01)
+    task = client.app.state.replay_task
+    assert task.done() and not task.cancelled()
+    assert failures(), [r.getMessage() for r in caplog.records]
+    assert "replay-beat47.jsonl" in failures()[0].getMessage()
+    assert failures()[0].exc_info is not None  # the traceback travels with the line
+    # The next control call sees a finished task, not a running replay.
+    assert client.post("/reset").json()["replay_cancelled"] is False
 
 
 def test_post_signal_publishes_to_bus(client: TestClient) -> None:

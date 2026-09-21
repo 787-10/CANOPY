@@ -103,8 +103,14 @@ class ScenarioSpec(BaseModel):
 
     def sanitize_input(self, signal: Signal) -> Signal:
         sanitized = signal.model_copy(deep=True)
-        for field_name in self.redacted_observable_fields:
-            sanitized.payload.observables.pop(field_name, None)
+        observables = sanitized.payload.observables
+        # ``observables`` is optional on the Signal schema. The registry's
+        # common redaction list makes this run on every record the gateway
+        # replays, so a record without observables must pass through rather
+        # than kill the replay task.
+        if observables:
+            for field_name in self.redacted_observable_fields:
+                observables.pop(field_name, None)
         return sanitized
 
 

@@ -87,6 +87,34 @@ def test_benchmark_inputs_exclude_completed_response_records() -> None:
         )
 
 
+def test_sanitize_input_passes_a_signal_without_observables_through() -> None:
+    """``observables`` is optional on the schema; the registry's common
+    redaction list runs ``sanitize_input`` on every record the gateway
+    replays, and a record without observables used to raise there and kill
+    the replay task half-way through the scenario."""
+    from canopy.services.schemas.events import Signal
+
+    case = load_scenario_registry().by_file("beat47.jsonl")
+    assert case.redacted_observable_fields  # the common list reaches every case
+    bare = Signal.model_validate(
+        {
+            "domain": "rf_ew", "source": "t", "realism": "mock_operational", "confidence": 0.5,
+            "location": {"label": "x"},
+            "payload": {"event_type": "rf_interference", "summary": "s"},
+            "provenance": {"source_id": "t"},
+        }
+    )
+    assert bare.payload.observables is None
+    assert case.sanitize_input(bare) == bare
+    redacted = bare.model_copy(
+        update={"payload": bare.payload.model_copy(update={"observables": {
+            case.redacted_observable_fields[0]: "x", "keep": 1,
+        }})}
+    )
+    assert case.sanitize_input(redacted).payload.observables == {"keep": 1}
+    assert redacted.payload.observables is not None and "keep" in redacted.payload.observables  # deep copy, input untouched
+
+
 def test_model_specs_have_stable_ids_and_decoding_settings() -> None:
     specs = load_model_specs()
 

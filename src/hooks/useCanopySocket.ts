@@ -18,6 +18,11 @@ import type {
 // development, else no socket at all.
 const DEFAULT_URL: string | null = wsUrl()
 
+/** Reconnect backoff after a close the hook did not ask for: the base delay
+ *  doubles per failed attempt up to the cap and starts over after an open. */
+export const RECONNECT_BASE_MS = 1_000
+export const RECONNECT_MAX_MS = 10_000
+
 const initialState: CanopySocketState = {
   signals: [],
   anomalies: [],
@@ -157,57 +162,86 @@ export function useCanopySocket(url: string | null = DEFAULT_URL) {
       return
     }
 
-    setConnection('connecting')
-    // The deploy-time token rides in the query string: a browser cannot set
-    // headers on a WebSocket handshake (docs/C2-API.md section 1). With no
-    // token configured the URL is used exactly as given.
-    const socket = new WebSocket(wsUrlWithToken(url))
+    // One live socket at a time. A close this effect did not ask for (the
+    // gateway restarted, the link dropped) schedules a reconnect with capped
+    // exponential backoff. The cleanup cancels the timer and closes the
+    // socket; events from a socket that is no longer the current one are
+    // ignored, so the asynchronous close of a socket the cleanup closed (or
+    // that a reconnect replaced) can neither mark the store offline while the
+    // next socket is live nor start a second reconnect chain.
+    let disposed = false
+    let socket: WebSocket | null = null
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let attempt = 0
 
-    socket.addEventListener('open', () => {
-      setConnection('live')
-      setState((current) => ({
-        ...current,
-        isConnected: true,
-        lastError: null,
-      }))
-    })
+    const connect = () => {
+      retryTimer = null
+      setConnection('connecting')
+      // The deploy-time token rides in the query string: a browser cannot set
+      // headers on a WebSocket handshake (docs/C2-API.md section 1). With no
+      // token configured the URL is used exactly as given.
+      const ws = new WebSocket(wsUrlWithToken(url))
+      socket = ws
+      const current = () => !disposed && socket === ws
 
-    socket.addEventListener('close', () => {
-      setConnection('offline')
-      setState((current) => ({
-        ...current,
-        isConnected: false,
-      }))
-    })
-
-    socket.addEventListener('error', () => {
-      setConnection('offline')
-      setState((current) => ({
-        ...current,
-        lastError: 'CANOPY socket error',
-      }))
-    })
-
-    socket.addEventListener('message', (event: MessageEvent<string>) => {
-      try {
-        const parsed: unknown = JSON.parse(event.data)
-        const message = normalizeMessage(parsed)
-        if (!message) {
-          return
-        }
-
-        ingestIntoStore(message)
-        setState((current) => mirrorMessage(current, message))
-      } catch {
-        setState((current) => ({
-          ...current,
-          lastError: 'Invalid CANOPY socket payload',
+      ws.addEventListener('open', () => {
+        if (!current()) return
+        attempt = 0
+        setConnection('live')
+        setState((state) => ({
+          ...state,
+          isConnected: true,
+          lastError: null,
         }))
-      }
-    })
+      })
+
+      ws.addEventListener('close', () => {
+        if (!current()) return
+        setConnection('offline')
+        setState((state) => ({
+          ...state,
+          isConnected: false,
+        }))
+        const delay = Math.min(RECONNECT_MAX_MS, RECONNECT_BASE_MS * 2 ** attempt)
+        attempt += 1
+        retryTimer = setTimeout(connect, delay)
+      })
+
+      ws.addEventListener('error', () => {
+        if (!current()) return
+        setConnection('offline')
+        setState((state) => ({
+          ...state,
+          lastError: 'CANOPY socket error',
+        }))
+      })
+
+      ws.addEventListener('message', (event: MessageEvent<string>) => {
+        if (!current()) return
+        try {
+          const parsed: unknown = JSON.parse(event.data)
+          const message = normalizeMessage(parsed)
+          if (!message) {
+            return
+          }
+
+          ingestIntoStore(message)
+          setState((state) => mirrorMessage(state, message))
+        } catch {
+          setState((state) => ({
+            ...state,
+            lastError: 'Invalid CANOPY socket payload',
+          }))
+        }
+      })
+    }
+
+    connect()
 
     return () => {
-      socket.close()
+      disposed = true
+      if (retryTimer !== null) clearTimeout(retryTimer)
+      socket?.close()
     }
   }, [url, setConnection])
 

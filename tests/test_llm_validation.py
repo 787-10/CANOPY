@@ -94,6 +94,91 @@ def test_request_decision_gets_stub_packet() -> None:
     assert repaired["request_packet"]["requested_effect"] == "sda_tasking"
 
 
+def test_prohibited_phrase_is_flagged_but_the_text_is_left_alone() -> None:
+    """The live held-out run logged ``pattern='\\bdefinitively\\b'`` in evidence.
+
+    The validator records a flag (so the bench can count it) and warns; it
+    never rewrites the model's prose, drops the item or moves confidence.
+    """
+    evidence = ["Signature definitively matches kb-gps-jamming-001 tradecraft."]
+    result = validate_and_repair_attribution(
+        {
+            "actor": "Russia",
+            "confidence": 0.7,
+            "evidence": list(evidence),
+            "kb_citations": ["kb-gps-jamming-001", UNCERTAINTY_ANCHOR],
+        }
+    )
+
+    assert any("prohibited phrase in evidence" in f and "definitively" in f for f in result.flags)
+    assert result.repaired["evidence"][0] == evidence[0]
+    assert result.repaired["actor"] == "Russia"
+    assert result.repaired["confidence"] == 0.7
+
+
+def test_unknown_action_is_downgraded_to_a_local_threat_warning() -> None:
+    """An action outside the taxonomy must still yield a constructible Decision."""
+    from canopy.services.schemas.events import Decision
+
+    repaired = validate_and_repair_decision(
+        {
+            "action": "monitor_and_report",
+            "target": "LEO-SCIENCE-1",
+            "rationale": "Keep watching.",
+            "authority": "request",
+            "request_packet": {"to": "CJFSCC"},
+        }
+    )
+
+    assert repaired["action"] == "threat_warning"
+    assert repaired["authority"] == "local"
+    assert repaired["request_packet"] is None
+    assert any("not in the action taxonomy" in n for n in repaired["_validation_notes"])
+    assert "[validator:" in repaired["rationale"]
+    repaired.pop("_validation_notes")
+    Decision(attribution_id="attr-1", **repaired)
+
+
+def test_unknown_authority_is_set_from_the_taxonomy() -> None:
+    from canopy.services.schemas.events import Decision
+
+    repaired = validate_and_repair_decision(
+        {
+            "action": "active_defense_escort",
+            "target": "GEO asset",
+            "rationale": "Escort.",
+            "authority": "advisory",
+        }
+    )
+
+    assert repaired["authority"] == "request"
+    assert repaired["request_packet"]["to"] == "CJFSCC"  # the request stub follows
+    repaired.pop("_validation_notes")
+    Decision(attribution_id="attr-1", **repaired)
+
+
+def test_missing_target_and_rationale_get_placeholders() -> None:
+    from canopy.services.schemas.events import Decision
+
+    repaired = validate_and_repair_decision({"action": "threat_warning", "authority": "local"})
+
+    assert repaired["target"] == "unspecified"
+    assert repaired["rationale"].startswith("[validator:")
+    repaired.pop("_validation_notes")
+    Decision(attribution_id="attr-1", **repaired)
+
+
+def test_well_formed_decision_is_untouched_by_the_taxonomy_repair() -> None:
+    raw = {
+        "action": "passive_defense",
+        "target": "UAS mesh",
+        "rationale": "Local defensive posture.",
+        "authority": "local",
+        "request_packet": None,
+    }
+    assert validate_and_repair_decision(raw) == raw
+
+
 def test_local_decision_clears_request_packet() -> None:
     repaired = validate_and_repair_decision(
         {

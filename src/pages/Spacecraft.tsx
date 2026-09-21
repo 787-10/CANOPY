@@ -29,6 +29,7 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   useCanopySocket()
   const signals = useEventStore((s) => s.signals)
   const attributions = useEventStore((s) => s.attributions)
+  const anomalies = useEventStore((s) => s.anomalies)
   const decisions = useEventStore((s) => s.decisions)
 
   const satelliteId = useMemo(
@@ -37,8 +38,8 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   )
   const records = useMemo(() => recordsForSatellite(signals, satelliteId), [signals, satelliteId])
   const { attribution, decision } = useMemo(
-    () => latestVerdictFor(attributions, decisions, satelliteId),
-    [attributions, decisions, satelliteId],
+    () => latestVerdictFor(attributions, decisions, satelliteId, anomalies),
+    [attributions, decisions, satelliteId, anomalies],
   )
   const states = useMemo(
     () => subsystemStates(records, attribution, decision),

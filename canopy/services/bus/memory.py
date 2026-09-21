@@ -53,6 +53,15 @@ class _Subscription:
     closed: bool = field(default=False)
 
 
+class _ClosedMarker(BaseModel):
+    """Payload of the wake-up item a closed subscription receives."""
+
+
+# Queued into a closed subscription so a consumer blocked on an empty queue
+# wakes up and ends its ``async for`` (close() alone cannot interrupt ``get``).
+_CLOSED: tuple[str, BaseModel] = ("", _ClosedMarker())
+
+
 class InProcessBus:
     """Single-process asyncio pub/sub.
 
@@ -100,6 +109,8 @@ class InProcessBus:
             while not sub.closed:
                 item = await sub.queue.get()
                 try:
+                    if item is _CLOSED:
+                        break
                     yield item
                 finally:
                     sub.queue.task_done()
@@ -139,5 +150,10 @@ class InProcessBus:
         """
         for sub in self._subs:
             sub.closed = True
+            if sub.queue.empty():
+                # A consumer parked on ``get`` never re-checks ``closed`` on
+                # its own; hand it the sentinel. A non-empty queue needs none:
+                # the consumer re-checks ``closed`` before its next ``get``.
+                sub.queue.put_nowait(_CLOSED)
         self._subs.clear()
         return _Completed()

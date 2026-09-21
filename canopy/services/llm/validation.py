@@ -7,6 +7,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from typing import Any, Literal, Protocol
 
+from canopy.services.schemas.events import ACTION_AUTHORITY
+
 logger = logging.getLogger(__name__)
 
 UNCERTAINTY_ANCHOR = "kb-attribution-uncertainty-001"
@@ -386,6 +388,7 @@ def validate_and_repair_attribution(
 
 def validate_and_repair_decision(raw: dict[str, Any]) -> dict[str, Any]:
     d = dict(raw)
+    _repair_action_taxonomy(d)
     _repair_recovery_invariants(d)
     authority = d.get("authority", "local")
     rationale = d.get("rationale", "")
@@ -449,6 +452,58 @@ def validate_and_repair_decision(raw: dict[str, Any]) -> dict[str, Any]:
 RECOVERY_ACTION = "recovery_recommendation"
 RECOVERY_DOWNGRADE_ACTION = "threat_warning"
 RECOVERY_SOURCE = "internal-diagnosis"
+_AUTHORITIES = ("local", "request")
+
+
+def _record_notes(d: dict[str, Any], notes: list[str]) -> None:
+    """Keep repair notes on the payload and in the rationale the operator sees."""
+    if not notes:
+        return
+    d["_validation_notes"] = [*(d.get("_validation_notes") or []), *notes]
+    rationale = str(d.get("rationale") or "").rstrip()
+    d["rationale"] = f"{rationale} [validator: {'; '.join(notes)}]".strip()
+
+
+def _repair_action_taxonomy(d: dict[str, Any]) -> list[str]:
+    """Keep ``action``, ``authority``, ``target`` and ``rationale`` constructible.
+
+    ``Decision`` types ``action`` and ``authority`` as closed literals, so a
+    model answer outside them (a free-form JSON fallback, a hallucinated verb)
+    used to raise in the client and the attribution got no decision at all;
+    on the fast lane that left the provisional ``threat_warning`` on screen as
+    the final word. An unknown action becomes the local ``threat_warning``
+    the gate would downgrade to (spec §7 R3), an unknown authority becomes
+    the taxonomy's for the action, and a missing ``target`` or ``rationale``
+    gets a placeholder. Every repair is noted on the rationale.
+    """
+    notes: list[str] = []
+    action = d.get("action")
+    if action not in ACTION_AUTHORITY:
+        d["action"] = RECOVERY_DOWNGRADE_ACTION
+        d["authority"] = "local"
+        d["request_packet"] = None
+        d["recovery"] = None
+        notes.append(
+            f"action {action!r} is not in the action taxonomy; "
+            f"downgraded to {RECOVERY_DOWNGRADE_ACTION}"
+        )
+    authority = d.get("authority")
+    if authority not in _AUTHORITIES:
+        expected = ACTION_AUTHORITY[d["action"]]
+        d["authority"] = expected
+        notes.append(f"authority {authority!r} is neither local nor request; set to {expected}")
+    if not isinstance(d.get("target"), str) or not d["target"]:
+        d["target"] = "unspecified"
+        notes.append("target was missing; set to 'unspecified'")
+    if not isinstance(d.get("rationale"), str):
+        d["rationale"] = ""
+        notes.append("rationale was missing")
+    if notes:
+        logger.warning("DECIDE_VALIDATION: action taxonomy repaired: %s", notes)
+        _record_notes(d, notes)
+    return notes
+
+
 _RECOVERY_REQUIRED_KEYS = ("action_id", "target_subsystem", "requires_approval", "rationale")
 _WITHHELD_REQUIRED_KEYS = ("action_id", "target_subsystem", "reason_code")
 
@@ -526,7 +581,5 @@ def _repair_recovery_invariants(d: dict[str, Any]) -> list[str]:
             d["withheld_recovery"] = withheld
     if notes:
         logger.warning("DECIDE_VALIDATION: recovery invariants repaired: %s", notes)
-        d["_validation_notes"] = [*(d.get("_validation_notes") or []), *notes]
-        rationale = str(d.get("rationale") or "").rstrip()
-        d["rationale"] = f"{rationale} [validator: {'; '.join(notes)}]".strip()
+        _record_notes(d, notes)
     return notes

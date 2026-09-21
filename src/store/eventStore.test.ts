@@ -455,7 +455,7 @@ describe('eventStore — setKB', () => {
 })
 
 describe('eventStore — reset', () => {
-  it('returns every field to its initial value with fresh empty Sets', () => {
+  it('returns every run field to its initial value with fresh empty Sets, keeping the connection and the knowledge base', () => {
     // Mutate a broad cross-section of the store first.
     store().ingestSignal(makeSignal('s'))
     store().ingestAnomaly(makeAnomaly('a'))
@@ -487,13 +487,16 @@ describe('eventStore — reset', () => {
     expect(s.signalsById).toEqual({})
     expect(s.attributionsById).toEqual({})
     expect(s.decisionsById).toEqual({})
-    expect(s.connection).toBe('connecting')
     expect(s.view).toBe('brigade')
     expect(s.selectedEventId).toBeNull()
     expect(s.pendingApproval).toBeNull()
     expect(s.maneuverDemo).toBeNull()
     expect(s.takeoverEvent).toBeNull()
-    expect(s.kb).toEqual({})
+    // Not run state: the socket hook owns the connection (the gateway's
+    // `reset` envelope arrives on a socket that stays open) and the knowledge
+    // base is fetched once at mount and serves the next run's citations too.
+    expect(s.connection).toBe('live')
+    expect(s.kb).toEqual({ kb: makeKBEntry('kb') })
 
     // Fresh, genuinely-empty Set instances.
     expect(s.approvedEventIds).toBeInstanceOf(Set)

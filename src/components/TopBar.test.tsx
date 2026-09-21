@@ -36,6 +36,20 @@ describe('TopBar marking chip', () => {
     expect(screen.getByTestId('marking')).toHaveTextContent(/^CUI\/\/SP-A\/SP-B$/)
   })
 
+  it('does not take the page down on a malformed marking; the chip says so instead', () => {
+    // The engine validates markings, but the attributions come back from
+    // sessionStorage on every page load: one bad value must not white-screen
+    // every page until the operator clears storage, and it must not read as
+    // a milder level than it might be.
+    useEventStore.getState().ingestAttribution(makeAttribution('att-bad', { marking: 'secret' }))
+    render(<TopBar title="Console" current="brigade" />)
+    const chip = screen.getByTestId('marking')
+    expect(chip).toHaveTextContent(/invalid/i)
+    expect(chip).not.toHaveTextContent(/^U$/)
+    // The page around it still renders.
+    expect(screen.getByTestId('connection')).toBeInTheDocument()
+  })
+
   it('is hidden in capture mode so the fixed layout does not shift', () => {
     render(<TopBar title="Console" current="brigade" />)
     const chip = screen.getByTestId('marking')

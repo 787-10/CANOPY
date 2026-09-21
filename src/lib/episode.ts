@@ -21,6 +21,9 @@ export function selectEpisodeAttribution(
   const scoped = satelliteId
     ? attributions.filter((a) => a.satellite_id === satelliteId)
     : attributions
+  // A pinned or requested satellite with nothing attributed yet is "standing
+  // by"; showing another satellite's verdict for it would be wrong.
+  if (satelliteId && !scoped.length) return null
   const withSatellite = scoped.filter((a) => a.satellite_id)
   const pool = withSatellite.length ? withSatellite : scoped.length ? scoped : attributions
 

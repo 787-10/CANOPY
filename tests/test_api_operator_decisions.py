@@ -55,3 +55,24 @@ def test_operator_call_rejects_an_unknown_status(client: TestClient) -> None:
     assert response.status_code == 400
     assert "accepted" in response.json()["detail"]
     assert client.get("/decisions/operator").json()["decisions"] == []
+
+
+def test_operator_call_rejects_a_non_string_attribution_id(client: TestClient) -> None:
+    # The id keys the tracer's arrival marks; a list used to raise there (500).
+    response = client.post(
+        "/decisions/dec-3/operator", json={"status": "accepted", "attribution_id": ["attr-1"]}
+    )
+    assert response.status_code == 400
+    assert "attribution_id" in response.json()["detail"]
+    assert client.get("/decisions/operator").json()["decisions"] == []
+    try:
+        # A string id and no id at all are both accepted.
+        for attribution_id in ("attr-1", None):
+            response = client.post(
+                "/decisions/dec-3/operator",
+                json={"status": "accepted", "attribution_id": attribution_id},
+            )
+            assert response.status_code == 200, response.text
+            assert response.json()["record"]["attribution_id"] == attribution_id
+    finally:
+        assert client.post("/reset").status_code == 200
