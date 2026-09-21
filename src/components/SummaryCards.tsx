@@ -14,7 +14,7 @@ import {
   STALE_DECISION_TITLE,
   decisionIsStale,
   operatorOutcome,
-  operatorStamp,
+  operatorStamps,
   recordOperatorDecision,
 } from '../lib/operatorDecisions'
 import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
@@ -103,6 +103,7 @@ export function DecisionSummaryCard({
   const accepted = useEventStore((s) => (decision ? s.acceptedDecisionIds.has(decision.id) : false))
   const denied = useEventStore((s) => (decision ? s.deferredDecisionIds.has(decision.id) : false))
   const statusAt = useEventStore((s) => (decision ? s.decisionStatusAt[decision.id] : undefined))
+  const scenarioAt = useEventStore((s) => (decision ? s.decisionStatusScenarioAt[decision.id] : undefined))
   const withheld = decision?.withheld_recovery ?? null
   const recovery = decision?.recovery ?? null
   const selection = decision ? selectionSummary(decision) : null
@@ -171,7 +172,7 @@ export function DecisionSummaryCard({
             <p className="summary-card__resolved">
               <span>{accepted ? 'Accepted' : 'Denied'}</span>
               <small className="summary-card__outcome" data-testid="summary-outcome">
-                {operatorStamp(statusAt) ? `${operatorStamp(statusAt)} · ` : ''}
+                {operatorStamps(statusAt, scenarioAt) ? `${operatorStamps(statusAt, scenarioAt)} · ` : ''}
                 {operatorOutcome(decision, accepted ? 'accepted' : 'denied')}
               </small>
               <button type="button" className="summary-card__button summary-card__button--quiet" onClick={() => void recordOperatorDecision(decision, 'reconsidered')} data-key="R">Reconsider</button>

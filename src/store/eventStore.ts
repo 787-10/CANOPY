@@ -104,6 +104,9 @@ interface EventState {
   deferredDecisionIds: Set<string>;
   /** When the operator last accepted or denied each decision (ISO). */
   decisionStatusAt: Record<string, string>;
+  /** The scenario clock's time at the operator's call, when a run's clock was
+   *  known (docs/MEGALITH-Flight-Plan.md §2.7: every time names its clock). */
+  decisionStatusScenarioAt: Record<string, string>;
   /** Live maneuver-demo overlay state. When set, the Cesium globe runs
    *  the accept-action visualization (hostile approach → friendly burn
    *  → miss). Cleared automatically when the animation finishes. */
@@ -132,8 +135,8 @@ interface EventState {
   selectEvent: (id: string | null) => void;
   dismissApproval: () => void;
   markApproved: (id: string) => void;
-  acceptDecision: (id: string) => void;
-  deferDecision: (id: string) => void;
+  acceptDecision: (id: string, scenarioAt?: string | null) => void;
+  deferDecision: (id: string, scenarioAt?: string | null) => void;
   clearDecisionStatus: (id: string) => void;
   startManeuverDemo: (demo: ManeuverDemo) => void;
   endManeuverDemo: () => void;
@@ -194,11 +197,24 @@ const initialState = (): Omit<
   acceptedDecisionIds: new Set(),
   deferredDecisionIds: new Set(),
   decisionStatusAt: {},
+  decisionStatusScenarioAt: {},
   maneuverDemo: null,
   takeoverEvent: null,
   pinnedSatelliteId: null,
   kb: {},
 });
+
+/** The scenario stamp map with `id` set, or cleared when no clock was known. */
+const withScenarioStamp = (
+  stamps: Record<string, string>,
+  id: string,
+  scenarioAt: string | null,
+): Record<string, string> => {
+  const next = { ...stamps };
+  if (scenarioAt) next[id] = scenarioAt;
+  else delete next[id];
+  return next;
+};
 
 export const useEventStore = create<EventState>()(
   persist(
@@ -256,7 +272,9 @@ export const useEventStore = create<EventState>()(
       deferredDecisionIds.delete(decision.id);
       const decisionStatusAt = { ...state.decisionStatusAt };
       delete decisionStatusAt[decision.id];
-      return { ...next, acceptedDecisionIds, deferredDecisionIds, decisionStatusAt };
+      const decisionStatusScenarioAt = { ...state.decisionStatusScenarioAt };
+      delete decisionStatusScenarioAt[decision.id];
+      return { ...next, acceptedDecisionIds, deferredDecisionIds, decisionStatusAt, decisionStatusScenarioAt };
     }),
 
   ingestTrace: (trace) =>
@@ -316,7 +334,7 @@ export const useEventStore = create<EventState>()(
           state.pendingApproval?.id === id ? null : state.pendingApproval,
       };
     }),
-  acceptDecision: (id) =>
+  acceptDecision: (id, scenarioAt = null) =>
     set((state) => {
       const acceptedDecisionIds = new Set(state.acceptedDecisionIds);
       acceptedDecisionIds.add(id);
@@ -326,9 +344,10 @@ export const useEventStore = create<EventState>()(
         acceptedDecisionIds,
         deferredDecisionIds,
         decisionStatusAt: { ...state.decisionStatusAt, [id]: new Date().toISOString() },
+        decisionStatusScenarioAt: withScenarioStamp(state.decisionStatusScenarioAt, id, scenarioAt),
       };
     }),
-  deferDecision: (id) =>
+  deferDecision: (id, scenarioAt = null) =>
     set((state) => {
       const deferredDecisionIds = new Set(state.deferredDecisionIds);
       deferredDecisionIds.add(id);
@@ -338,6 +357,7 @@ export const useEventStore = create<EventState>()(
         deferredDecisionIds,
         acceptedDecisionIds,
         decisionStatusAt: { ...state.decisionStatusAt, [id]: new Date().toISOString() },
+        decisionStatusScenarioAt: withScenarioStamp(state.decisionStatusScenarioAt, id, scenarioAt),
       };
     }),
   clearDecisionStatus: (id) =>
@@ -348,7 +368,9 @@ export const useEventStore = create<EventState>()(
       deferredDecisionIds.delete(id);
       const decisionStatusAt = { ...state.decisionStatusAt };
       delete decisionStatusAt[id];
-      return { acceptedDecisionIds, deferredDecisionIds, decisionStatusAt };
+      const decisionStatusScenarioAt = { ...state.decisionStatusScenarioAt };
+      delete decisionStatusScenarioAt[id];
+      return { acceptedDecisionIds, deferredDecisionIds, decisionStatusAt, decisionStatusScenarioAt };
     }),
   startManeuverDemo: (demo) => set({ maneuverDemo: demo }),
   endManeuverDemo: () => set({ maneuverDemo: null }),
@@ -390,6 +412,7 @@ export const useEventStore = create<EventState>()(
         acceptedDecisionIds: [...state.acceptedDecisionIds],
         deferredDecisionIds: [...state.deferredDecisionIds],
         decisionStatusAt: state.decisionStatusAt,
+        decisionStatusScenarioAt: state.decisionStatusScenarioAt,
       }),
       merge: (persisted, current) => {
         const stored = (persisted ?? {}) as Partial<Omit<EventState, "acceptedDecisionIds" | "deferredDecisionIds">> & {
@@ -404,6 +427,7 @@ export const useEventStore = create<EventState>()(
           acceptedDecisionIds: ids(stored.acceptedDecisionIds),
           deferredDecisionIds: ids(stored.deferredDecisionIds),
           decisionStatusAt: stored.decisionStatusAt ?? {},
+          decisionStatusScenarioAt: stored.decisionStatusScenarioAt ?? {},
         };
       },
     },

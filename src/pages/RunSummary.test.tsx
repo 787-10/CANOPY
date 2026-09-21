@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { RunSummary } from './RunSummary'
 import { LAST_RUN_KEY } from '../lib/demoRuns'
+import { pacingLabel } from '../lib/runSummary'
+import { useClockStore } from '../store/clockStore'
 import { providerFromClass, scenarioIdFromSignals, summariseHealth } from '../lib/runSummary'
 import { resolveRoute } from '../lib/routes'
 import { useCaptureStore } from '../store/captureStore'
@@ -182,13 +184,39 @@ describe('RunSummary page (S8)', () => {
     expect(screen.queryByTestId('run-archive-table')).not.toBeInTheDocument()
   })
 
-  it('prefers the launched run for the scenario id', async () => {
+  it('prefers the launched run for the scenario id and prints its pacing', async () => {
     sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'A', stem: 'megalith_link_margin_a.jsonl', startedAt: 'x' }))
     const fetchImpl = vi.fn(() => Promise.resolve(response(200, HEALTH)))
     render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
     expect(screen.getByTestId('run-scenario')).toHaveTextContent('megalith_link_margin_a.jsonl')
+    expect(screen.getByTestId('run-pacing')).toHaveTextContent('speed 20× · gaps capped at 6 s · posted by the launcher')
     expect(screen.queryByText(/run-bundle endpoint/)).not.toBeInTheDocument()
     await waitFor(() => expect(screen.getByTestId('run-provider')).toHaveTextContent('stub'))
+  })
+
+  it("prints the gateway's replay marker as the pacing when the console has one", async () => {
+    sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'A', stem: 'megalith_link_margin_a.jsonl', startedAt: 'x', flight: 60 }))
+    useClockStore.getState().applyReplay(
+      {
+        state: 'finished',
+        scenario: 'megalith_link_margin_a.jsonl',
+        speed: 60,
+        max_delay_s: null,
+        first_ts: '2026-09-20T14:48:28Z',
+        last_ts: '2026-09-20T15:14:42Z',
+        now_ts: '2026-09-20T15:14:42Z',
+        started_at: '2026-09-21T11:26:00Z',
+        ts: '2026-09-21T11:26:27Z',
+      },
+      Date.now(),
+    )
+    const fetchImpl = vi.fn(() => Promise.resolve(response(200, HEALTH)))
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} />)
+    expect(screen.getByTestId('run-pacing')).toHaveTextContent('speed 60× · no cap · finished')
+    useClockStore.getState().reset()
+    // Without the marker the launcher's flight rate is what is known.
+    expect(pacingLabel(null, { run: 'A', stem: 'x', startedAt: '', flight: 600 })).toBe('flight 600× · no cap · posted by the launcher')
+    expect(pacingLabel(null, null)).toBe('unknown')
   })
 
   it('asks /health and /archive with the bearer header when the console carries a deploy-time token (C11)', async () => {

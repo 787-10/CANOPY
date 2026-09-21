@@ -580,7 +580,7 @@ describe('eventStore — persist partialize', () => {
     expect(Object.keys(persisted.decisionStatusAt as Record<string, string>).sort()).toEqual(['acc-1', 'def-1'])
 
     // The persisted blob carries exactly the partialized keys — nothing else.
-    expect(Object.keys(persisted).sort()).toEqual([...([...includedKeys].sort()), 'acceptedDecisionIds', 'deferredDecisionIds', 'decisionStatusAt'].sort())
+    expect(Object.keys(persisted).sort()).toEqual([...([...includedKeys].sort()), 'acceptedDecisionIds', 'deferredDecisionIds', 'decisionStatusAt', 'decisionStatusScenarioAt'].sort())
     expect(parsed.version).toBe(2)
   })
 })
@@ -610,6 +610,18 @@ describe('eventStore — decision revisions', () => {
     store().ingestDecision(makeDecision('dec-c21', { revision: 2, action: 'passive_defense' }))
     expect(store().deferredDecisionIds.has('dec-c21')).toBe(false)
     expect(store().decisionStatusAt['dec-c21']).toBeUndefined()
+  })
+
+  it('keeps the scenario clock stamp beside the wall stamp and clears both together', () => {
+    store().acceptDecision('dec-s', '2026-09-20T15:04:22.000Z')
+    expect(store().decisionStatusAt['dec-s']).toBeDefined()
+    expect(store().decisionStatusScenarioAt['dec-s']).toBe('2026-09-20T15:04:22.000Z')
+    store().deferDecision('dec-s')
+    expect(store().decisionStatusScenarioAt['dec-s']).toBeUndefined()
+    store().deferDecision('dec-s', '2026-09-20T15:05:00.000Z')
+    store().clearDecisionStatus('dec-s')
+    expect(store().decisionStatusAt['dec-s']).toBeUndefined()
+    expect(store().decisionStatusScenarioAt['dec-s']).toBeUndefined()
   })
 
   it('keeps the operator call on a redelivered same or lower revision', () => {

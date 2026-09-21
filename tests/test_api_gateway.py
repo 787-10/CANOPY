@@ -512,6 +512,35 @@ def test_a_new_websocket_receives_the_replay_snapshot_first(client: TestClient) 
             assert snapshot["data"]["now_ts"] == snapshot["data"]["last_ts"]
 
 
+def test_a_late_websocket_joins_an_uncapped_run_at_the_timeline_position(client: TestClient) -> None:
+    """Flight plan §2.2: between two sparse records the timeline has moved on;
+    the snapshot's ``now_ts`` is ``first_ts + elapsed * speed``, not the last
+    record's time, so a late console does not lag the others."""
+    import time
+    from datetime import datetime
+
+    client.post("/reset")
+    with client.websocket_connect("/ws") as first:
+        # beat47 has gaps of hours: at 1x the run sleeps after its first record.
+        response = client.post("/scenarios/beat47.jsonl/replay?speed=1&no_cap=1")
+        assert response.status_code == 200, response.text
+        body = response.json()
+        assert body["no_cap"] is True and body["max_delay_s"] is None
+        started, _ = _drain_until(first, _is_replay("started"))
+        started_at = datetime.fromisoformat(started["data"]["started_at"].replace("Z", "+00:00"))
+        first_ts = datetime.fromisoformat(body["first_ts"].replace("Z", "+00:00"))
+        time.sleep(0.4)
+        with client.websocket_connect("/ws") as late:
+            snapshot = late.receive_json()
+            assert snapshot["kind"] == "replay" and snapshot["data"]["state"] == "started"
+            now_ts = datetime.fromisoformat(snapshot["data"]["now_ts"].replace("Z", "+00:00"))
+            sent_at = datetime.fromisoformat(snapshot["data"]["ts"].replace("Z", "+00:00"))
+            advanced = (now_ts - first_ts).total_seconds()
+            elapsed = (sent_at - started_at).total_seconds()
+            assert 0.3 <= advanced <= elapsed + 0.05, (advanced, elapsed)
+    client.post("/reset")
+
+
 def test_reset_announces_a_cancelled_replay_before_the_reset_marker(client: TestClient) -> None:
     client.post("/reset")
     with client.websocket_connect("/ws") as ws:

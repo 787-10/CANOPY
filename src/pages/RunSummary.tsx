@@ -5,6 +5,7 @@ import { actionLabel } from '../lib/actionLabels'
 import { spacecraftDisplayName, verdictLabel, withheldRecoveryLabel } from '../lib/commanderLanguage'
 import { fetchGateway } from '../lib/gateway'
 import {
+  pacingLabel,
   readLastRun,
   scenarioIdFromSignals,
   summariseHealth,
@@ -12,6 +13,7 @@ import {
 } from '../lib/runSummary'
 import { formatMs, stageTimings } from '../lib/timing'
 import { useCaptureStore } from '../store/captureStore'
+import { useClockStore } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import { selectEpisodeAttribution } from '../lib/episode'
 import '../styles/run.css'
@@ -126,6 +128,7 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
     [traces, attribution, decision],
   )
   const lastRun = readLastRun()
+  const replayMarker = useClockStore((s) => s.run)
   const scenarioId =
     lastRun?.stem ?? scenarioIdFromSignals(signals.map((signal) => signal.id)) ?? 'unknown'
 
@@ -143,6 +146,10 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
               <div>
                 <dt>Scenario</dt>
                 <dd data-testid="run-scenario">{scenarioId}</dd>
+              </div>
+              <div>
+                <dt>Pacing</dt>
+                <dd data-testid="run-pacing">{pacingLabel(replayMarker, lastRun)}</dd>
               </div>
               <div>
                 <dt>Spacecraft</dt>

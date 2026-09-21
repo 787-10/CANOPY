@@ -16,6 +16,12 @@ import { create } from 'zustand'
 import type { ReplayMarker } from '../types/canopy'
 import { useCaptureStore } from './captureStore'
 
+/** A marker whose send time is within this of its receipt was sent by a
+ *  gateway on a clock in step with ours (the same host, or NTP): anchor at
+ *  the send time so a busy tab that handles the message late does not run
+ *  behind for the rest of the run. Further apart, trust receipt (spec §2). */
+export const CLOCK_SKEW_TOLERANCE_MS = 2_000
+
 export const FLIGHT_QUERY_PARAM = 'flight'
 export const FLIGHT_VIEW_STORAGE_KEY = 'megalith-flight-view'
 
@@ -138,8 +144,19 @@ export const useClockStore = create<ClockState>()((set, get) => ({
     const lastTs = Date.parse(marker.last_ts)
     if (!Number.isFinite(nowTs) || !Number.isFinite(lastTs)) return
     const state = get()
+    const sentMs = Date.parse(marker.ts)
+    const anchorWall =
+      Number.isFinite(sentMs) && Math.abs(wallMs - sentMs) <= CLOCK_SKEW_TOLERANCE_MS ? sentMs : wallMs
+    if (marker.state === 'started' && marker.max_delay_s !== null) {
+      // A capped run (the storyboard's 20x with 6 s gaps) has no linear
+      // timeline: its speed is not a clock rate. Remember the run for the
+      // pacing readout, but keep the clock as it is (wall time, or the
+      // operator's free flight).
+      set({ run: marker })
+      return
+    }
     if (marker.state === 'started') {
-      const anchor: Anchor = { scenarioMs: nowTs, wallMs, rate: marker.speed }
+      const anchor: Anchor = { scenarioMs: nowTs, wallMs: anchorWall, rate: marker.speed }
       if (state.mode === 'paused') {
         // Stay paused, but resume into the run at its time.
         set({ run: marker, rate: marker.speed, resumeMode: 'flight', anchor: held({ ...state, timeAt: () => nowTs } as ClockState, wallMs) })
@@ -253,4 +270,10 @@ export function flightClockLabel(state: Pick<ClockState, 'mode' | 'rate' | 'time
 export function initialiseFlightView(search?: string) {
   const view = useCaptureStore.getState().enabled ? 'pass' : readInitialFlightView(search)
   useClockStore.getState().setView(view)
+}
+
+// Development aid, like the globe's `__megalithViewer`: a browser probe can
+// read the flight clock (two consoles compared at one wall instant).
+if (import.meta.env.DEV && typeof window !== 'undefined') {
+  ;(window as unknown as { __megalithClock?: typeof useClockStore }).__megalithClock = useClockStore
 }

@@ -1,5 +1,6 @@
-// The overview's Reports strip: one card per signal, newest on the left so
-// a new card always enters at the same place. A bus anomaly or hostile-kind
+// The overview's Reports strip: one card per signal, newest scenario time on
+// the left (a record that lands out of order takes its place in time, not at
+// the edge). A bus anomaly or hostile-kind
 // external anomaly raised on a signal turns that signal's card into an
 // alert; it does not add a twin card at the same timestamp. Pure over the
 // store's buffers so the order, the cap and the alert classification each
@@ -148,6 +149,16 @@ export function buildReportItems(
   for (const anomaly of orphans) {
     items.push(anomalyItem(anomaly, signalsById.get(anomaly.source_signal)))
   }
-  const newestFirst = items.reverse()
+  // Arrival order first (newest arrival first), then by the records' own
+  // time: the strip reads on the scenario clock, and a late or early arrival
+  // sits where its timestamp puts it. Stable, so equal stamps keep arrival order.
+  const newestFirst = items
+    .reverse()
+    .map((item, index) => ({ item, index, ms: Date.parse(item.ts) }))
+    .sort((a, b) => {
+      if (Number.isFinite(a.ms) && Number.isFinite(b.ms) && a.ms !== b.ms) return b.ms - a.ms
+      return a.index - b.index
+    })
+    .map(({ item }) => item)
   return newestFirst.length > limit ? newestFirst.slice(0, limit) : newestFirst
 }

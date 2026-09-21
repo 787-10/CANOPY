@@ -43,7 +43,7 @@ import logging
 import os
 from collections.abc import Mapping, Sequence
 from contextlib import asynccontextmanager
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import EllipsisType
 from typing import Any, get_args
@@ -380,10 +380,22 @@ def replay_envelope(state: dict[str, Any], *, now_ts: datetime) -> dict[str, Any
 
 
 def _replay_now_ts(app: FastAPI) -> datetime:
-    """Scenario time of the current run as far as the gateway knows it."""
+    """Scenario time of the current run as far as the gateway knows it.
+
+    Finished: the end. Started without a cap (a flight run): the timeline is
+    linear, so it is ``first_ts + (now - started_at) * speed``, capped at
+    ``last_ts``; a console joining between two sparse records must not start
+    at the last record's time and lag the others (flight plan §2.2). With a
+    cap the timeline jumps, so the last published record is where the
+    stream is.
+    """
     state = app.state.replay_state
     if state["state"] == "finished":
         return state["last_ts"]
+    if state["state"] == "started" and state.get("max_delay_s") is None:
+        elapsed_s = max(0.0, (datetime.now(UTC) - state["started_at"]).total_seconds())
+        position = state["first_ts"] + timedelta(seconds=elapsed_s * float(state["speed"]))
+        return min(position, state["last_ts"])
     service = app.state.replay_service
     published = getattr(service, "last_published_ts", None)
     return published or state["first_ts"]
@@ -704,6 +716,9 @@ def create_app(
             raise HTTPException(status_code=400, detail="attribution_id must be a string")
         from datetime import datetime, timezone
 
+        scenario_ts = payload.get("scenario_ts")
+        if scenario_ts is not None and not isinstance(scenario_ts, str):
+            raise HTTPException(status_code=400, detail="scenario_ts must be an ISO string or null")
         action = str(payload.get("action") or "decision")
         target = payload.get("target")
         record: dict[str, Any] = {
@@ -715,7 +730,11 @@ def create_app(
             "satellite_id": payload.get("satellite_id"),
             "attribution_id": attribution_id,
             "operator": "console",
+            # Two clocks (spec 1.4.3, flight plan §2.7): the gateway's wall
+            # time, and the scenario clock's time at the call when the console
+            # had a run's clock (null otherwise).
             "ts": datetime.now(timezone.utc).isoformat(),
+            "scenario_ts": scenario_ts,
         }
         app.state.operator_decisions[decision_id] = record
         arrow = f" → {target}" if target and status != "reconsidered" else ""

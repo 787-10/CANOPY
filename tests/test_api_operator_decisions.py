@@ -76,3 +76,33 @@ def test_operator_call_rejects_a_non_string_attribution_id(client: TestClient) -
             assert response.json()["record"]["attribution_id"] == attribution_id
     finally:
         assert client.post("/reset").status_code == 200
+
+
+def test_operator_call_carries_the_scenario_clock_when_given(client: TestClient) -> None:
+    """Spec 1.4.3: a call made on a run's clock records both stamps; without
+    one, ``scenario_ts`` is null and the wall stamp stands alone."""
+    try:
+        with_clock = client.post(
+            "/decisions/dec-2/operator",
+            json={
+                "status": "accepted",
+                "action": "recovery_recommendation",
+                "scenario_ts": "2026-09-20T15:04:22.000Z",
+            },
+        )
+        assert with_clock.status_code == 200, with_clock.text
+        record = with_clock.json()["record"]
+        assert record["scenario_ts"] == "2026-09-20T15:04:22.000Z"
+        assert record["ts"].startswith("20")
+
+        without = client.post(
+            "/decisions/dec-3/operator", json={"status": "denied", "action": "threat_warning"}
+        ).json()["record"]
+        assert without["scenario_ts"] is None
+
+        bad = client.post(
+            "/decisions/dec-4/operator", json={"status": "denied", "scenario_ts": 12345}
+        )
+        assert bad.status_code == 400
+    finally:
+        assert client.post("/reset").status_code == 200

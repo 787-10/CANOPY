@@ -13,7 +13,7 @@ import {
   STALE_DECISION_TITLE,
   decisionIsStale,
   operatorOutcome,
-  operatorStamp,
+  operatorStamps,
   recordOperatorDecision,
 } from '../lib/operatorDecisions'
 import { selectionSentence, selectionSummary } from '../lib/selectionBasis'
@@ -57,6 +57,7 @@ export function OperatorActionPanel({
     decision ? s.deferredDecisionIds.has(decision.id) : false,
   )
   const statusAt = useEventStore((s) => (decision ? s.decisionStatusAt[decision.id] : undefined))
+  const scenarioAt = useEventStore((s) => (decision ? s.decisionStatusScenarioAt[decision.id] : undefined))
 
   // Render nothing until the engine produces a decision. The empty
   // space stays empty rather than carrying placeholder chrome — the
@@ -230,7 +231,7 @@ export function OperatorActionPanel({
             {status === 'accepted' ? 'Accepted' : 'Denied'}
           </span>
           <span className="operator-action__resolved-detail" data-testid="operator-outcome">
-            {operatorStamp(statusAt) ? `${operatorStamp(statusAt)} · ` : ''}
+            {operatorStamps(statusAt, scenarioAt) ? `${operatorStamps(statusAt, scenarioAt)} · ` : ''}
             {operatorOutcome(decision, status)}
           </span>
           <button

@@ -145,7 +145,7 @@ export async function startDemoRun(
     sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run, stem: spec.stem, flight }))
     sessionStorage.setItem(
       LAST_RUN_KEY,
-      JSON.stringify({ run, stem: spec.stem, startedAt: new Date().toISOString() }),
+      JSON.stringify({ run, stem: spec.stem, startedAt: new Date().toISOString(), flight }),
     )
   } catch {
     // storage unavailable: the console cannot pick the replay up; start it by hand

@@ -213,3 +213,61 @@ describe('view persistence', () => {
     expect(sessionStorage.getItem(FLIGHT_VIEW_STORAGE_KEY)).toBeNull()
   })
 })
+
+describe('a capped run', () => {
+  it('is remembered for the pacing readout but does not drive the clock', () => {
+    fresh()
+    const wall = Date.parse('2026-09-21T11:26:00Z')
+    const marker = {
+      state: 'started' as const,
+      scenario: 'megalith_link_margin_a.jsonl',
+      speed: 20,
+      max_delay_s: 6,
+      first_ts: '2026-09-20T14:48:28Z',
+      last_ts: '2026-09-20T15:14:42Z',
+      now_ts: '2026-09-20T14:48:28Z',
+      started_at: '2026-09-21T11:26:00Z',
+      ts: '2026-09-21T11:26:00Z',
+    }
+    useClockStore.getState().applyReplay(marker, wall)
+    const state = useClockStore.getState()
+    expect(state.run).toEqual(marker)
+    expect(state.mode).toBe('free')
+    expect(state.rate).toBe(1)
+    expect(state.timeAt(wall + 10_000)).toBe(wall + 10_000)
+    // Its end is a known time: the clock holds there like any finished run.
+    useClockStore.getState().applyReplay({ ...marker, state: 'finished', now_ts: marker.last_ts }, wall + 50_000)
+    expect(useClockStore.getState().mode).toBe('holding')
+    expect(useClockStore.getState().timeAt(wall + 90_000)).toBe(Date.parse(marker.last_ts))
+  })
+})
+
+describe('anchoring a started marker', () => {
+  const marker = (ts: string) => ({
+    state: 'started' as const,
+    scenario: 'megalith_link_margin_a.jsonl',
+    speed: 60,
+    max_delay_s: null,
+    first_ts: '2026-09-20T14:48:28Z',
+    last_ts: '2026-09-20T15:14:42Z',
+    now_ts: '2026-09-20T14:48:28Z',
+    started_at: ts,
+    ts,
+  })
+
+  it('anchors at the send time when the message was handled late on a clock in step', () => {
+    fresh()
+    const sent = Date.parse('2026-09-21T11:26:00.000Z')
+    const received = sent + 700
+    useClockStore.getState().applyReplay(marker('2026-09-21T11:26:00.000Z'), received)
+    // 700 ms of wall at 60x had already passed when the marker was handled.
+    expect(useClockStore.getState().timeAt(received)).toBe(Date.parse('2026-09-20T14:48:28Z') + 700 * 60)
+  })
+
+  it('anchors at receipt when the sender clock is far from ours', () => {
+    fresh()
+    const received = Date.parse('2026-09-21T11:26:00.000Z')
+    useClockStore.getState().applyReplay(marker('2026-09-21T11:25:30.000Z'), received)
+    expect(useClockStore.getState().timeAt(received)).toBe(Date.parse('2026-09-20T14:48:28Z'))
+  })
+})

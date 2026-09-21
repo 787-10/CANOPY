@@ -370,7 +370,8 @@ export function CesiumGlobe({
   const flightView = useClockStore((s) => s.view === 'flight')
   const clockMode = useClockStore((s) => s.mode)
   const clockRate = useClockStore((s) => s.rate)
-  const clockRunLive = useClockStore((s) => s.run?.state === 'started')
+  // The rate is the run's only for a run paced by the flight clock (no cap).
+  const clockRunLive = useClockStore((s) => s.run?.state === 'started' && s.run.max_delay_s === null)
   const flightViewRef = useRef(false)
   const flightBodiesRef = useRef<FlightBody[]>([])
   const hasFramedOnceRef = useRef(false)

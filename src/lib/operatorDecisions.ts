@@ -8,6 +8,7 @@ import { actionLabel } from './actionLabels'
 import { recoveryActionLabel, subsystemLabel } from './commanderLanguage'
 import { fetchGateway } from './gateway'
 import { targetLabel } from './targetLabel'
+import { useClockStore } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import type { Decision } from '../types/canopy'
 
@@ -19,8 +20,11 @@ export async function recordOperatorDecision(
   { fetchImpl = fetch }: { fetchImpl?: typeof fetch } = {},
 ): Promise<void> {
   const store = useEventStore.getState()
-  if (status === 'accepted') store.acceptDecision(decision.id)
-  else if (status === 'denied') store.deferDecision(decision.id)
+  // Two stamps on every call (docs/MEGALITH-Flight-Plan.md §2.7): the wall
+  // clock, and the scenario clock when a run's clock is known.
+  const scenarioAt = scenarioStamp()
+  if (status === 'accepted') store.acceptDecision(decision.id, scenarioAt)
+  else if (status === 'denied') store.deferDecision(decision.id, scenarioAt)
   else store.clearDecisionStatus(decision.id)
   // No gateway, nothing to tell: fixtures and tests stay local.
   if (store.connection !== 'live') return
@@ -37,6 +41,7 @@ export async function recordOperatorDecision(
           target: decision.target,
           attribution_id: decision.attribution_id,
           satellite_id: decision.recovery?.satellite_id ?? null,
+          scenario_ts: scenarioAt,
         }),
       },
       { fetchImpl },
@@ -57,11 +62,29 @@ export function operatorOutcome(decision: Decision, status: 'accepted' | 'denied
   return `Issued: ${actionLabel(decision.action)} to ${targetLabel(decision.target)}`
 }
 
+/** The scenario clock's time now as ISO, or null while no run's clock is known. */
+export function scenarioStamp(): string | null {
+  const clock = useClockStore.getState()
+  if (clock.mode === 'free') return null
+  const ms = clock.timeAt()
+  return Number.isFinite(ms) ? new Date(ms).toISOString() : null
+}
+
 /** `2026-09-20T15:14:02.123Z` -> `15:14:02Z`. */
 export function operatorStamp(iso: string | undefined): string | null {
   if (!iso) return null
   const d = new Date(iso)
   return Number.isNaN(d.getTime()) ? null : `${d.toISOString().slice(11, 19)}Z`
+}
+
+/** Both stamps of a call, each naming its clock: `15:04:22Z scenario ·
+ *  11:31:04Z wall`; only the wall stamp (unlabelled, as before) when the call
+ *  was made with no run's clock known. */
+export function operatorStamps(wallIso: string | undefined, scenarioIso: string | undefined): string | null {
+  const wall = operatorStamp(wallIso)
+  const scenario = operatorStamp(scenarioIso)
+  if (!wall) return scenario ? `${scenario} scenario` : null
+  return scenario ? `${scenario} scenario · ${wall} wall` : wall
 }
 
 // A decision behind the verdict revision (C21). The decide stage makes a
