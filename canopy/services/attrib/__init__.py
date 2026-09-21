@@ -35,6 +35,12 @@ log = logging.getLogger(__name__)
 __all__ = ["AttribService", "DEFAULT_RULE_VERDICT"]
 
 DEFAULT_WINDOW_S = 2.0
+# The fast lane's cluster idle window on *scenario* time (spec §5.0, 1.4.4):
+# a satellite's cluster closes after this much scenario quiet, converted to
+# wall seconds by the replay's rate. Ten minutes covers the demo episodes'
+# widest gap between two reports (331 s) at any rate, so a run is one
+# episode at 1x as at 600x. ``None`` keeps the wall window (``window_s``).
+DEFAULT_CLUSTER_WINDOW_SCENARIO_S = 600.0
 STRESS_HAIRCUT = 0.15
 
 # Verdict-lane context (docs/INTERFACE-SPEC.md §5.1, §5.2). The two window
@@ -335,6 +341,15 @@ class AttribService:
     Batches without a ``satellite_id``, without a bus anomaly, or with the
     rule lane off keep the windowed, synchronous behaviour unchanged.
 
+    Cluster window on scenario time (spec §5.0, 1.4.4). ``window_s`` is the
+    legacy batching delay and stays wall time. The fast lane's cluster closes
+    after ``cluster_window_scenario_s`` of *scenario* quiet when that is set:
+    the wall timeout is ``cluster_window_scenario_s / clock_rate()``, where
+    ``clock_rate`` returns the replay's speed while a run is in progress and
+    ``None`` when no timeline is known (then the wall ``window_s`` applies, as
+    before). A 1x replay of a demo episode is therefore one cluster, like a
+    600x one, and the harnesses' ``flush()`` seam is unchanged.
+
     Closely-spaced objects (spec §5.4). A cue that names no satellite but a
     ``candidate_satellite_ids`` set stays on the legacy path (it opens no
     cluster and joins none); :meth:`recent_context` hands the rule lane the
@@ -356,6 +371,8 @@ class AttribService:
         kb: KB,
         *,
         window_s: float = DEFAULT_WINDOW_S,
+        cluster_window_scenario_s: float | None = None,
+        clock_rate: Callable[[], float | None] = lambda: None,
         tracer: Tracer | None = None,
         blocked_domains: Callable[[], set[Domain]] | None = None,
         multi_agent: bool = True,
@@ -369,6 +386,10 @@ class AttribService:
         self._llm = llm
         self._kb = kb
         self._window_s = window_s
+        if cluster_window_scenario_s is not None and cluster_window_scenario_s < 0:
+            raise ValueError("cluster_window_scenario_s must be >= 0 or None")
+        self._cluster_window_scenario_s = cluster_window_scenario_s
+        self._clock_rate = clock_rate
         self._tracer = tracer
         self._blocked_domains = blocked_domains
         self._multi_agent = multi_agent
@@ -642,7 +663,9 @@ class AttribService:
                 if cluster.closing or self._window_s <= 0:
                     break
                 try:
-                    await asyncio.wait_for(cluster.joined.wait(), timeout=self._window_s)
+                    await asyncio.wait_for(
+                        cluster.joined.wait(), timeout=self.cluster_timeout_s()
+                    )
                 except TimeoutError:
                     if cluster.dirty:
                         # A joiner landed in the loop turn between the timer
@@ -658,6 +681,22 @@ class AttribService:
             )
         finally:
             self._close_cluster(cluster)
+
+    def cluster_timeout_s(self) -> float:
+        """Wall seconds of quiet that close a fast-lane cluster right now.
+
+        The scenario window over the replay's rate while a run's timeline is
+        known; the wall ``window_s`` otherwise (no run, or the window unset).
+        """
+        if self._cluster_window_scenario_s is None:
+            return self._window_s
+        try:
+            rate = self._clock_rate()
+        except Exception:  # noqa: BLE001 - a broken provider must not stall the lane
+            rate = None
+        if rate is None or not rate > 0:
+            return self._window_s
+        return self._cluster_window_scenario_s / float(rate)
 
     def _close_cluster(self, cluster: _SatelliteCluster) -> None:
         cluster.closed = True

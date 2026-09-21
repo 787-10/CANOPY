@@ -41,7 +41,7 @@ export type LastRun = {
   run: string
   stem: string
   startedAt: string
-  /** The launcher's flight rate (10, 60 or 600), or null for the storyboard's pacing. */
+  /** The launcher's flight rate (1, 10, 60 or 600), or null for the storyboard's pacing. */
   flight: number | null
 } | null
 

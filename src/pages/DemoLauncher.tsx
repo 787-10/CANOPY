@@ -15,11 +15,14 @@ type DemoLauncherProps = {
   run?: string | null
   /** `?autostart=1`: start without a click. */
   autostart?: boolean
-  /** `?flight=10|60|600`: fly the run on the scenario clock at that rate. */
+  /** `?flight=1|10|60|600`: fly the run on the scenario clock at that rate. */
   flight?: string | null
   fetchImpl?: typeof fetch
   navigate?: (url: string) => void
 }
+
+const wallTimeText = (seconds: number) =>
+  seconds >= 120 ? `${Math.round(seconds / 60)} min` : `${Math.round(seconds)} s`
 
 const parseFlightRate = (value: string | null | undefined): FlightRate | null => {
   const rate = Number(value)
@@ -119,7 +122,7 @@ export function DemoLauncher({
               data-testid={`demo-flight-${candidate ?? 'off'}`}
             >
               <span>{candidate ? `Flight ${candidate}×` : 'Pass view'}</span>
-              <strong>{candidate ? `about ${Math.round((26 * 60) / candidate)} s of wall time` : 'storyboard pacing'}</strong>
+              <strong>{candidate ? `about ${wallTimeText((26 * 60) / candidate)} of wall time` : 'storyboard pacing'}</strong>
             </button>
           ))}
         </div>

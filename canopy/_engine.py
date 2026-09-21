@@ -158,6 +158,8 @@ def build_engine(
     provider: str = "stub",
     kb_path: str | Path = DEFAULT_KB_PATH,
     attrib_window_s: float = 2.0,
+    attrib_cluster_window_scenario_s: float | None = None,
+    attrib_clock_rate: Callable[[], float | None] | None = None,
     blocked_domains_provider=None,
     multi_agent: bool = True,
     enable_osint: bool = True,
@@ -230,6 +232,10 @@ def build_engine(
         resolved_llm,
         kb,
         window_s=attrib_window_s,
+        # The fast lane's cluster window on scenario time (spec §5.0, 1.4.4):
+        # the gateway sets both; the CLI and the bench keep the wall window.
+        cluster_window_scenario_s=attrib_cluster_window_scenario_s,
+        clock_rate=attrib_clock_rate if attrib_clock_rate is not None else (lambda: None),
         tracer=tracer,
         blocked_domains=blocked_domains_provider,
         multi_agent=multi_agent,

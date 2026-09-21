@@ -2,7 +2,7 @@
 // `/demo?run=A|B|C`. Kept out of the page component so the fetch and the
 // navigation can be unit-tested with doubles.
 import { useCaptureStore, withCapture } from '../store/captureStore'
-import { useClockStore, type FlightRate } from '../store/clockStore'
+import { COUPLED_RATES, useClockStore, type FlightRate } from '../store/clockStore'
 import { useEventStore } from '../store/eventStore'
 import { apiUrl, fetchGateway } from './gateway'
 
@@ -97,7 +97,7 @@ export type StartDemoRunOptions = {
   apiUrl?: string
   /** Clear the console's event buffers first (default true). */
   clearState?: boolean
-  /** Fly the run on the scenario clock at this rate (10, 60 or 600); null is the storyboard's pacing. */
+  /** Fly the run on the scenario clock at this rate (1, 10, 60 or 600); null is the storyboard's pacing. */
   flight?: FlightRate | null
 }
 
@@ -161,7 +161,7 @@ export async function startDemoRun(
 type PendingReplay = { run: DemoRun; stem: string; flight: FlightRate | null }
 
 const parseFlight = (value: unknown): FlightRate | null =>
-  value === 10 || value === 60 || value === 600 ? value : null
+  (COUPLED_RATES as readonly number[]).includes(value as number) ? (value as FlightRate) : null
 
 export function readPendingReplay(): PendingReplay | null {
   try {

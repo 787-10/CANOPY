@@ -121,7 +121,7 @@ describe('demo runs', () => {
     useClockStore.getState().setView('pass')
   })
 
-  it('a pending flight rate outside 10/60/600 falls back to the storyboard pacing', async () => {
+  it('a pending flight rate outside 1/10/60/600 falls back to the storyboard pacing', async () => {
     sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'C', flight: 7 }))
     expect(readPendingReplay()).toEqual({ run: 'C', stem: DEMO_RUNS.C.stem, flight: null })
   })

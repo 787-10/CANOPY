@@ -31,7 +31,9 @@ export type FlightRate = 1 | 10 | 60 | 600
 export const FLIGHT_RATES: readonly FlightRate[] = [1, 10, 60, 600]
 /** Rates a flight-coupled run may use (decision 2): 1× fragments an episode
  *  while the attribution window is wall time. */
-export const COUPLED_RATES: readonly FlightRate[] = [10, 60, 600]
+/** Rates a run may be paced at (spec §5.0, 1.4.4: the cluster window is on
+ *  scenario time, so 1× is one episode like the others). */
+export const COUPLED_RATES: readonly FlightRate[] = [1, 10, 60, 600]
 
 /** How far a signal's `ts` may sit from the clock before it is a diagnostic:
  *  a quarter second of wall time at the run's rate. */

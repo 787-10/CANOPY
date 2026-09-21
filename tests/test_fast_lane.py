@@ -610,3 +610,38 @@ async def test_legacy_decisions_keep_a_fresh_id_and_revision_zero() -> None:
         assert len({u.id for _, u in run.ui_events}) == 2
     finally:
         await run.stop()
+
+
+async def test_cluster_window_on_scenario_time_scales_with_the_replay_rate() -> None:
+    """Spec §5.0 (1.4.4): a 0.4 s scenario window at 2x is 0.2 s of wall, so an
+    anomaly 0.1 s later joins the cluster as a revision; with no timeline the
+    0.05 s wall window applies and the same gap opens a new cluster."""
+    rate: list[float | None] = [2.0]
+    run = await _start(
+        delay_s=0.0,
+        window_s=0.05,
+        cluster_window_scenario_s=0.4,
+        clock_rate=lambda: rate[0],
+    )
+    try:
+        assert run.attrib.cluster_timeout_s() == pytest.approx(0.2)
+        await run.publish(_bus(0.83))
+        await run.wait_for(run.attributions, 2)  # provisional + revision 1
+        await asyncio.sleep(0.1)  # inside the 0.2 s wall window at 2x
+        assert run.attrib.open_clusters != {}
+        await run.publish(_bus(0.83, ts=T0 + timedelta(seconds=30)))
+        await run.wait_for(run.attributions, 3)
+        ids = [a.id for _, a in run.attributions]
+        assert len(set(ids)) == 1, "the second anomaly joined the open cluster"
+        assert run.attributions[-1][1].revision == 2
+
+        # No run in progress: the wall window (0.05 s) closes the cluster first.
+        rate[0] = None
+        assert run.attrib.cluster_timeout_s() == pytest.approx(0.05)
+        await asyncio.sleep(0.4)
+        assert run.attrib.open_clusters == {}
+        await run.publish(_bus(0.83, ts=T0 + timedelta(seconds=60)))
+        await run.wait_for(run.attributions, 5)
+        assert len({a.id for _, a in run.attributions}) == 2
+    finally:
+        await run.stop()

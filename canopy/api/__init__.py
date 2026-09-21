@@ -64,6 +64,7 @@ from canopy._engine import (
 from canopy.api import archive
 from canopy.api.schemas import SCHEMA_MODES, event_schema, event_schemas
 from canopy.services.bus import codec
+from canopy.services.attrib import DEFAULT_CLUSTER_WINDOW_SCENARIO_S
 from canopy.services.scenario_replay import ScenarioReplayService, load_scenario_signals
 from canopy.services.schemas.events import Domain, Signal
 from bench.specs import load_scenario_registry
@@ -277,6 +278,11 @@ async def _lifespan(app: FastAPI):
     engine = build_engine(
         provider=provider,
         kb_path=kb_path,
+        # Fast-lane clusters close on scenario quiet (spec §5.0, 1.4.4): the
+        # replay's speed converts the window to wall time while a run is in
+        # progress; with no run the wall window applies.
+        attrib_cluster_window_scenario_s=DEFAULT_CLUSTER_WINDOW_SCENARIO_S,
+        attrib_clock_rate=lambda: _replay_rate(app),
         blocked_domains_provider=lambda: app.state.blocked_domains,
         enable_osint=not bool(os.environ.get("CANOPY_DISABLE_OSINT")),
         bus_backend=bus_backend,
@@ -377,6 +383,15 @@ def replay_envelope(state: dict[str, Any], *, now_ts: datetime) -> dict[str, Any
             "ts": _iso_z(datetime.now(UTC)),
         },
     )
+
+
+def _replay_rate(app: FastAPI) -> float | None:
+    """The replay's speed while a run is in progress, else None (no timeline)."""
+    state = getattr(app.state, "replay_state", None)
+    if not state or state.get("state") != "started":
+        return None
+    speed = state.get("speed")
+    return float(speed) if speed else None
 
 
 def _replay_now_ts(app: FastAPI) -> datetime:

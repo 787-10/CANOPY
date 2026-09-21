@@ -40,9 +40,16 @@ class ScenarioReplayService:
 
     Honors scenario timestamps so the replay paces in real time, scaled by
     ``speed`` (e.g., 20.0 = 20x). ``max_delay_s`` caps any single inter-event
-    sleep, useful when tests want to drain a scenario without waiting for
+    gap, useful when tests want to drain a scenario without waiting for
     long lulls. ``stop_when_done`` is provided so an orchestrator can wait
     for the replay to finish; the service signals completion by setting it.
+
+    Pacing is by deadline (docs/MEGALITH-Flight-Plan.md §8): each record's
+    target wall time is the first record's plus the (capped) gaps so far, and
+    the service sleeps until that deadline rather than for the gap after the
+    previous publish. Publish and pipeline time therefore do not accumulate:
+    without a cap the k-th record lands at ``start + (ts_k - ts_0) / speed``,
+    which is the timeline the gateway's ``replay`` envelope announces.
     """
 
     def __init__(
@@ -83,19 +90,25 @@ class ScenarioReplayService:
 
     async def _replay_one(self, path: Path) -> None:
         log.info("scenario replay: starting %s (speed=%sx)", path, self._speed)
+        loop = asyncio.get_running_loop()
         previous_ts = None
+        deadline: float | None = None
         published = 0
         for signal in load_scenario_signals(path):
             if self._signal_filter is not None and not self._signal_filter(signal):
                 continue
             if self._signal_transform is not None:
                 signal = self._signal_transform(signal)
-            if previous_ts is not None:
-                delay = (signal.ts - previous_ts).total_seconds() / self._speed
+            if previous_ts is None or deadline is None:
+                deadline = loop.time()
+            else:
+                gap = (signal.ts - previous_ts).total_seconds() / self._speed
                 if self._max_delay_s is not None:
-                    delay = min(delay, self._max_delay_s)
-                if delay > 0:
-                    await asyncio.sleep(delay)
+                    gap = min(gap, self._max_delay_s)
+                deadline += max(gap, 0.0)
+                wait = deadline - loop.time()
+                if wait > 0:
+                    await asyncio.sleep(wait)
             await self._bus.publish(f"signals.{signal.domain}", signal)
             previous_ts = signal.ts
             self.last_published_ts = signal.ts

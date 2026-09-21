@@ -64,3 +64,47 @@ async def test_replay_rejects_zero_speed() -> None:
     bus = InProcessBus()
     with pytest.raises(ValueError):
         ScenarioReplayService(bus, ROOT / "scenarios" / "beat1.jsonl", speed=0.0)
+
+
+async def test_replay_paces_by_deadline_so_publish_time_does_not_accumulate(tmp_path: Path) -> None:
+    """Flight plan §8: with records 1 s apart at 25x (40 ms gaps) and a bus that
+    takes 30 ms per publish, a per-gap sleep would take about 70 ms per record;
+    deadline pacing lands each record at start + k * 40 ms regardless."""
+    import json
+    import time
+    from datetime import timedelta
+
+    base = load_scenario_signals(ROOT / "scenarios" / "beat1.jsonl")[0]
+    records = []
+    for k in range(6):
+        record = json.loads(base.model_dump_json())
+        record["id"] = f"pace-{k}"
+        record["ts"] = (base.ts + timedelta(seconds=k)).isoformat().replace("+00:00", "Z")
+        records.append(json.dumps(record))
+    path = tmp_path / "paced.jsonl"
+    path.write_text("\n".join(records) + "\n")
+
+    class SlowBus(InProcessBus):
+        def __init__(self) -> None:
+            super().__init__()
+            self.stamps: list[float] = []
+
+        async def publish(self, topic: str, event) -> None:  # type: ignore[override]
+            self.stamps.append(time.monotonic())
+            await asyncio.sleep(0.03)
+            await super().publish(topic, event)
+
+    bus = SlowBus()
+    stop_event = asyncio.Event()
+    replay = ScenarioReplayService(bus, path, speed=25.0, stop_when_done=stop_event)
+    try:
+        await asyncio.wait_for(replay.run(), timeout=5.0)
+    finally:
+        bus.close()
+    assert stop_event.is_set()
+    assert len(bus.stamps) == 6
+    offsets = [stamp - bus.stamps[0] for stamp in bus.stamps]
+    # Each record within a scheduler tick of its deadline; the last lands near
+    # 200 ms, not near 350 ms (5 gaps of 40 ms plus 5 publishes of 30 ms).
+    for k, offset in enumerate(offsets):
+        assert abs(offset - 0.04 * k) < 0.02, (k, offsets)
