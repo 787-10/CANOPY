@@ -1,0 +1,273 @@
+/* Spacecraft page: the 3D stage with its HUD and subsystem chips, and the
+   strip of Symptom, Cause belief and Recovery panels under it. Health colours
+   are the topology's: green nominal, amber degraded, the internal-fault blue
+   for a fault, the hostile red for a withheld recovery. */
+
+.spacecraft-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+}
+
+/* ---- The 3D host ------------------------------------------------------- */
+
+.viewport3d {
+  position: relative;
+  min-height: 0;
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background:
+    radial-gradient(ellipse at 50% 42%, rgba(29, 63, 168, 0.16), transparent 62%),
+    var(--panel-strong);
+  overflow: hidden;
+}
+
+.viewport3d__canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  cursor: grab;
+}
+
+.viewport3d__canvas:active {
+  cursor: grabbing;
+}
+
+.viewport3d__status {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  pointer-events: none;
+}
+
+.viewport3d__status--corner {
+  inset: auto auto 6px 8px;
+  display: block;
+  font-size: 0.62rem;
+  color: var(--amber);
+}
+
+.viewport3d__credit {
+  position: absolute;
+  left: 8px;
+  bottom: 6px;
+  padding: 2px 6px;
+  border-radius: 2px;
+  background: rgba(6, 10, 10, 0.6);
+  color: var(--text-subtle);
+  font-size: 0.62rem;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+}
+
+/* ---- Shared bits ------------------------------------------------------- */
+
+.scene-btn {
+  border: 1px solid var(--control-line);
+  border-radius: 2px;
+  background: var(--control-surface);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 3px 8px;
+  cursor: pointer;
+}
+
+.scene-btn[aria-pressed='true'] {
+  background: var(--control-surface-active);
+}
+
+.health-dot {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.6);
+  flex: none;
+}
+
+.health-dot--degraded { background: var(--amber); }
+.health-dot--faulted { background: var(--verdict-internal); }
+.health-dot--withheld-recovery { background: var(--verdict-hostile); }
+
+.health--nominal { color: var(--green); }
+.health--degraded { color: var(--amber); }
+.health--faulted { color: var(--verdict-internal); }
+.health--withheld-recovery { color: var(--verdict-hostile); }
+
+/* ---- The stage --------------------------------------------------------- */
+
+.spacecraft-scene {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.spacecraft-scene__viewport {
+  position: absolute;
+  inset: 0;
+}
+
+.spacecraft-scene__leaders {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.leader {
+  stroke: rgba(220, 227, 213, 0.22);
+  stroke-width: 1;
+  opacity: 0.55;
+  transition: opacity 120ms linear;
+}
+
+.leader--degraded { stroke: var(--amber); opacity: 0.9; stroke-width: 1.2; }
+.leader--faulted { stroke: var(--verdict-internal); opacity: 0.95; stroke-width: 1.4; }
+.leader--withheld-recovery { stroke: var(--verdict-hostile); opacity: 0.95; stroke-width: 1.4; stroke-dasharray: 4 3; }
+.leader.is-selected { stroke: var(--text-primary); opacity: 1; stroke-width: 1.4; }
+
+.spacecraft-scene__hud {
+  position: absolute;
+  left: 14px;
+  top: 14px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--panel);
+  font-size: 0.72rem;
+}
+
+.spacecraft-scene__actor {
+  padding: 3px 8px;
+  border: 1px solid var(--line-bright);
+  border-radius: 2px;
+  color: var(--verdict-hostile);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+
+.spacecraft-scene__explode {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.66rem;
+}
+
+.spacecraft-scene__explode input {
+  width: 120px;
+  accent-color: var(--brand-bright);
+}
+
+.spacecraft-scene__chips {
+  position: absolute;
+  right: 14px;
+  top: 14px;
+  bottom: 14px;
+  width: 236px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.subsystem-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 8px;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  background: var(--panel);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.subsystem-chip:hover { border-color: var(--line-bright); }
+.subsystem-chip.is-selected { border-color: var(--text-primary); background: var(--panel-strong); }
+.subsystem-chip--degraded { border-color: rgba(201, 164, 87, 0.5); }
+.subsystem-chip--faulted { border-color: rgba(123, 150, 255, 0.55); }
+.subsystem-chip--withheld-recovery { border-color: rgba(255, 123, 109, 0.6); }
+
+.subsystem-chip__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 700;
+}
+
+.subsystem-chip__head em {
+  margin-left: auto;
+  font-style: normal;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.subsystem-chip__note {
+  color: var(--text-subtle);
+  font-size: 0.66rem;
+  line-height: 1.3;
+}
+
+.subsystem-chip__recovery {
+  color: var(--text-primary);
+  font-size: 0.66rem;
+  border-top: 1px solid var(--line);
+  padding-top: 3px;
+}
+
+.subsystem-chip__recovery--withheld,
+.subsystem-chip__recovery--blocked { color: var(--verdict-hostile); }
+.subsystem-chip__recovery--approved { color: var(--green); }
+
+/* ---- The strip --------------------------------------------------------- */
+
+.spacecraft-strip {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr) minmax(0, 1fr);
+  gap: 12px;
+  height: 224px;
+  flex: none;
+}
+
+/* The btop title sits on the frame, so the panel itself must not clip;
+   the body scrolls instead. */
+.spacecraft-strip__panel {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  overflow: visible;
+}
+
+.spacecraft-strip__body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* Capture mode: a fixed frame, no controls in the still. */
+html[data-capture="1"] .spacecraft-scene__hud .scene-btn,
+html[data-capture="1"] .spacecraft-scene__explode {
+  display: none;
+}

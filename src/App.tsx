@@ -11,6 +11,7 @@ import { resolveRoute } from './lib/routes'
 import { initialiseCaptureMode } from './store/captureStore'
 import './App.css'
 import './styles/scrollbars.css'
+import './styles/spacecraft.css'
 
 // Capture mode (fixed 1920x1080 layout) is read from `?capture=1` /
 // sessionStorage before the first render.

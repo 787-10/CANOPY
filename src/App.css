@@ -2941,61 +2941,6 @@
 
 /* Inline card under a feed row. */
 
-/* ---- Spacecraft page ---------------------------------------------------- */
-.spacecraft-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr);
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-areas:
-    "topology symptom belief"
-    "topology recovery latest";
-  gap: 12px;
-  min-height: 0;
-}
-
-.spacecraft-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 0;
-  padding: 12px;
-  overflow: auto;
-}
-
-.spacecraft-panel--topology {
-  grid-area: topology;
-}
-
-.spacecraft-panel--symptom {
-  grid-area: symptom;
-}
-
-.spacecraft-panel--belief {
-  grid-area: belief;
-}
-
-.spacecraft-panel--recovery {
-  grid-area: recovery;
-}
-
-.spacecraft-panel--latest {
-  grid-area: latest;
-  padding: 0;
-}
-
-.spacecraft-panel .panel__header {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-}
-
-.spacecraft-panel .panel__header h2 {
-  font-size: 0.9rem;
-  font-weight: 760;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
 .verdict-badge {
   --verdict-color: var(--text-muted);
   --verdict-line: var(--line-bright);
@@ -3034,120 +2979,6 @@
   --verdict-color: var(--verdict-unknown);
   --verdict-line: rgba(184, 194, 217, 0.55);
   --verdict-soft: rgba(184, 194, 217, 0.12);
-}
-
-/* Topology */
-.topology {
-  margin: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-.topology__svg {
-  flex: 1 1 auto;
-  min-height: 0;
-  max-height: 100%;
-}
-
-.topology__edge {
-  stroke: rgba(220, 227, 213, 0.18);
-  stroke-width: 1;
-}
-
-.topology__edge--stressed {
-  stroke: rgba(201, 164, 87, 0.5);
-  stroke-dasharray: 4 3;
-}
-
-.topology__node {
-  --node-color: var(--green);
-}
-
-.topology__node--degraded {
-  --node-color: var(--amber);
-}
-
-.topology__node--faulted {
-  --node-color: var(--verdict-internal);
-}
-
-.topology__node--withheld-recovery {
-  --node-color: var(--verdict-hostile);
-}
-
-.topology__ring {
-  fill: rgba(4, 8, 8, 0.95);
-  stroke: var(--node-color);
-  stroke-width: 1.6;
-}
-
-.topology__node--faulted .topology__ring,
-.topology__node--degraded .topology__ring,
-.topology__node--withheld-recovery .topology__ring {
-  stroke-width: 2.4;
-}
-
-.topology__core {
-  fill: var(--node-color);
-}
-
-.topology__halo {
-  fill: none;
-  stroke: var(--node-color);
-  stroke-width: 1;
-  stroke-dasharray: 3 3;
-  opacity: 0.8;
-}
-
-.topology__label {
-  fill: var(--text-primary);
-  font-family: var(--font-sans);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.topology__state {
-  fill: var(--node-color);
-  font-family: var(--font-sans);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.topology__legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px 14px;
-  color: var(--text-muted);
-  font-size: 0.68rem;
-}
-
-.topology__legend-item i {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 4px;
-  border-radius: 50%;
-  border: 1.5px solid var(--green);
-  vertical-align: -1px;
-}
-
-.topology__legend-item--degraded i {
-  border-color: var(--amber);
-  background: var(--amber);
-}
-
-.topology__legend-item--faulted i {
-  border-color: var(--verdict-internal);
-  background: var(--verdict-internal);
-}
-
-.topology__legend-item--withheld-recovery i {
-  border-color: var(--verdict-hostile);
-  border-style: dashed;
 }
 
 /* Sparkline */
@@ -5755,16 +5586,6 @@ html[data-capture="1"] .reasoning-line {
   line-height: 1.4;
 }
 
-/* Spacecraft page: recovery under the topology on the left; the bus-health
-   card takes the whole lower right so it fits without scrolling. */
-.spacecraft-grid {
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1fr);
-  grid-template-rows: minmax(0, 0.9fr) minmax(0, 1.1fr);
-  grid-template-areas:
-    "topology symptom belief"
-    "recovery latest latest";
-}
-
 /* A new alert card glows harder than a report so the amber reads through
    its own amber border. */
 @keyframes report-glow-alert {
@@ -5810,11 +5631,6 @@ html[data-capture="1"] .reasoning-line {
 
 .reasoning-line__time {
   font-family: var(--font-mono, ui-monospace, Menlo, monospace);
-}
-
-/* Equal rows: the topology gets its height back and the card still fits. */
-.spacecraft-grid {
-  grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
 }
 
 /* Stress mode cells say what a tick does, so the grid cannot be read as a
@@ -5982,7 +5798,6 @@ html[data-capture="1"] .reasoning-line {
   padding-top: 10px;
 }
 
-.spacecraft-panel,
 .run-panel,
 .reasoning-panel {
   overflow: visible;
@@ -6442,8 +6257,7 @@ html[data-capture="1"] .panel {
   gap: 20px;
 }
 
-.run-grid,
-.spacecraft-grid {
+.run-grid {
   gap: 16px;
 }
 
@@ -7104,13 +6918,6 @@ details.kb-card__more[open] > .kb-card__summary {
    chips restated them. The blocked and withheld flags stay. */
 .reasoning-line__chip--verdict,
 .reasoning-line__chip--physics {
-  display: none;
-}
-
-/* Spacecraft page: the Cause belief and Recovery panels carry the belief
-   and the recovery; the card beside them keeps the record's facts only. */
-.spacecraft-shell .bus-health-card__basis,
-.spacecraft-shell .bus-health-card__recovery {
   display: none;
 }
 

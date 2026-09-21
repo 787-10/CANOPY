@@ -37,7 +37,7 @@ const nominal = makeBusHealthSignal('bh-nominal', {
 const drop = makeBusHealthSignal('bh-drop', { ts: '2026-09-17T14:32:12Z' })
 
 const nodeState = (subsystem: string) =>
-  screen.getByTestId(`topology-${subsystem}`).getAttribute('data-health')
+  screen.getByTestId(`subsystem-${subsystem}`).getAttribute('data-health')
 
 describe('Spacecraft page — states', () => {
   it('shows the empty state with no bus-health records', () => {
@@ -46,7 +46,7 @@ describe('Spacecraft page — states', () => {
     expect(screen.getByTestId('brand')).toHaveTextContent('MEGALITH')
   })
 
-  it('nominal: every node nominal, no onset, no recovery, no verdict', () => {
+  it('nominal: every chip nominal, no onset, no recovery, no verdict', () => {
     seed(nominal)
     render(<Spacecraft />)
     expect(screen.getByTestId('spacecraft-page')).toHaveAttribute('data-satellite', SIM01)
@@ -58,6 +58,11 @@ describe('Spacecraft page — states', () => {
     expect(screen.queryByTestId('sparkline-onset')).not.toBeInTheDocument()
     expect(screen.getByTestId('recovery-state')).toHaveAttribute('data-phase', 'none')
     expect(screen.getByTestId('spacecraft-verdict')).toHaveTextContent('No verdict yet')
+    expect(screen.getByTestId('spacecraft-explode')).toHaveValue('0.55')
+    expect(screen.getByTestId('spacecraft-latest-report')).toHaveAttribute(
+      'href',
+      '/signal?id=bh-nominal',
+    )
   })
 
   it('degraded: symptom without a verdict marks comms degraded with onset and rate', () => {
@@ -106,7 +111,12 @@ describe('Spacecraft page — states', () => {
     expect(screen.getByTestId('spacecraft-verdict')).toHaveTextContent('Internal fault · 86%')
     expect(screen.getByTestId('spacecraft-verdict')).toHaveAttribute('data-verdict', 'internal_fault')
     expect(screen.getByTestId('recovery-state')).toHaveAttribute('data-phase', 'routed')
-    expect(screen.getByTestId('bus-health-card')).toBeInTheDocument()
+    // The target subsystem's chip carries the recovery's headline.
+    expect(within(screen.getByTestId('subsystem-comms')).getByText(/Routed as a decision: switch redundant amplifier on comms/)).toBeInTheDocument()
+    expect(within(screen.getByTestId('subsystem-power')).queryByText(/Routed as a decision/)).not.toBeInTheDocument()
+    expect(screen.getByTestId('spacecraft-latest-report')).toHaveAttribute('href', '/signal?id=bh-drop')
+    // An internal fault has no adversary: the literal actor "None" is not shown.
+    expect(screen.queryByTestId('spacecraft-actor')).not.toBeInTheDocument()
   })
 
   it('withheld-recovery: hostile verdict with the recovery withheld marks comms and shows the reason', () => {
@@ -157,6 +167,8 @@ describe('Spacecraft page — states', () => {
     expect(screen.getByTestId('recovery-state')).toHaveAttribute('data-phase', 'withheld')
     expect(screen.getByTestId('recovery-reason')).toHaveTextContent('Withheld: Verdict: hostile external')
     expect(screen.getByTestId('recovery-reason')).toHaveTextContent('verdict/hostile_external')
+    expect(within(screen.getByTestId('subsystem-comms')).getByText(/Withheld: reset transponder chain on comms/)).toBeInTheDocument()
+    expect(screen.getByTestId('spacecraft-actor')).toHaveTextContent('Actor-1')
     const belief = screen.getByTestId('belief-bar')
     expect(within(belief).getByTestId('belief-external')).toHaveTextContent('79%')
     expect(within(belief).getByTestId('belief-top')).toHaveTextContent('Uplink interference · 56%')

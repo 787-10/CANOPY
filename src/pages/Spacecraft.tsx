@@ -1,9 +1,8 @@
 import { useMemo } from 'react'
-import { BusHealthCard } from '../components/BusHealthCard'
 import { TopBar } from '../components/TopBar'
 import { BeliefBar } from '../components/spacecraft/BeliefBar'
 import { RecoveryStatePanel } from '../components/spacecraft/RecoveryStatePanel'
-import { SubsystemTopology } from '../components/spacecraft/SubsystemTopology'
+import { SpacecraftScene } from '../components/spacecraft/SpacecraftScene'
 import { SymptomSparkline } from '../components/spacecraft/SymptomSparkline'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName, verdictLabel } from '../lib/commanderLanguage'
@@ -24,6 +23,10 @@ type SpacecraftProps = {
   requestedSatellite?: string | null
 }
 
+/** The spacecraft as a body: the 3D model with each subsystem's health on
+ *  it, the verdict, and one chip per subsystem; under it the symptom curve,
+ *  the cause belief and the recovery state. Every value is derived from the
+ *  store by the pure functions in lib/spacecraftHealth. */
 export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   // Keep the store live while this page is open (same socket the Brigade uses).
   useCanopySocket()
@@ -61,9 +64,6 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   )
   const latest = records[records.length - 1] ?? null
   const latestSymptom = [...records].reverse().find((record) => !record.isNominal) ?? latest
-  const latestSignal = latest
-    ? signals.find((signal) => signal.id === latest.signalId) ?? null
-    : null
   const name = satelliteId ? spacecraftDisplayName(satelliteId) : 'No spacecraft'
   const verdict = attribution?.verdict ?? null
   const verdictState = verdict ?? 'absent'
@@ -96,57 +96,65 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
           <a href={withCapture('/demo?run=A')}>Open the demo launcher</a>
         </section>
       ) : (
-        <section className="spacecraft-grid" aria-label={`${name} health`}>
-          <section className="panel spacecraft-panel spacecraft-panel--topology">
-            <div className="panel__header">
-              <h2>Subsystem topology</h2>
-              <span>{records.length} bus-health records</span>
-            </div>
-            <SubsystemTopology states={states} name={name} />
-          </section>
+        <div className="spacecraft-body">
+          <SpacecraftScene
+            name={name}
+            states={states}
+            recovery={recovery}
+            verdict={verdict}
+            confidence={attribution?.confidence ?? null}
+            provisional={Boolean(attribution?.provisional)}
+            actor={attribution?.actor ?? null}
+          />
 
-          <section className="panel spacecraft-panel spacecraft-panel--symptom">
-            <div className="panel__header">
-              <h2>Symptom</h2>
-              <span data-testid="spacecraft-symptom">
-                {latestSymptom ? `${latestSymptom.subsystemLabel} · ${latestSymptom.symptomLabel}` : 'none'}
-              </span>
-            </div>
-            <SymptomSparkline
-              series={series}
-              symptomLabel={latestSymptom?.symptomLabel ?? 'no symptom'}
-            />
-          </section>
+          <section className="spacecraft-strip" aria-label={`${name} health`}>
+            <section className="panel spacecraft-strip__panel">
+              <div className="panel__header">
+                <h2>Symptom</h2>
+                <span data-testid="spacecraft-symptom">
+                  {latestSymptom ? `${latestSymptom.subsystemLabel} · ${latestSymptom.symptomLabel}` : 'none'}
+                  {latest ? (
+                    <>
+                      {' · '}
+                      <a
+                        href={withCapture(`/signal?id=${encodeURIComponent(latest.signalId)}`)}
+                        data-testid="spacecraft-latest-report"
+                      >
+                        latest report →
+                      </a>
+                    </>
+                  ) : null}
+                </span>
+              </div>
+              <div className="spacecraft-strip__body">
+                <SymptomSparkline series={series} symptomLabel={latestSymptom?.symptomLabel ?? 'no symptom'} />
+              </div>
+            </section>
 
-          <section className="panel spacecraft-panel spacecraft-panel--belief">
-            <div className="panel__header">
-              <h2>Cause belief</h2>
-              <span>{latestSymptom ? `record ${latestSymptom.ts.slice(11, 19)}Z` : 'no record'}</span>
-            </div>
-            <BeliefBar
-              basis={latestSymptom?.physicsBasis ?? null}
-              physicsConsistency={latestSymptom?.physicsConsistency ?? null}
-            />
-          </section>
+            <section className="panel spacecraft-strip__panel">
+              <div className="panel__header">
+                <h2>Cause belief</h2>
+                <span>{latestSymptom ? `record ${latestSymptom.ts.slice(11, 19)}Z` : 'no record'}</span>
+              </div>
+              <div className="spacecraft-strip__body">
+                <BeliefBar
+                  basis={latestSymptom?.physicsBasis ?? null}
+                  physicsConsistency={latestSymptom?.physicsConsistency ?? null}
+                />
+              </div>
+            </section>
 
-          <section className="panel spacecraft-panel spacecraft-panel--recovery">
-            <div className="panel__header">
-              <h2>Recovery</h2>
-              <span>{recovery.phase === 'none' ? 'none' : recovery.phase}</span>
-            </div>
-            <RecoveryStatePanel state={recovery} />
+            <section className="panel spacecraft-strip__panel">
+              <div className="panel__header">
+                <h2>Recovery</h2>
+                <span>{recovery.phase === 'none' ? 'none' : recovery.phase}</span>
+              </div>
+              <div className="spacecraft-strip__body">
+                <RecoveryStatePanel state={recovery} />
+              </div>
+            </section>
           </section>
-
-          <section className="spacecraft-panel spacecraft-panel--latest">
-            {latestSignal ? (
-              <BusHealthCard
-                signal={latestSignal}
-                decision={decision}
-                zoomHref={withCapture(`/signal?id=${encodeURIComponent(latestSignal.id)}`)}
-              />
-            ) : null}
-          </section>
-        </section>
+        </div>
       )}
     </main>
   )

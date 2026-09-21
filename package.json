@@ -18,6 +18,7 @@
     "mgrs": "^2.1.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",
+    "three": "^0.186.0",
     "zustand": "^5.0.12"
   },
   "devDependencies": {
@@ -28,6 +29,7 @@
     "@types/node": "^24.12.2",
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
+    "@types/three": "^0.186.0",
     "@vitejs/plugin-react": "^6.0.1",
     "eslint": "^10.2.1",
     "eslint-plugin-react-hooks": "^7.1.1",
