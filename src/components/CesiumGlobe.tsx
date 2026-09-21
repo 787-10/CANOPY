@@ -409,7 +409,7 @@ export function CesiumGlobe({
     [stopFollowing],
   )
 
-  /** Track a spacecraft in place (CORE's followSat): Cesium frames a tracked
+  /** Track a spacecraft in place (the module dashboard's followSat): Cesium frames a tracked
    *  entity tight once its bounding sphere resolves, so wait for the tracking
    *  transform to engage, then push the camera back out to the range it had.
    *  The spacecraft slides to the centre at the operator's zoom and the

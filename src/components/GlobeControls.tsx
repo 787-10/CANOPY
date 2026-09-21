@@ -13,7 +13,7 @@ export type GlobeControlsProps = {
   onToggleFollow: () => void
 }
 
-/** The globe's camera controls, the cluster CORE's dashboard and the original
+/** The globe's camera controls, the cluster the module's dashboard and the original
  *  CANOPY map carry: zoom in and out, reset to the stream's home framing, and
  *  follow the selected spacecraft. While following the button reads "Stop
  *  following" and Esc does the same. Pure: the viewer work is the parent's;
