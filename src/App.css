@@ -374,10 +374,10 @@
   /* Compact card in the top-right corner of the map, clear of the globe
      controls (bottom right) and the markers around the station. */
   position: absolute;
-  top: 14px;
-  right: 14px;
+  top: 22px;
+  right: 22px;
   z-index: 5;
-  width: min(228px, calc(100% - 28px));
+  width: min(188px, calc(100% - 44px));
   border: 1px solid rgba(201, 164, 87, 0.42);
   border-radius: 2px;
   background:
@@ -386,14 +386,14 @@
   box-shadow:
     inset 0 1px 0 rgba(245, 247, 240, 0.04),
     0 8px 20px rgba(0, 0, 0, 0.28);
-  padding: 8px 10px 9px;
+  padding: 6px 8px 7px;
   backdrop-filter: blur(10px) saturate(1.08);
 }
 
 .satellite-detail span,
 .satellite-detail dt {
   color: rgba(220, 227, 213, 0.7);
-  font-size: 0.62rem;
+  font-size: 0.54rem;
   font-weight: 650;
   text-transform: uppercase;
   letter-spacing: 0.06em;
@@ -401,32 +401,32 @@
 
 .satellite-detail strong {
   display: block;
-  margin-top: 2px;
+  margin-top: 1px;
   color: var(--text-primary);
-  font-size: 0.95rem;
+  font-size: 0.82rem;
   font-weight: 720;
   letter-spacing: 0.02em;
 }
 
 .satellite-detail dl {
   display: grid;
-  gap: 3px;
-  margin: 7px 0 0;
+  gap: 2px;
+  margin: 5px 0 0;
 }
 
 .satellite-detail div {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
-  gap: 10px;
+  gap: 8px;
   border-top: 1px solid rgba(220, 227, 213, 0.12);
-  padding-top: 3px;
+  padding-top: 2px;
 }
 
 .satellite-detail dd {
   margin: 0;
   color: #f5f7f0;
-  font-size: 0.74rem;
+  font-size: 0.66rem;
   font-weight: 650;
   text-align: right;
   font-variant-numeric: tabular-nums;

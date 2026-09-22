@@ -161,10 +161,10 @@
 
 .run-restart__button {
   padding: 6px 12px;
-  border: 1px solid var(--frame, var(--line-bright));
+  border: 1px solid var(--red);
   border-radius: 4px;
-  background: transparent;
-  color: var(--text-primary);
+  background: rgba(224, 92, 79, 0.1);
+  color: var(--red);
   font-family: var(--font-mono, ui-monospace, monospace);
   font-size: 0.72rem;
   font-weight: 600;
@@ -176,14 +176,13 @@
 .run-restart__button:hover,
 .run-restart__button:focus-visible {
   outline: none;
-  color: var(--cyan, var(--brand-bright));
-  border-color: var(--cyan, var(--brand-bright));
+  background: rgba(224, 92, 79, 0.2);
 }
 
 .run-restart__button--confirm {
-  color: var(--amber);
-  border-color: var(--amber);
-  background: rgba(201, 164, 87, 0.12);
+  color: #fff;
+  border-color: var(--red);
+  background: var(--red);
 }
 
 .run-restart__button:disabled {

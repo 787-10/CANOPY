@@ -322,6 +322,10 @@ export const FLIGHT_MODEL_SCALE = 0.025
  *  behind, beside and above a 13 m body), and the zoom floor that lets it. */
 export const FLIGHT_MODEL_VIEW_FROM = new Cartesian3(-30, 18, 13)
 export const FLIGHT_MODEL_MIN_ZOOM_M = 6
+/** While the body is drawn its name is lifted this far above it in the eye's
+ *  frame (metres up on screen at the body's depth), clear of a 13 m body;
+ *  with the mark alone the pixel offset is enough. */
+export const FLIGHT_MODEL_LABEL_LIFT_M = 7
 
 export function focusFlightModel(viewer: Viewer, body: FlightBody): Entity | null {
   const entity = viewer.entities.getById(body.entityIds[0])
@@ -337,6 +341,7 @@ export function focusFlightModel(viewer: Viewer, body: FlightBody): Entity | nul
     })
   }
   if (entity.billboard) entity.billboard.show = new ConstantProperty(false)
+  if (entity.label) entity.label.eyeOffset = new ConstantProperty(new Cartesian3(0, FLIGHT_MODEL_LABEL_LIFT_M, 0))
   return entity
 }
 
@@ -348,4 +353,5 @@ export function unfocusFlightModel(viewer: Viewer, body: FlightBody): void {
   entity.orientation = undefined
   entity.viewFrom = undefined
   if (entity.billboard) entity.billboard.show = new ConstantProperty(true)
+  if (entity.label) entity.label.eyeOffset = new ConstantProperty(Cartesian3.ZERO)
 }
