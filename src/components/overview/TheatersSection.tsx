@@ -19,6 +19,7 @@ export function TheatersSection({ open, onToggle }: TheatersSectionProps) {
   const attributions = useEventStore((s) => s.attributions)
   const anomalies = useEventStore((s) => s.anomalies)
   const pinned = useEventStore((s) => s.pinnedSatelliteId)
+  const followed = useEventStore((s) => s.followedSatelliteId)
   const pinEpisode = useEventStore((s) => s.pinEpisode)
   const incidents = deriveIncidents(attributions, anomalies)
   const [now, setNow] = useState(() => Date.now())
@@ -72,7 +73,7 @@ export function TheatersSection({ open, onToggle }: TheatersSectionProps) {
       ) : (
         <p className="side-column__empty">No incident yet</p>
       )}
-      {pinned ? (
+      {pinned || followed ? (
         <button type="button" className="side-column__quiet" onClick={() => pinEpisode(null)} data-testid="follow-latest" data-key="F" title="Key F">
           Follow latest
         </button>

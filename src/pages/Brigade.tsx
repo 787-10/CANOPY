@@ -31,6 +31,8 @@ export function Brigade() {
   useKnowledgeBase()
   const capture = useCaptureStore((s) => s.enabled)
   const { signals, report, attribution, decision, pinnedSatelliteId } = useEpisode()
+  // The globe's target: the fleet row or Theaters pin the operator chose (lib/fleet.ts).
+  const followedSatelliteId = useEventStore((s) => s.followedSatelliteId)
   const anomalies = useEventStore((state) => state.anomalies)
   const uiEvents = useEventStore((state) => state.uiEvents)
   const missionState = useCanopyMissionState(signals, uiEvents, {
@@ -78,7 +80,7 @@ export function Brigade() {
           focusSignalId={pinnedFocusId ?? missionState.mapFocusSignalId}
           signals={signals}
           report={report}
-          pinnedSatellite={pinnedSatelliteId ? spacecraftDisplayName(pinnedSatelliteId) : null}
+          pinnedSatellite={followedSatelliteId ? spacecraftDisplayName(followedSatelliteId) : null}
         />
         <SideColumn side="right" label="Response" expanded={rightExpanded} onToggle={toggleRight} capture={capture}>
           <ResponseColumn attribution={attribution} decision={decision} />

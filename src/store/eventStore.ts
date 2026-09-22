@@ -116,6 +116,9 @@ interface EventState {
    *  Theaters list; null follows the latest episode. Persisted with the
    *  event buffers so the detail pages follow the same pin. */
   pinnedSatelliteId: string | null;
+  /** The spacecraft the globe follows (the Spacecraft section's rows, or the
+   *  pinned episode's spacecraft); any fleet member, incident or not. */
+  followedSatelliteId: string | null;
 
   // Knowledge base resolved by id (loaded once via GET /kb).
   kb: Record<string, KBEntry>;
@@ -143,6 +146,7 @@ interface EventState {
   openTakeover: (event: UIEvent) => void;
   closeTakeover: () => void;
   pinEpisode: (satelliteId: string | null) => void;
+  followSatellite: (satelliteId: string | null) => void;
   setKB: (entries: KBEntry[]) => void;
   /** Forget the run: every event buffer and lookup, the arrival stamps, the
    *  operator's calls and the pin. Keeps what is not run state: the socket's
@@ -175,6 +179,7 @@ const initialState = (): Omit<
   | "openTakeover"
   | "closeTakeover"
   | "pinEpisode"
+  | "followSatellite"
   | "setKB"
   | "reset"
 > => ({
@@ -201,6 +206,7 @@ const initialState = (): Omit<
   maneuverDemo: null,
   takeoverEvent: null,
   pinnedSatelliteId: null,
+  followedSatelliteId: null,
   kb: {},
 });
 
@@ -376,7 +382,9 @@ export const useEventStore = create<EventState>()(
   endManeuverDemo: () => set({ maneuverDemo: null }),
   openTakeover: (event) => set({ takeoverEvent: event }),
   closeTakeover: () => set({ takeoverEvent: null }),
-  pinEpisode: (pinnedSatelliteId) => set({ pinnedSatelliteId }),
+  // Pinning an episode also follows its spacecraft on the globe; clearing the pin (Follow latest) clears both.
+  pinEpisode: (pinnedSatelliteId) => set({ pinnedSatelliteId, followedSatelliteId: pinnedSatelliteId }),
+  followSatellite: (followedSatelliteId) => set({ followedSatelliteId }),
       setKB: (entries) =>
         set({
           kb: Object.fromEntries(entries.map((e) => [e.id, e])),
@@ -407,6 +415,7 @@ export const useEventStore = create<EventState>()(
         attributionsById: state.attributionsById,
         decisionsById: state.decisionsById,
         pinnedSatelliteId: state.pinnedSatelliteId,
+        followedSatelliteId: state.followedSatelliteId,
         // The operator's calls follow the operator from page to page; the
         // Sets travel as arrays and come back as Sets in `merge`.
         acceptedDecisionIds: [...state.acceptedDecisionIds],

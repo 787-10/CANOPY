@@ -4378,11 +4378,54 @@ dt,
   display: grid;
   grid-template-columns: auto 1fr;
   column-gap: 8px;
-  row-gap: 1px;
+  align-items: start;
   padding: 4px 6px;
   border: 1px solid transparent;
   border-radius: 3px;
   font-size: 0.7rem;
+}
+
+/* The rest of the row is the follow control: role, status and a ring that
+   fills while the globe follows this spacecraft. */
+.fleet__follow {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  column-gap: 8px;
+  row-gap: 1px;
+  width: 100%;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.fleet__follow:hover .fleet__role,
+.fleet__follow:focus-visible .fleet__role {
+  color: var(--cyan, var(--brand-bright));
+}
+
+.fleet__follow:focus-visible {
+  outline: 1px solid var(--cyan, var(--brand-bright));
+  outline-offset: 2px;
+}
+
+.fleet__follow-mark {
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+}
+
+.fleet__follow[aria-pressed='true'] .fleet__follow-mark {
+  color: var(--amber);
+}
+
+.fleet__row--followed {
+  border-color: rgba(201, 164, 87, 0.42);
 }
 
 .fleet__row--episode {
@@ -4414,7 +4457,7 @@ dt,
 }
 
 .fleet__status {
-  grid-column: 1 / -1;
+  grid-column: 1;
   color: var(--text-muted);
   font-size: 0.64rem;
   font-variant-numeric: tabular-nums;

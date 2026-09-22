@@ -390,6 +390,8 @@ export function CesiumGlobe({
   const clockRunLive = useClockStore((s) => s.run?.state === 'started' && s.run.max_delay_s === null)
   const flightViewRef = useRef(false)
   const flightBodiesRef = useRef<FlightBody[]>([])
+  // Bumped when the flight bodies are rebuilt, so a pin engages on them.
+  const [flightBodiesVersion, setFlightBodiesVersion] = useState(0)
   // The body whose 3D model is on the globe (a double-click or Follow in flight).
   const focusedBodyRef = useRef<FlightBody | null>(null)
   const hasFramedOnceRef = useRef(false)
@@ -1321,6 +1323,10 @@ export function CesiumGlobe({
     })
   }, [displayMode, framingKey, ensureN2YOSatellitesLoaded, flyCamera])
 
+  const configFor = (layer: N2YOLayerState) => N2YO_SATELLITES.find((candidate) => candidate.id === layer.satelliteId) ?? null
+  const namedInStream = (layer: N2YOLayerState) =>
+    signalsRef.current.some((signal) => syntheticSatelliteFor(signal.payload.satellite_id ?? null)?.id === layer.satelliteId)
+
   // The operator's pin: select the pinned spacecraft's track (label and
   // orbit on) and fly to it; on "Follow latest" deselect and fly home. A pin
   // that arrives before its layer has loaded engages when the layer does
@@ -1331,11 +1337,28 @@ export function CesiumGlobe({
     const layer = pinnedSatellite
       ? n2yoLayersRef.current.find((candidate) => candidate.satelliteName === pinnedSatellite) ?? null
       : null
+    if (!layer && pinnedSatellite) {
+      // A flight-only body (OBJ-1) is not loaded in pass view until asked for:
+      // following it loads it, and this effect engages when the layer lands.
+      const config = N2YO_SATELLITES.find((candidate) => candidate.label === pinnedSatellite)
+      if (config?.flightOnly && !loadedN2yoSatelliteIdsRef.current.has(config.id)) {
+        void ensureN2YOSatellitesLoaded(['SIM'], { includeFlightOnly: true })
+      }
+      return
+    }
     if (layer) {
+      // Pinned while hidden (a flight-only body in pass view): show it.
+      if (!flightViewRef.current) setLayerEntitiesShown(viewer, layer, true)
       if (engagedPinRef.current === layer.satelliteName) return
       engagedPinRef.current = layer.satelliteName
-      if (selectedN2yoLayerRef.current && selectedN2yoLayerRef.current !== layer) {
-        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+      const previous = selectedN2yoLayerRef.current
+      if (previous && previous !== layer) {
+        deselectN2YOSatellite(viewer, previous)
+        // The body followed before goes back out of the pinned frame if it
+        // is flight-only and the stream does not name it.
+        if (!flightViewRef.current && configFor(previous)?.flightOnly && !namedInStream(previous)) {
+          setLayerEntitiesShown(viewer, previous, false)
+        }
       }
       selectedN2yoLayerRef.current = layer
       selectTrackInPlace(viewer, layer, { orbit: !flightViewRef.current })
@@ -1350,9 +1373,14 @@ export function CesiumGlobe({
     } else if (!pinnedSatellite && engagedPinRef.current) {
       engagedPinRef.current = null
       if (selectedN2yoLayerRef.current) {
-        deselectN2YOSatellite(viewer, selectedN2yoLayerRef.current)
+        const was = selectedN2yoLayerRef.current
+        deselectN2YOSatellite(viewer, was)
         selectedN2yoLayerRef.current = null
         setSelectedSatellite(null)
+        // A flight-only body goes back out of the pinned frame unless the stream names it.
+        if (!flightViewRef.current && configFor(was)?.flightOnly && !namedInStream(was)) {
+          setLayerEntitiesShown(viewer, was, false)
+        }
       }
       if (homeDestinationRef.current) {
         flyCamera(homeDestinationRef.current, 0.9)
@@ -1361,13 +1389,14 @@ export function CesiumGlobe({
       }
     }
     viewer.scene.requestRender()
-  }, [pinnedSatellite, displayMode, n2yoLayerCount, flyCamera, stopFollowing, followLayer])
+  }, [pinnedSatellite, displayMode, n2yoLayerCount, flightBodiesVersion, flyCamera, stopFollowing, followLayer, ensureN2YOSatellitesLoaded])
 
-  const configFor = (layer: N2YOLayerState) => N2YO_SATELLITES.find((candidate) => candidate.id === layer.satelliteId) ?? null
-
-  // Flight view: switching views ends any follow (the followed entity changes).
+  // Flight view: switching views ends any follow (the followed entity changes)
+  // and lets the pin engage again in the new view: followed in flight, flown
+  // to at its pass in pass view.
   useEffect(() => {
     stopFollowing()
+    engagedPinRef.current = null
   }, [flightView, stopFollowing])
 
   // Spacecraft named by the stream: in flight only those fly (a held-out
@@ -1446,6 +1475,9 @@ export function CesiumGlobe({
       addFlightBody(viewer, body, index, { ring: first, trailS: first ? undefined : FOLLOWER_TRAIL_S })
     })
     flightBodiesRef.current = bodies
+    // The pinned spacecraft, if any, is followed on its new flight body.
+    engagedPinRef.current = null
+    setFlightBodiesVersion((value) => value + 1)
     const tick = () => {
       if (viewer.isDestroyed()) return
       const clock = useClockStore.getState()

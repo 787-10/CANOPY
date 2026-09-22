@@ -550,6 +550,7 @@ describe('eventStore — persist partialize', () => {
       'attributionsById',
       'decisionsById',
       'pinnedSatelliteId',
+      'followedSatelliteId',
     ]
     for (const key of includedKeys) {
       expect(persisted).toHaveProperty(key)
@@ -632,5 +633,20 @@ describe('eventStore — decision revisions', () => {
     store().ingestDecision(makeDecision('dec-keep', { revision: 0, action: 'passive_defense' }))
     expect(store().acceptedDecisionIds.has('dec-keep')).toBe(true)
     expect(store().decisionStatusAt['dec-keep']).toBeDefined()
+  })
+})
+
+describe('following a spacecraft on the globe', () => {
+  it('any fleet member can be followed; a pinned episode follows its spacecraft; the pin clearing clears both', () => {
+    store().followSatellite('ctb://megalith.demo/obj-01')
+    expect(store().followedSatelliteId).toBe('ctb://megalith.demo/obj-01')
+    expect(store().pinnedSatelliteId).toBeNull()
+    store().pinEpisode('ctb://megalith.demo/sim-02')
+    expect(store().followedSatelliteId).toBe('ctb://megalith.demo/sim-02')
+    store().pinEpisode(null)
+    expect(store().followedSatelliteId).toBeNull()
+    store().followSatellite('ctb://megalith.demo/sim-01')
+    store().reset()
+    expect(store().followedSatelliteId).toBeNull()
   })
 })
