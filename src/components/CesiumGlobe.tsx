@@ -211,9 +211,10 @@ const PIN_CAMERA_HEIGHT_M = 1_400_000
 const PRE_RUN_CAMERA_HEIGHT_M = 4_500_000
 /** The globe's zoom floor; a focused spacecraft model lowers it for its stay. */
 const GLOBE_MIN_ZOOM_M = 250
-/** The imagery in its own colour, at full detail (Jeewoo, 2026-09-22: "some
- *  colour and more detail"); the near-monochrome skin of the first cut is gone. */
-const IMAGERY_LOOK = { brightness: 1.0, contrast: 1.06, saturation: 1.0 }
+/** The imagery's look, one setting for every provider: near-monochrome with
+ *  the contrast raised (Jeewoo, 2026-09-22: the coloured globe tried that day
+ *  was worse than the muted one, "but I'd like some more contrast"). */
+const IMAGERY_LOOK = { brightness: 0.9, contrast: 1.35, saturation: 0.04 }
 
 // One press of Zoom in (or +) brings the camera to 60% of its height; Zoom
 // out (or -) is the inverse, so a press each way lands where it started.
