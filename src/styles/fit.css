@@ -15,8 +15,14 @@
   scrollbar-width: none;
 }
 
+/* Card titles sit on the top border, lifted 0.68em above it: the first card
+   needs room above so the column does not clip its title, and the gap must
+   be wider than the lift so a title clears the card above (Jeewoo,
+   2026-09-22: "no margin above Verdict, it looks crushed"). 22px more in
+   all for the three-card episode state; the 900px fit keeps its slack. */
 .brigade-shell .response {
-  gap: 12px;
+  gap: 18px;
+  padding-top: 10px;
 }
 
 .brigade-shell .response .summary-card {
