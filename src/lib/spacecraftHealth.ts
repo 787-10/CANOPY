@@ -25,13 +25,19 @@ export type SubsystemHealth =
   | 'degraded'
   | 'faulted'
   | 'withheld-recovery'
+  /** The spacecraft has sent no bus-health record yet: nothing is known, which is not the same as nominal. */
+  | 'no-report'
 
 export const HEALTH_LABEL: Record<SubsystemHealth, string> = {
   nominal: 'Nominal',
   degraded: 'Degraded',
   faulted: 'Faulted',
   'withheld-recovery': 'Recovery withheld',
+  'no-report': 'No report yet',
 }
+
+/** Health that asks for no attention: nominal, or nothing heard yet. */
+export const isQuietHealth = (health: SubsystemHealth): boolean => health === 'nominal' || health === 'no-report'
 
 export type SubsystemState = {
   subsystem: Subsystem
@@ -85,7 +91,13 @@ export function subsystemStates(
         reason: `recovery ${decision?.withheld_recovery?.action_id ?? ''} withheld: ${decision?.withheld_recovery?.reason_code ?? ''}`.trim(),
       }
     }
+    if (!record && records.length === 0) {
+      // Nothing heard from this spacecraft yet: unknown, shown as such.
+      return { subsystem, health: 'no-report', latest: null, reason: 'no reports yet' }
+    }
     if (!record || record.isNominal) {
+      // A bus-health record speaks for the whole bus: subsystems it does not
+      // name are within limits while the latest word is nominal.
       return {
         subsystem,
         health: 'nominal',

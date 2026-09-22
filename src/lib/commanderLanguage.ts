@@ -1157,6 +1157,9 @@ export function verdictHeadline(attribution: Attribution): string {
 /** `ctb://<authority>/<spacecraft-id>` -> `<spacecraft-id>` in upper case;
  *  anything else is returned as given (docs/INTERFACE-SPEC.md §1). */
 export function spacecraftDisplayName(satelliteId: string): string {
+  // A synthetic demo spacecraft has a display name of its own (`OBJ-1`, not `OBJ-01`).
+  const synthetic = syntheticSatelliteFor(satelliteId)
+  if (synthetic && synthetic.satelliteId === satelliteId) return synthetic.label
   const match = satelliteId.match(/^ctb:\/\/[^/]+\/(.+)$/)
   return match ? match[1].toUpperCase() : satelliteId
 }

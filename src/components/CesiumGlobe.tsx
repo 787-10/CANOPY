@@ -207,6 +207,8 @@ type CesiumGlobeProps = {
 // the Site A anchor uses, so the pinned mark, the station and an RF emitter
 // estimate read as separate marks.
 const PIN_CAMERA_HEIGHT_M = 1_400_000
+/** Before a run: the station with the whole fleet pinned around it. */
+const PRE_RUN_CAMERA_HEIGHT_M = 4_500_000
 /** The globe's zoom floor; a focused spacecraft model lowers it for its stay. */
 const GLOBE_MIN_ZOOM_M = 250
 
@@ -1257,13 +1259,31 @@ export function CesiumGlobe({
     if (displayMode !== 'globe') {
       return
     }
-    if (!framingKey) {
-      // The stream was cleared (a new run): the next one frames itself again.
-      framedStreamRef.current = false
-      return
-    }
     const viewer = viewerRef.current
     if (!viewer || viewer.isDestroyed()) {
+      return
+    }
+    if (!framingKey) {
+      // The stream was cleared (a new run): the next one frames itself again.
+      // The fleet is still drawn, pinned at its pass, so the operator sees what
+      // is being observed before anything is wrong (lib/fleet.ts); the camera
+      // stays where it is until a run frames the station.
+      framedStreamRef.current = false
+      satelliteFamilySelectionRef.current = ['SIM']
+      void ensureN2YOSatellitesLoaded(['SIM']).then(() => {
+        if (viewer.isDestroyed() || hasFramedOnceRef.current) return
+        // First picture of the session: the fleet's station from far enough
+        // to hold both pinned spacecraft (610 km apart) and the site.
+        const station = n2yoLayersRef.current
+          .filter((layer) => layer.satelliteFamily === 'SIM')
+          .map((layer) => groundStationFromPositionCache(layer.cache))
+          .find((candidate) => candidate !== null)
+        if (!station) return
+        const anchor = Cartesian3.fromDegrees(station.lng, station.lat, PRE_RUN_CAMERA_HEIGHT_M)
+        homeDestinationRef.current = anchor
+        hasFramedOnceRef.current = true
+        flyCamera(anchor, 1.2)
+      })
       return
     }
     // The console shows the synthetic spacecraft only (demo plan section 6:

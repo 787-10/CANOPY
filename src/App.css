@@ -4334,6 +4334,62 @@ dt,
   border-radius: 0 0 3px 3px;
 }
 
+/* The fleet list in the Spacecraft section (lib/fleet.ts): name, role, what it
+   has sent; the episode's spacecraft framed; a symptomatic one in amber. */
+.fleet {
+  list-style: none;
+  margin: 0 0 8px;
+  padding: 0;
+  display: grid;
+  gap: 3px;
+}
+
+.fleet__row {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 1px;
+  padding: 4px 6px;
+  border: 1px solid transparent;
+  border-radius: 3px;
+  font-size: 0.7rem;
+}
+
+.fleet__row--episode {
+  border-color: rgba(201, 164, 87, 0.42);
+  background: rgba(201, 164, 87, 0.06);
+}
+
+.fleet__name {
+  color: var(--text-primary);
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-decoration: none;
+}
+
+.fleet__name:hover {
+  color: var(--cyan, var(--brand-bright));
+}
+
+.fleet__row[data-state="symptomatic"] .fleet__name {
+  color: var(--amber);
+}
+
+.fleet__role {
+  color: var(--text-subtle);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.6rem;
+  align-self: baseline;
+}
+
+.fleet__status {
+  grid-column: 1 / -1;
+  color: var(--text-muted);
+  font-size: 0.64rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .side-column__empty {
   margin: 0;
   color: var(--text-subtle);

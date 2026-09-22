@@ -216,6 +216,12 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
       .worldToLocal(worldBox.getCenter(new THREE.Vector3()))
       .sub(parent.worldToLocal(origin.clone()))
     if (dir.lengthSq() > 0) dir.normalize()
+    // The offset is applied in the mesh's parent frame, so one world unit of
+    // explode is 1 / (the parent's world scale) there. The archive's nodes
+    // carry their own scales under the fitted group (0.0002 in all for this
+    // file), so dividing by the fit scale alone moved parts by a hundredth of
+    // a unit: the slider did nothing visible.
+    const parentScale = parent.getWorldScale(new THREE.Vector3()).x
     const tag: Tag = {
       partId: tagged.name || material.name,
       subsystem,
@@ -223,7 +229,7 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
       dir,
       baseColor: material.color.getHex(),
       baseEmissive: material.emissive.getHex(),
-      explodeScale: 1 / scale,
+      explodeScale: parentScale > 0 ? 1 / parentScale : 1 / scale,
     }
     tagged.userData = tag
     meshes.push(tagged)

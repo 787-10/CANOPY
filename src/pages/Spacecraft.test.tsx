@@ -40,10 +40,25 @@ const nodeState = (subsystem: string) =>
   screen.getByTestId(`subsystem-${subsystem}`).getAttribute('data-health')
 
 describe('Spacecraft page — states', () => {
-  it('shows the empty state with no bus-health records', () => {
+  it('shows the fleet primary with every subsystem unreported before any bus-health record', () => {
     render(<Spacecraft />)
-    expect(screen.getByText('No bus-health records yet')).toBeInTheDocument()
+    expect(screen.getByTestId('spacecraft-page')).toHaveAttribute('data-satellite', SIM01)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Spacecraft · SIM-01')
+    for (const subsystem of ['power', 'thermal', 'comms', 'adcs', 'propulsion', 'cdh', 'payload']) {
+      expect(nodeState(subsystem)).toBe('no-report')
+    }
+    expect(screen.getByTestId('spacecraft-quiet')).toHaveTextContent('No bus-health record from SIM-01 yet')
+    const fleet = screen.getByTestId('fleet-switch')
+    expect(within(fleet).getAllByRole('link')).toHaveLength(3)
+    expect(screen.getByTestId('fleet-switch-SIM-01')).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByTestId('fleet-switch-OBJ-1')).toHaveTextContent('no reports yet')
     expect(screen.getByTestId('brand')).toHaveTextContent('MEGALITH')
+  })
+
+  it('follows ?sat= to another fleet member with no records', () => {
+    render(<Spacecraft requestedSatellite="OBJ-1" />)
+    expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Spacecraft · OBJ-1')
+    expect(screen.getByTestId('fleet-switch-OBJ-1')).toHaveAttribute('aria-current', 'page')
   })
 
   it('nominal: every chip nominal, no onset, no recovery, no verdict', () => {

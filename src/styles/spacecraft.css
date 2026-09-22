@@ -102,6 +102,7 @@
 .health--degraded { color: var(--amber); }
 .health--faulted { color: var(--verdict-internal); }
 .health--withheld-recovery { color: var(--verdict-hostile); }
+.health--no-report { color: var(--text-subtle); }
 
 /* ---- The stage --------------------------------------------------------- */
 
@@ -206,6 +207,7 @@
 .subsystem-chip--degraded { border-color: rgba(201, 164, 87, 0.5); }
 .subsystem-chip--faulted { border-color: rgba(123, 150, 255, 0.55); }
 .subsystem-chip--withheld-recovery { border-color: rgba(255, 123, 109, 0.6); }
+.subsystem-chip--no-report { border-style: dashed; }
 
 .subsystem-chip__head {
   display: flex;
@@ -270,4 +272,68 @@
 html[data-capture="1"] .spacecraft-scene__hud .scene-btn,
 html[data-capture="1"] .spacecraft-scene__explode {
   display: none;
+}
+
+/* The fleet switcher above the body (lib/fleet.ts): one chip per spacecraft
+   with its role and how much it has reported; the current one is framed. */
+.fleet-switch {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 0;
+}
+
+.fleet-switch__item {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  align-items: baseline;
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.66rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.fleet-switch__item strong {
+  color: var(--text-primary);
+  font-weight: 700;
+}
+
+.fleet-switch__item small {
+  grid-column: 1 / -1;
+  color: var(--text-subtle);
+  font-size: 0.6rem;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+.fleet-switch__item.is-current {
+  border-color: var(--frame, var(--line-bright));
+  background: rgba(123, 150, 255, 0.08);
+}
+
+.fleet-switch__item[data-state="symptomatic"] strong {
+  color: var(--amber);
+}
+
+.fleet-switch__item:hover {
+  border-color: var(--cyan, var(--brand-bright));
+}
+
+.spacecraft-quiet {
+  flex: none;
+  margin: -4px 0 0;
+  color: var(--text-subtle);
+  font-size: 0.8rem;
+}
+
+.spacecraft-quiet a {
+  color: var(--cyan, var(--brand-bright));
 }

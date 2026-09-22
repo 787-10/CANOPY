@@ -6,6 +6,7 @@ import { SpacecraftScene } from '../components/spacecraft/SpacecraftScene'
 import { SymptomSparkline } from '../components/spacecraft/SymptomSparkline'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName, verdictLabel } from '../lib/commanderLanguage'
+import { FLEET_PRIMARY, fleetClock, fleetStatus } from '../lib/fleet'
 import { resolveRequestedSatellite } from '../lib/syntheticSatellites'
 import {
   buildSymptomSeries,
@@ -35,10 +36,13 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   const anomalies = useEventStore((s) => s.anomalies)
   const decisions = useEventStore((s) => s.decisions)
 
+  // The spacecraft named in ?sat=, else the latest bus-health record's, else
+  // the fleet's primary: the page shows a body before any report arrives.
   const satelliteId = useMemo(
-    () => pickSatelliteId(signals, resolveRequestedSatellite(requestedSatellite)),
+    () => pickSatelliteId(signals, resolveRequestedSatellite(requestedSatellite)) ?? FLEET_PRIMARY.satelliteId,
     [signals, requestedSatellite],
   )
+  const fleet = useMemo(() => fleetStatus(signals, anomalies), [signals, anomalies])
   const records = useMemo(() => recordsForSatellite(signals, satelliteId), [signals, satelliteId])
   const { attribution, decision } = useMemo(
     () => latestVerdictFor(attributions, decisions, satelliteId, anomalies),
@@ -64,7 +68,7 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
   )
   const latest = records[records.length - 1] ?? null
   const latestSymptom = [...records].reverse().find((record) => !record.isNominal) ?? latest
-  const name = satelliteId ? spacecraftDisplayName(satelliteId) : 'No spacecraft'
+  const name = spacecraftDisplayName(satelliteId)
   const verdict = attribution?.verdict ?? null
   const verdictState = verdict ?? 'absent'
 
@@ -86,17 +90,33 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
         }
       />
 
-      {!satelliteId ? (
-        <section className="spacecraft-empty panel">
-          <h2>No bus-health records yet</h2>
-          <p>
-            The page follows the spacecraft named in <code>?sat=</code>, else the latest bus-health
-            record. Replay a scenario from the Brigade view or the demo launcher and return here.
+      <div className="spacecraft-body">
+        <nav className="fleet-switch" aria-label="Spacecraft" data-testid="fleet-switch">
+          {fleet.map(({ member, reportCount, latest, state }) => (
+            <a
+              key={member.satelliteId}
+              href={withCapture(`/spacecraft?sat=${encodeURIComponent(member.name)}`)}
+              className={`fleet-switch__item${member.satelliteId === satelliteId ? ' is-current' : ''}`}
+              aria-current={member.satelliteId === satelliteId ? 'page' : undefined}
+              data-testid={`fleet-switch-${member.name}`}
+              data-state={state}
+              title={`${member.roleLabel}: ${member.note}`}
+            >
+              <strong>{member.name}</strong>
+              <span>{member.roleLabel}</span>
+              <small>
+                {latest ? `${reportCount} report${reportCount === 1 ? '' : 's'} · ${fleetClock(latest.ts)}` : 'no reports yet'}
+              </small>
+            </a>
+          ))}
+        </nav>
+        {records.length === 0 ? (
+          <p className="spacecraft-quiet" data-testid="spacecraft-quiet">
+            No bus-health record from {name} yet: the body shows what is known, which is nothing.
+            Replay a scenario from the Brigade view or the{' '}
+            <a href={withCapture('/demo?run=A')}>demo launcher</a>.
           </p>
-          <a href={withCapture('/demo?run=A')}>Open the demo launcher</a>
-        </section>
-      ) : (
-        <div className="spacecraft-body">
+        ) : null}
           <SpacecraftScene
             name={name}
             states={states}
@@ -155,7 +175,6 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
             </section>
           </section>
         </div>
-      )}
     </main>
   )
 }

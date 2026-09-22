@@ -79,6 +79,8 @@ describe('SituationColumn', () => {
     expect(facts).not.toHaveTextContent('link margin db drop')
     expect(screen.getByTestId('spacecraft')).toHaveTextContent('SIM-01')
     expect(screen.getByTestId('spacecraft-physics')).toHaveTextContent('0.10')
+    expect(screen.getAllByTestId('fleet-row')[0]).toHaveAttribute('data-state', 'symptomatic')
+    expect(screen.getAllByTestId('fleet-row')[0]).toHaveAttribute('aria-current', 'true')
     expect(screen.getByTestId('sparkline')).toHaveAttribute('data-points', '2')
     expect(screen.getByRole('link', { name: /Spacecraft page/ })).toHaveAttribute('href', '/spacecraft?sat=SIM-01')
 
@@ -97,6 +99,11 @@ describe('SituationColumn', () => {
     fireEvent.click(within(screen.getByTestId('spacecraft')).getByRole('button', { name: /Spacecraft/ }))
     fireEvent.click(within(screen.getByTestId('environment')).getByRole('button', { name: /Environment/ }))
     expect(screen.getByText('No bus symptom yet')).toBeInTheDocument()
+    // The fleet is listed before any report, all quiet.
+    const rows = screen.getAllByTestId('fleet-row')
+    expect(rows.map((row) => row.getAttribute('data-state'))).toEqual(['quiet', 'quiet', 'quiet'])
+    expect(rows[0]).toHaveTextContent('SIM-01')
+    expect(rows[0]).toHaveTextContent('no reports yet')
     expect(screen.getByTestId('environment-denied')).toHaveTextContent('none denied')
     expect(screen.getByTestId('environment-weather')).toHaveTextContent('No space-weather report')
   })

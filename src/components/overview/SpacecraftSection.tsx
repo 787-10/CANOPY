@@ -1,4 +1,5 @@
 import { spacecraftDisplayName } from '../../lib/commanderLanguage'
+import { FLEET, fleetClock, fleetStatus } from '../../lib/fleet'
 import { spacecraftFacts } from '../../lib/situation'
 import { withCapture } from '../../store/captureStore'
 import { useEventStore } from '../../store/eventStore'
@@ -12,16 +13,39 @@ type SpacecraftSectionProps = {
   onToggle: () => void
 }
 
-/** The episode's spacecraft: its name in the section header, the latest
- *  bus symptom with its subsystem, and the physics-consistency score with
- *  its recent trend. */
+/** The fleet, known before any report (lib/fleet.ts): one row per spacecraft
+ *  with its role and what it has sent this run; then the episode's
+ *  spacecraft, its latest bus symptom with its subsystem, and the
+ *  physics-consistency score with its recent trend. */
 export function SpacecraftSection({ satelliteId, open, onToggle }: SpacecraftSectionProps) {
   const anomalies = useEventStore((s) => s.anomalies)
+  const signals = useEventStore((s) => s.signals)
   const facts = spacecraftFacts(anomalies, satelliteId)
   const name = facts.satelliteId ? spacecraftDisplayName(facts.satelliteId) : null
   const href = withCapture(name ? `/spacecraft?sat=${encodeURIComponent(name)}` : '/spacecraft')
+  const fleet = fleetStatus(signals, anomalies)
   return (
-    <Disclosure id="spacecraft" label="Spacecraft" count={name ?? '—'} open={open} onToggle={onToggle}>
+    <Disclosure id="spacecraft" label="Spacecraft" count={name ?? String(FLEET.length)} open={open} onToggle={onToggle}>
+      <ul className="fleet" data-testid="fleet">
+        {fleet.map(({ member, reportCount, latest, state }) => (
+          <li
+            key={member.satelliteId}
+            className={`fleet__row${member.satelliteId === facts.satelliteId ? ' fleet__row--episode' : ''}`}
+            data-testid="fleet-row"
+            data-satellite={member.satelliteId}
+            data-state={state}
+            aria-current={member.satelliteId === facts.satelliteId ? 'true' : undefined}
+          >
+            <a className="fleet__name" href={withCapture(`/spacecraft?sat=${encodeURIComponent(member.name)}`)} title={member.note}>
+              {member.name}
+            </a>
+            <span className="fleet__role">{member.roleLabel}</span>
+            <span className="fleet__status">
+              {latest ? `${reportCount} report${reportCount === 1 ? '' : 's'} · ${fleetClock(latest.ts)}` : 'no reports yet'}
+            </span>
+          </li>
+        ))}
+      </ul>
       {facts.latest ? (
         <dl className="facts" data-testid="spacecraft-facts">
           <div>

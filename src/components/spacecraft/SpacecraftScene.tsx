@@ -7,7 +7,7 @@ import { Suspense, lazy, useCallback, useRef, useState } from 'react'
 import { subsystemLabel, verdictLabel } from '../../lib/commanderLanguage'
 import type { AnchorScreen } from '../../lib/spacecraft3d/model'
 import { ASSEMBLY } from '../../lib/spacecraft3d/parts'
-import {
+import { isQuietHealth,
   HEALTH_LABEL,
   SUBSYSTEMS,
   type RecoveryState,
@@ -33,7 +33,7 @@ const DEFAULT_EXPLODE = 0.55
 export function SpacecraftScene({ name, states, recovery, verdict, confidence, provisional, actor }: SpacecraftSceneProps) {
   const [explode, setExplode] = useState(DEFAULT_EXPLODE)
   const [selected, setSelected] = useState<Subsystem | null>(
-    () => states.find((state) => state.health !== 'nominal')?.subsystem ?? null,
+    () => states.find((state) => !isQuietHealth(state.health))?.subsystem ?? null,
   )
   const [autoRotate, setAutoRotate] = useState(false)
   const [resetToken, setResetToken] = useState(0)

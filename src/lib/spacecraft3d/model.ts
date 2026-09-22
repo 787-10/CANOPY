@@ -4,7 +4,7 @@
 // for the page's leader lines. Technique after the internal diagnosis
 // module's dashboard twin: tag primitives, apply state by traversal.
 import * as THREE from 'three'
-import type { Subsystem, SubsystemHealth, SubsystemState } from '../spacecraftHealth'
+import { isQuietHealth, type Subsystem, type SubsystemHealth, type SubsystemState } from '../spacecraftHealth'
 import { ANCHOR_PART, SIM01_PARTS, TONE_HEX, type Part, type Tone } from './parts'
 
 export type HealthPalette = Record<SubsystemHealth | 'selected', THREE.Color>
@@ -160,7 +160,7 @@ export function applyHealth(
     material.color.setHex(tag.baseColor)
     material.emissive.setHex(tag.baseEmissive)
     material.emissiveIntensity = 0
-    if (health !== 'nominal') {
+    if (!isQuietHealth(health)) {
       const tint = palette[health]
       const mix = health === 'degraded' ? 0.3 : health === 'faulted' ? 0.42 : 0.5
       material.color.lerp(tint, mix)
@@ -171,7 +171,7 @@ export function applyHealth(
     material.envMapIntensity = 1
     if (!selected) continue
     if (tag.subsystem === selected) {
-      const glow = health === 'nominal' ? palette.selected : palette[health]
+      const glow = isQuietHealth(health) ? palette.selected : palette[health]
       material.color.lerp(glow, 0.3)
       material.emissive.copy(glow)
       material.emissiveIntensity = 0.5 + 0.35 * pulse
@@ -214,6 +214,7 @@ const FALLBACK: Record<SubsystemHealth | 'selected', string> = {
   degraded: '#c9a457',
   faulted: '#7b96ff',
   'withheld-recovery': '#ff7b6d',
+  'no-report': '#8a9390',
   selected: '#f5f7f0',
 }
 const CSS_VAR: Record<SubsystemHealth | 'selected', string> = {
@@ -221,6 +222,7 @@ const CSS_VAR: Record<SubsystemHealth | 'selected', string> = {
   degraded: '--amber',
   faulted: '--verdict-internal',
   'withheld-recovery': '--verdict-hostile',
+  'no-report': '--text-subtle',
   selected: '--text-primary',
 }
 

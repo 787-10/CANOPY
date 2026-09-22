@@ -32,10 +32,11 @@ const drop2 = makeBusHealthSignal('bh-2', {
 })
 
 describe('subsystemStates', () => {
-  it('lists the seven spec subsystems, nominal with no records', () => {
+  it('lists the seven spec subsystems, unreported with no records', () => {
     const states = subsystemStates([], null, null)
     expect(states.map((state) => state.subsystem)).toEqual([...SUBSYSTEMS])
-    expect(states.every((state) => state.health === 'nominal')).toBe(true)
+    // Nothing heard is not nominal: the page says so until a record lands.
+    expect(states.every((state) => state.health === 'no-report')).toBe(true)
   })
 
   it('marks the symptomatic subsystem faulted under an internal-fault verdict', () => {
