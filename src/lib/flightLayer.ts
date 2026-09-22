@@ -339,8 +339,9 @@ export const FLIGHT_MODEL_SCALE = 0.025
  *  about to be tracked, so the camera frames the model in the spacecraft's
  *  own frame (Cesium waits for the model's bounding sphere before it frames).
  *  The body flies nose-first: orientation from the velocity. */
-/** Where the camera sits in the spacecraft's frame while focused (metres:
- *  behind, beside and above a 13 m body), and the zoom floor that lets it. */
+/** Where the camera sits in the spacecraft's velocity frame while focused
+ *  (metres: behind along the track, to the right, above a 13 m body), and
+ *  the zoom floor that lets it. */
 export const FLIGHT_MODEL_VIEW_FROM = new Cartesian3(-30, 18, 13)
 export const FLIGHT_MODEL_MIN_ZOOM_M = 6
 /** While the body is drawn its name is lifted this far above it in the eye's
@@ -351,6 +352,11 @@ export const FLIGHT_MODEL_LABEL_LIFT_M = 7
 export function focusFlightModel(viewer: Viewer, body: FlightBody): Entity | null {
   const entity = viewer.entities.getById(body.entityIds[0])
   if (!entity?.position) return null
+  // The camera sits behind and beside the body along its motion, so the view
+  // is the same whichever way the spacecraft is heading: in the east-north-up
+  // frame the same offset landed in front of it on the opposite leg of the
+  // orbit (Jeewoo, 2026-09-22: "following from the opposite side").
+  entity.trackingReferenceFrame = TrackingReferenceFrame.VELOCITY
   entity.viewFrom = new ConstantProperty(FLIGHT_MODEL_VIEW_FROM)
   if (!entity.model) {
     entity.orientation = new VelocityOrientationProperty(entity.position as PositionProperty)
@@ -373,6 +379,7 @@ export function unfocusFlightModel(viewer: Viewer, body: FlightBody): void {
   entity.model = undefined
   entity.orientation = undefined
   entity.viewFrom = undefined
+  entity.trackingReferenceFrame = TrackingReferenceFrame.ENU
   if (entity.billboard) entity.billboard.show = new ConstantProperty(true)
   if (entity.label) entity.label.eyeOffset = new ConstantProperty(Cartesian3.ZERO)
 }

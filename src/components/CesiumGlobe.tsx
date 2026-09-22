@@ -211,6 +211,9 @@ const PIN_CAMERA_HEIGHT_M = 1_400_000
 const PRE_RUN_CAMERA_HEIGHT_M = 4_500_000
 /** The globe's zoom floor; a focused spacecraft model lowers it for its stay. */
 const GLOBE_MIN_ZOOM_M = 250
+/** The imagery in its own colour, at full detail (Jeewoo, 2026-09-22: "some
+ *  colour and more detail"); the near-monochrome skin of the first cut is gone. */
+const IMAGERY_LOOK = { brightness: 1.0, contrast: 1.06, saturation: 1.0 }
 
 // One press of Zoom in (or +) brings the camera to 60% of its height; Zoom
 // out (or -) is the inverse, so a press each way lands where it started.
@@ -797,11 +800,11 @@ export function CesiumGlobe({
         }
 
         const layer = new ImageryLayer(provider, {
-          alpha: 0.95,
-          brightness: 0.82,
-          contrast: 1.18,
-          gamma: 1.05,
-          saturation: 0.12,
+          alpha: 1,
+          brightness: IMAGERY_LOOK.brightness,
+          contrast: IMAGERY_LOOK.contrast,
+          gamma: 1,
+          saturation: IMAGERY_LOOK.saturation,
         })
         viewer.imageryLayers.add(layer)
         setImageryMode('Local fallback imagery')
@@ -818,11 +821,11 @@ export function CesiumGlobe({
           },
         ),
         {
-          alpha: 0.95,
-          brightness: 0.88,
-          contrast: 1.04,
+          alpha: 1,
+          brightness: IMAGERY_LOOK.brightness,
+          contrast: IMAGERY_LOOK.contrast,
           gamma: 1,
-          saturation: 0.02,
+          saturation: IMAGERY_LOOK.saturation,
         },
       )
 
@@ -851,11 +854,11 @@ export function CesiumGlobe({
           style: IonWorldImageryStyle.AERIAL,
         }),
         {
-          alpha: 0.88,
-          brightness: 0.72,
-          contrast: 1.08,
+          alpha: 1,
+          brightness: IMAGERY_LOOK.brightness,
+          contrast: IMAGERY_LOOK.contrast,
           gamma: 1,
-          saturation: 0.18,
+          saturation: IMAGERY_LOOK.saturation,
         },
       )
 

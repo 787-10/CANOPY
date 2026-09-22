@@ -4375,57 +4375,55 @@ dt,
 }
 
 .fleet__row {
+  position: relative;
   display: grid;
   grid-template-columns: auto 1fr;
-  column-gap: 8px;
-  align-items: start;
-  padding: 4px 6px;
+  grid-template-areas:
+    'name role'
+    'status status';
+  column-gap: 10px;
+  row-gap: 2px;
+  align-items: baseline;
+  padding: 5px 8px;
   border: 1px solid transparent;
   border-radius: 3px;
   font-size: 0.7rem;
 }
 
-/* The rest of the row is the follow control: role, status and a ring that
-   fills while the globe follows this spacecraft. */
+/* The follow control is the row itself: a transparent button over it, the
+   name link above the button so it still opens the body. */
 .fleet__follow {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  column-gap: 8px;
-  row-gap: 1px;
-  width: 100%;
+  position: absolute;
+  inset: 0;
   margin: 0;
   padding: 0;
   border: 0;
+  border-radius: 3px;
   background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
   cursor: pointer;
 }
 
-.fleet__follow:hover .fleet__role,
-.fleet__follow:focus-visible .fleet__role {
-  color: var(--cyan, var(--brand-bright));
+.fleet__follow:hover {
+  background: rgba(123, 150, 255, 0.06);
 }
 
 .fleet__follow:focus-visible {
   outline: 1px solid var(--cyan, var(--brand-bright));
-  outline-offset: 2px;
-}
-
-.fleet__follow-mark {
-  grid-row: 1 / span 2;
-  align-self: center;
-  color: var(--text-subtle);
-  font-size: 0.8rem;
-}
-
-.fleet__follow[aria-pressed='true'] .fleet__follow-mark {
-  color: var(--amber);
+  outline-offset: 1px;
 }
 
 .fleet__row--followed {
   border-color: rgba(201, 164, 87, 0.42);
+}
+
+.fleet__following {
+  margin-left: 8px;
+  color: var(--amber);
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  font-size: 0.58rem;
 }
 
 .fleet__row--episode {
@@ -4434,6 +4432,9 @@ dt,
 }
 
 .fleet__name {
+  position: relative;
+  z-index: 1;
+  grid-area: name;
   color: var(--text-primary);
   font-weight: 700;
   letter-spacing: 0.04em;
@@ -4449,18 +4450,24 @@ dt,
 }
 
 .fleet__role {
+  grid-area: role;
+  justify-self: end;
   color: var(--text-subtle);
   text-transform: uppercase;
   letter-spacing: 0.06em;
   font-size: 0.6rem;
-  align-self: baseline;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 .fleet__status {
-  grid-column: 1;
+  grid-area: status;
   color: var(--text-muted);
   font-size: 0.64rem;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .side-column__empty {

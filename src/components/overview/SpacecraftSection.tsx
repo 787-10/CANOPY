@@ -50,22 +50,20 @@ export function SpacecraftSection({ satelliteId, open, onToggle }: SpacecraftSec
               >
                 {member.name}
               </a>
+              <span className="fleet__role">{member.roleLabel}</span>
+              <span className="fleet__status">
+                {latest ? `${reportCount} report${reportCount === 1 ? '' : 's'} · ${fleetClock(latest.ts)}` : 'no reports yet'}
+                {isFollowed ? <em className="fleet__following">following</em> : null}
+              </span>
               <button
                 type="button"
                 className="fleet__follow"
                 aria-pressed={isFollowed}
+                aria-label={isFollowed ? `Stop following ${member.name}` : `Follow ${member.name} on the globe`}
                 onClick={() => followSatellite(isFollowed ? null : member.satelliteId)}
                 title={isFollowed ? `Stop following ${member.name}` : `Follow ${member.name} on the globe`}
                 data-testid="fleet-follow"
-              >
-                <span className="fleet__role">{member.roleLabel}</span>
-                <span className="fleet__status">
-                  {latest ? `${reportCount} report${reportCount === 1 ? '' : 's'} · ${fleetClock(latest.ts)}` : 'no reports yet'}
-                </span>
-                <span className="fleet__follow-mark" aria-hidden="true">
-                  {isFollowed ? '◉' : '◎'}
-                </span>
-              </button>
+              />
             </li>
           )
         })}

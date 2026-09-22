@@ -106,11 +106,17 @@ describe('SituationColumn', () => {
     expect(rows[0]).toHaveTextContent('no reports yet')
     // Any fleet member can be followed on the globe, incident or not; the name opens the body.
     const follows = screen.getAllByTestId('fleet-follow')
+    expect(follows[2]).toHaveAccessibleName('Follow OBJ-1 on the globe')
     fireEvent.click(follows[2])
     expect(useEventStore.getState().followedSatelliteId).toBe('ctb://megalith.demo/obj-01')
     expect(follows[2]).toHaveAttribute('aria-pressed', 'true')
+    expect(follows[2]).toHaveAccessibleName('Stop following OBJ-1')
+    // The followed row says so in words; no glyph.
+    expect(rows[2]).toHaveTextContent('following')
+    expect(rows[2].textContent).not.toMatch(/[◉◎]/)
     fireEvent.click(follows[2])
     expect(useEventStore.getState().followedSatelliteId).toBeNull()
+    expect(rows[2]).not.toHaveTextContent('following')
     expect(screen.getAllByTestId('fleet-name')[2]).toHaveAttribute('href', '/spacecraft?sat=OBJ-1')
     expect(screen.getByTestId('environment-denied')).toHaveTextContent('none denied')
     expect(screen.getByTestId('environment-weather')).toHaveTextContent('No space-weather report')
