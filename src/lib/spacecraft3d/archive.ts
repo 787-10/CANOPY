@@ -14,7 +14,17 @@ import { addEdges, buildProceduralModel, type BuiltModel, type StructureMesh, ty
 
 /** A welded, spatially connected piece of one mesh, in the normalised frame
  *  (arrays along X, +Y zenith, the bus along Z with the aft module at +Z). */
-export type Component = { centre: THREE.Vector3; size: THREE.Vector3; tris: number; material: string }
+export type Component = {
+  centre: THREE.Vector3
+  size: THREE.Vector3
+  /** World-space bounds. */
+  min: THREE.Vector3
+  max: THREE.Vector3
+  tris: number
+  /** Surface area in world units squared. */
+  area: number
+  material: string
+}
 
 export type ArchiveModelSpec = {
   file: string
@@ -26,6 +36,9 @@ export type ArchiveModelSpec = {
   cameraDistance: number
   /** Which subsystem a component belongs to; null is primary structure. */
   assign: (component: Component) => Subsystem | null
+  /** X of the bus centre after normalisation: power parts either side are
+   *  different wings, merged and exploded apart from each other. */
+  wingSplitX: number
 }
 
 type Range = readonly [number, number]
@@ -46,6 +59,7 @@ export const ARCHIVE_MODEL: ArchiveModelSpec = {
   fit: 6.4,
   rotation: [0, Math.PI / 2, 0],
   cameraDistance: 8.6,
+  wingSplitX: -0.85,
   assign: (c) => {
     // Radiator panels: the reflective flat panels on the bus sides. The same
     // material under the bus is the skin of the radar boxes, not a radiator.
@@ -158,6 +172,10 @@ function splitComponents(mesh: THREE.Mesh, material: string, cell = 0.002): Arra
     }
     const box = new THREE.Box3()
     const sum = new THREE.Vector3()
+    const a = new THREE.Vector3()
+    const b = new THREE.Vector3()
+    const c = new THREE.Vector3()
+    let area = 0
     for (const t of tris) {
       for (let k = 0; k < 3; k += 1) {
         const source = vertexAt(t, k)
@@ -165,10 +183,78 @@ function splitComponents(mesh: THREE.Mesh, material: string, cell = 0.002): Arra
         box.expandByPoint(v)
         sum.add(v)
       }
+      const i0 = vertexAt(t, 0)
+      const i1 = vertexAt(t, 1)
+      const i2 = vertexAt(t, 2)
+      a.set(world[i0 * 3]!, world[i0 * 3 + 1]!, world[i0 * 3 + 2]!)
+      b.set(world[i1 * 3]!, world[i1 * 3 + 1]!, world[i1 * 3 + 2]!)
+      c.set(world[i2 * 3]!, world[i2 * 3 + 1]!, world[i2 * 3 + 2]!)
+      area += b.sub(a).cross(c.sub(a)).length() / 2
     }
-    out.push([piece, { centre: sum.divideScalar(tris.length * 3), size: box.getSize(new THREE.Vector3()), tris: tris.length, material }])
+    out.push([
+      piece,
+      {
+        centre: sum.divideScalar(tris.length * 3),
+        size: box.getSize(new THREE.Vector3()),
+        min: box.min.clone(),
+        max: box.max.clone(),
+        tris: tris.length,
+        area,
+        material,
+      },
+    ])
   }
   return out
+}
+
+/** A component too small to be a part: no area to speak of, or a handful of
+ *  triangles of no size. Exports leave these behind (seam faces, stray
+ *  quads); drawn, they hovered as slivers once the body exploded. */
+export function isDegenerate(component: Component, bodyDiag: number, totalArea: number): boolean {
+  const diag = component.size.length()
+  if (component.area <= totalArea * 5e-6) return true
+  return component.tris <= 4 && diag < bodyDiag * 0.01
+}
+
+/** A thin plate (a box face, a decal, a strip) that lies on a much larger
+ *  component takes that component's subsystem, so it stays on its body. */
+export function adoptHosts(
+  pieces: Array<{ component: Component; target: Subsystem | null }>,
+  bodyDiag: number,
+): number {
+  const volume = (c: Component) => Math.max(c.size.x, 1e-9) * Math.max(c.size.y, 1e-9) * Math.max(c.size.z, 1e-9)
+  const largest = Math.max(...pieces.map((piece) => volume(piece.component)), 1e-9)
+  const tolerance = bodyDiag * 0.004
+  const hosts = pieces.filter((piece) => volume(piece.component) >= largest * 0.002)
+  let adopted = 0
+  for (const piece of pieces) {
+    const c = piece.component
+    const thin = Math.min(c.size.x, c.size.y, c.size.z) / Math.max(c.size.x, c.size.y, c.size.z, 1e-9)
+    if (thin > 0.03 || volume(c) > largest * 0.02) continue
+    let best: { component: Component; target: Subsystem | null } | null = null
+    let bestVolume = 0
+    for (const host of hosts) {
+      if (host === piece) continue
+      const h = host.component
+      const hv = volume(h)
+      if (hv < volume(c) * 8) continue
+      const inside =
+        c.centre.x >= h.min.x - tolerance && c.centre.x <= h.max.x + tolerance &&
+        c.centre.y >= h.min.y - tolerance && c.centre.y <= h.max.y + tolerance &&
+        c.centre.z >= h.min.z - tolerance && c.centre.z <= h.max.z + tolerance
+      if (!inside) continue
+      // The smallest host that contains it: the box the plate lies on, not the bus.
+      if (best === null || hv < bestVolume) {
+        best = host
+        bestVolume = hv
+      }
+    }
+    if (best && best.target !== piece.target) {
+      piece.target = best.target
+      adopted += 1
+    }
+  }
+  return adopted
 }
 
 const volumeOf = (box: THREE.Box3): number => {
@@ -249,24 +335,55 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
   scene.traverse((object) => {
     if (object instanceof THREE.Mesh) found.push(object)
   })
+  // Every mesh is split into welded components and each component is
+  // assigned on its own, so one archive material can serve several bodies
+  // and one body can gather several materials. Components are gathered from
+  // every mesh first, because two passes look across meshes:
+  //  - degenerate fragments (no area, or a few triangles of no size) are
+  //    dropped: they rendered as hovering slivers;
+  //  - a thin plate lying on a body (a box face, a decal) adopts that body's
+  //    subsystem, so it does not fly off on its own when exploding.
+  type Piece = { object: THREE.Mesh; material: THREE.MeshStandardMaterial; geometry: THREE.BufferGeometry; component: Component; target: Subsystem | null }
+  const pieces: Piece[] = []
   for (const object of found) {
     const source = Array.isArray(object.material) ? object.material[0] : object.material
     if (!(source instanceof THREE.MeshStandardMaterial)) continue
     const material = source.clone()
     material.name = source.name
     object.material = material
-    // Every mesh is split into welded components and each component is
-    // assigned on its own, so one archive material can serve several bodies
-    // and one body can gather several materials.
-    const parent = object.parent ?? scene
-    const byTarget = new Map<Subsystem | null, THREE.BufferGeometry[]>()
     for (const [geometry, component] of splitComponents(object, material.name)) {
-      const target = spec.assign(component)
-      const list = byTarget.get(target)
-      if (list) list.push(geometry)
-      else byTarget.set(target, [geometry])
+      pieces.push({ object, material, geometry, component, target: spec.assign(component) })
     }
-    for (const [target, geometries] of byTarget) {
+  }
+  const bodyDiag = Math.hypot(size.x, size.y, size.z) * scale
+  const totalArea = pieces.reduce((sum, piece) => sum + piece.component.area, 0)
+  const kept: Piece[] = []
+  for (const piece of pieces) {
+    if (isDegenerate(piece.component, bodyDiag, totalArea)) piece.geometry.dispose()
+    else kept.push(piece)
+  }
+  adoptHosts(kept, bodyDiag)
+  const byObject = new Map<THREE.Mesh, Piece[]>()
+  for (const piece of kept) {
+    const list = byObject.get(piece.object)
+    if (list) list.push(piece)
+    else byObject.set(piece.object, [piece])
+  }
+  for (const [object, list] of byObject) {
+    const material = list[0]!.material
+    const parent = object.parent ?? scene
+    // One merged mesh per target, except power, which is merged per wing so
+    // that a material spanning both arrays (the cell fronts) does not tie the
+    // wings together when they explode.
+    const byBucket = new Map<string, { target: Subsystem | null; geometries: THREE.BufferGeometry[] }>()
+    for (const piece of list) {
+      const wing = piece.target === 'power' ? (piece.component.centre.x >= spec.wingSplitX ? ':east' : ':west') : ''
+      const key = `${piece.target ?? 'structure'}${wing}`
+      const bucket = byBucket.get(key)
+      if (bucket) bucket.geometries.push(piece.geometry)
+      else byBucket.set(key, { target: piece.target, geometries: [piece.geometry] })
+    }
+    for (const { target, geometries } of byBucket.values()) {
       const merged = geometries.length === 1 ? geometries[0]! : mergeGeometries(geometries, false)
       if (geometries.length > 1) for (const g of geometries) g.dispose()
       if (!merged) continue
@@ -290,19 +407,41 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
     object.geometry.dispose()
     material.dispose()
   }
+  for (const object of found) {
+    // A mesh whose every component was dropped still leaves the scene.
+    if (object.parent && !byObject.has(object)) {
+      object.parent.remove(object)
+      object.geometry.dispose()
+    }
+  }
   root.updateMatrixWorld(true)
 
   const anchors: Partial<Record<Subsystem, THREE.Object3D>> = {}
-  for (const [subsystem, group] of groups) {
-    if (subsystem !== 'power') {
-      const host = group.host
-      const parent = host.parent ?? root
-      const dir = parent.worldToLocal(group.box.getCenter(new THREE.Vector3())).sub(parent.worldToLocal(origin.clone()))
+  const rigidDirection = (members: TaggedMesh[]) => {
+    // One direction for a set of parts, so they explode as a body: each
+    // part's own radial made the fronts, backs and fittings of one wing drift
+    // apart into hovering sheets and specks.
+    const box = new THREE.Box3()
+    for (const mesh of members) box.expandByObject(mesh)
+    const centre = box.getCenter(new THREE.Vector3())
+    for (const mesh of members) {
+      const parent = mesh.parent ?? root
+      const dir = parent.worldToLocal(centre.clone()).sub(parent.worldToLocal(origin.clone()))
       if (dir.lengthSq() > 0) dir.normalize()
-      for (const mesh of meshes) {
-        const tag = mesh.userData as Tag
-        if (tag.subsystem === subsystem) tag.dir.copy(dir)
-      }
+      ;(mesh.userData as Tag).dir.copy(dir)
+    }
+  }
+  for (const [subsystem, group] of groups) {
+    const members = meshes.filter((mesh) => (mesh.userData as Tag).subsystem === subsystem)
+    if (subsystem === 'power') {
+      // The two wings leave in opposite directions, each as one body.
+      const centreX = (mesh: TaggedMesh) => new THREE.Box3().expandByObject(mesh).getCenter(new THREE.Vector3()).x
+      const east = members.filter((mesh) => centreX(mesh) >= spec.wingSplitX)
+      const west = members.filter((mesh) => centreX(mesh) < spec.wingSplitX)
+      if (east.length) rigidDirection(east)
+      if (west.length) rigidDirection(west)
+    } else {
+      rigidDirection(members)
     }
     const anchor = new THREE.Object3D()
     anchor.position.copy(group.host.worldToLocal(group.box.getCenter(new THREE.Vector3())))
