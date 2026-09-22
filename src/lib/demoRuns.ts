@@ -2,6 +2,7 @@
 // `/demo?run=A|B|C`. Kept out of the page component so the fetch and the
 // navigation can be unit-tested with doubles.
 import { useCaptureStore, withCapture } from '../store/captureStore'
+import { navigate as navigateInDocument } from './navigation'
 import { COUPLED_RATES, useClockStore, type FlightRate } from '../store/clockStore'
 import { useEphemerisStore } from '../store/ephemerisStore'
 import { useEventStore } from '../store/eventStore'
@@ -151,7 +152,7 @@ export type RestartDemoResult = { status: 'restarted'; gatewayReset: boolean }
  *  Nothing replays until they press Start. */
 export async function restartDemo({
   fetchImpl = fetch,
-  navigate = (url) => window.location.assign(url),
+  navigate = navigateInDocument,
   apiUrl = DEMO_API_URL,
 }: { fetchImpl?: typeof fetch; navigate?: (url: string) => void; apiUrl?: string } = {}): Promise<RestartDemoResult> {
   const gatewayReset = await resetEngine({ fetchImpl, apiUrl })
@@ -166,7 +167,7 @@ export async function startDemoRun(
   run: DemoRun,
   {
     fetchImpl = fetch,
-    navigate = (url) => window.location.assign(url),
+    navigate = navigateInDocument,
     apiUrl = DEMO_API_URL,
     clearState = true,
     flight = null,

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { navigate } from '../lib/navigation'
 import { PAGES } from '../lib/pages'
 import { useEpisode } from '../hooks/useEpisode'
 import { acceptIsLocked, recordOperatorDecision } from '../lib/operatorDecisions'
@@ -23,7 +24,7 @@ export function Hotkeys() {
       const key = event.key.toLowerCase()
       if (/^[1-9]$/.test(key)) {
         const page = PAGES[Number(key) - 1]
-        if (page) window.location.assign(withCapture(page.href, capture))
+        if (page) navigate(withCapture(page.href, capture))
         return
       }
       if (key === 'f') {

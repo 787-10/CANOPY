@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 from collections import Counter
 from collections.abc import Iterable, Mapping
+import re
 from dataclasses import dataclass
 
 from canopy.services.kb import KB
@@ -1074,16 +1075,45 @@ class StubLLMClient:
         if UNCERTAINTY_ENTRY in self._kb and UNCERTAINTY_ENTRY not in seen:
             citations.append(UNCERTAINTY_ENTRY)
 
+        actor, evidence = self._name_for_kb(template.actor, list(template.evidence))
         return Attribution(
             anomaly_ids=[a.id for a in anomalies],
-            actor=template.actor,
+            actor=actor,
             confidence=template.confidence,
             doctrine_match=citations[0] if citations else None,
-            evidence=list(template.evidence),
+            evidence=evidence,
             predicted_next=template.predicted_next,
             kb_citations=citations,
             source_signal_ids=source_ids,
         )
+
+    # The canned templates name real states, which CANOPY's own scenarios use.
+    # A knowledge base that names only synthetic actors (the MEGALITH demo's
+    # Actor-1; demo plan section 6, no real actor may reach the screen) gets
+    # its own actor in place of the template's, in the actor field and in the
+    # evidence lines. A knowledge base that knows the template's actor keeps it.
+    _REAL_NAMES = ("Russian", "Russia", "Chinese", "China", "Iranian", "Iran", "North Korean", "North Korea")
+
+    def _name_for_kb(self, actor: str | None, evidence: list[str]) -> tuple[str | None, list[str]]:
+        # Only a real state's name is replaced: "Unknown" and "None" (no actor)
+        # and any synthetic name pass through untouched.
+        if not actor or actor not in self._REAL_NAMES:
+            return actor, evidence
+        known = self._kb.actors()
+        if not known or actor in known:
+            return actor, evidence
+        stand_in = known[0]
+        pattern = re.compile("|".join(re.escape(name) for name in self._REAL_NAMES))
+        return stand_in, [pattern.sub(stand_in, line) for line in evidence]
+
+    def _alternative_for_kb(self, alternative: str | None, primary_actor: str | None) -> str | None:
+        if not alternative or alternative not in self._REAL_NAMES:
+            return alternative
+        known = self._kb.actors()
+        if not known or alternative in known:
+            return alternative
+        others = [name for name in known if name != primary_actor]
+        return others[0] if others else None
 
     async def attribute_redteam(
         self,
@@ -1112,12 +1142,15 @@ class StubLLMClient:
                 ),
             )
 
+        alternative = self._alternative_for_kb(template.alternative_actor, primary.actor)
+        _, objections = self._name_for_kb(template.alternative_actor, list(template.objections))
+        _, rationale_lines = self._name_for_kb(template.alternative_actor, [template.rationale])
         return AttributionChallenge(
             primary_attribution_id=primary.id,
-            alternative_actor=template.alternative_actor,
-            objections=list(template.objections),
+            alternative_actor=alternative,
+            objections=objections,
             confidence_delta=template.confidence_delta,
-            rationale=template.rationale,
+            rationale=rationale_lines[0],
         )
 
     async def reconcile(

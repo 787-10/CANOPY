@@ -62,6 +62,16 @@ class KB:
     def by_domain(self, domain: str) -> list[KBEntry]:
         return list(self._by_domain.get(domain, ()))
 
+    def actors(self) -> list[str]:
+        """Distinct actor names the entries carry, in entry order; never ``Unknown``."""
+        seen: list[str] = []
+        for entry in self.all_entries():
+            actor = getattr(entry, "actor", None)
+            # The demo file writes "None" for entries that name no actor.
+            if actor and actor not in ("Unknown", "None") and actor not in seen:
+                seen.append(actor)
+        return seen
+
     def all_entries(self) -> list[KBEntry]:
         return list(self._by_id.values())
 

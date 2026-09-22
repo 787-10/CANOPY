@@ -7,6 +7,8 @@ import { SignalsPage } from './pages/SignalsPage'
 import { SignalZoom } from './pages/SignalZoom'
 import { Spacecraft } from './pages/Spacecraft'
 import { VerdictPage } from './pages/VerdictPage'
+import { useEffect } from 'react'
+import { useLocation } from './lib/navigation'
 import { resolveRoute } from './lib/routes'
 import { initialiseCaptureMode } from './store/captureStore'
 import { initialiseFlightView } from './store/clockStore'
@@ -44,7 +46,15 @@ function pageFor(route: ReturnType<typeof resolveRoute>) {
 }
 
 function App() {
-  const route = resolveRoute(window.location.pathname, window.location.search)
+  // Pages change in this document (lib/navigation.ts): a fullscreen console
+  // keeps its fullscreen across the header links and the page keys. The
+  // capture and flight flags in the new URL are applied as on a load.
+  const location = useLocation()
+  useEffect(() => {
+    initialiseCaptureMode(location.search)
+    initialiseFlightView(location.search)
+  }, [location.pathname, location.search])
+  const route = resolveRoute(location.pathname, location.search)
   return (
     <>
       <Hotkeys />
