@@ -3,6 +3,11 @@
 // loading the globe; n2yoSatelliteLayer re-exports these for the layer.
 export type SyntheticSatelliteFamily = 'SIM'
 
+/** Which archive body draws the spacecraft (public/models/PROVENANCE.md):
+ *  the fleet's bus for the SIM pair, a different spacecraft for the
+ *  closely-spaced object so it reads as not one of ours (Jeewoo, 2026-09-22). */
+export type SpacecraftBodyId = 'gpm' | 'trmm'
+
 export type SyntheticSatelliteConfig = {
   family: SyntheticSatelliteFamily
   /** Synthetic globe-layer id (>= 900000), never a real NORAD id; matches
@@ -16,6 +21,8 @@ export type SyntheticSatelliteConfig = {
   /** Drawn in flight (and in pass view only when the stream names it): the
    *  closely-spaced object must not appear pinned in the storyboard's frames. */
   flightOnly?: boolean
+  /** The 3D body on the Spacecraft page and the focused flight mark; `gpm` when unset. */
+  body?: SpacecraftBodyId
 }
 
 // Position files are produced by the demo-scenario lane in the exact shape
@@ -48,6 +55,7 @@ export const SYNTHETIC_SATELLITES: SyntheticSatelliteConfig[] = [
     synthetic: true,
     satelliteId: 'ctb://megalith.demo/obj-01',
     flightOnly: true,
+    body: 'trmm',
   },
 ]
 

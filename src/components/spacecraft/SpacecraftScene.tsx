@@ -5,6 +5,7 @@
 // imperatively every frame; React state per frame would re-render the HUD
 // sixty times a second for nothing.
 import { Suspense, lazy, useCallback, useRef, useState } from 'react'
+import type { SpacecraftBodyId } from '../../lib/syntheticSatellites'
 import { subsystemLabel } from '../../lib/commanderLanguage'
 import type { AnchorScreen } from '../../lib/spacecraft3d/model'
 import { ASSEMBLY } from '../../lib/spacecraft3d/parts'
@@ -21,6 +22,8 @@ const SpacecraftViewport = lazy(() => import('./SpacecraftViewport'))
 
 export type SpacecraftSceneProps = {
   name: string
+  /** The archive body to draw; the fleet's bus when unset. */
+  body?: SpacecraftBodyId
   states: SubsystemState[]
   recovery: RecoveryState
   verdict: Verdict | null
@@ -31,7 +34,7 @@ export type SpacecraftSceneProps = {
 
 const DEFAULT_EXPLODE = 0.55
 
-export function SpacecraftScene({ name, states, recovery, actor }: SpacecraftSceneProps) {
+export function SpacecraftScene({ name, body, states, recovery, actor }: SpacecraftSceneProps) {
   const [explode, setExplode] = useState(DEFAULT_EXPLODE)
   const [selected, setSelected] = useState<Subsystem | null>(
     () => states.find((state) => !isQuietHealth(state.health))?.subsystem ?? null,
@@ -77,6 +80,7 @@ export function SpacecraftScene({ name, states, recovery, actor }: SpacecraftSce
       <Suspense fallback={<div className="viewport3d__status">Loading model…</div>}>
         <SpacecraftViewport
           className="spacecraft-scene__viewport"
+          body={body}
           states={states}
           selected={selected}
           onSelect={choose}

@@ -37,4 +37,13 @@ describe('the fleet', () => {
     expect(fleetClock('2026-09-20T15:03:14Z')).toBe('15:03:14Z')
     expect(fleetClock('nope')).toBe('nope')
   })
+
+  it('gives the SIM pair the fleet bus and the closely-spaced object its own body', () => {
+    expect(FLEET.map((member) => [member.name, member.body])).toEqual([
+      ['SIM-01', 'gpm'],
+      ['SIM-02', 'gpm'],
+      ['OBJ-1', 'trmm'],
+    ])
+    expect(fleetMember('ctb://megalith.demo/obj-01')?.body).toBe('trmm')
+  })
 })

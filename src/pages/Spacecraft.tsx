@@ -6,7 +6,7 @@ import { SpacecraftScene } from '../components/spacecraft/SpacecraftScene'
 import { SymptomSparkline } from '../components/spacecraft/SymptomSparkline'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { spacecraftDisplayName, verdictLabel } from '../lib/commanderLanguage'
-import { FLEET_PRIMARY, fleetClock, fleetStatus } from '../lib/fleet'
+import { FLEET_PRIMARY, fleetClock, fleetMember, fleetStatus } from '../lib/fleet'
 import { resolveRequestedSatellite } from '../lib/syntheticSatellites'
 import {
   buildSymptomSeries,
@@ -119,6 +119,7 @@ export function Spacecraft({ requestedSatellite = null }: SpacecraftProps) {
         ) : null}
           <SpacecraftScene
             name={name}
+            body={fleetMember(satelliteId)?.body ?? 'gpm'}
             states={states}
             recovery={recovery}
             verdict={verdict}

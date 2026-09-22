@@ -1,8 +1,10 @@
 # Spacecraft geometry provenance
 
-Open geometry used by the Spacecraft page's CAD prototype as a visual
-stand-in for the synthetic spacecraft `SIM-01`. The on-screen identity stays
-`SIM-01`; these files supply shape only. Retrieved 2026-09-21, unmodified
+Open geometry used by the Spacecraft page and the focused flight mark as
+visual stand-ins for the synthetic spacecraft: `gpm.glb` for the fleet's bus
+(`SIM-01`, `SIM-02`), `trmm.glb` for the closely-spaced object (`OBJ-1`), a
+different spacecraft so it reads as not one of ours. The on-screen identities
+stay synthetic; these files supply shape only. Retrieved 2026-09-21, unmodified
 (byte-identical to the archive; hashes below).
 
 ## Source
@@ -17,14 +19,19 @@ NASA 3D Resources, the agency's public model archive, mirrored on GitHub:
 | File | Archive path | Last archive commit | Bytes | SHA-256 |
 | --- | --- | --- | --- | --- |
 | `gpm.glb` | `3D Models/Global Precipitation Measurement/Global Precipitation Measurement.glb` | `875e9f9a` (2024-11-07) | 2,257,008 | `7068c880770bb2ac936e804a1af48e564c90b829ff884c405a4759e8da9e693e` |
+| `trmm.glb` | `3D Models/Tropical Rainfall Measuring Mission (TRMM)/Tropical Rainfall Measuring Mission (TRMM).glb` | `751bf23c` (2024-12-30) | 195,804 | `2d285eef6c6d16616ef97c0686900f874b08263faae31e8d6bcd6df2c81c6a1d` |
 
 Both are Khronos glTF binaries (Blender glTF I/O 4.2.57) with Draco mesh
 compression and no textures, so neither file carries any NASA insignia or
 logotype. `gpm.glb`: 1 mesh, 48 named materials, about 283,000 triangles.
+`trmm.glb` (retrieved 2026-09-22 from the same archive commit): 20 named
+meshes, 23 materials, about 52,000 triangles.
 
 ## Credits on the archive pages
 
 - GPM: <https://science.nasa.gov/3d-resources/global-precipitation-measurement/>, credited "NASA/Christopher R. Meaney".
+- TRMM: the archive folder holds the model and a preview image and names no
+  author; the archive as a whole is credited to NASA.
 
 ## Terms
 
@@ -53,6 +60,13 @@ boom for the ground link, instruments on the nadir deck and propulsion for
 orbit maintenance. It is not a defence asset. (TRMM was evaluated as an
 alternate during the prototype and not adopted; see the CANOPY branch
 `prototype/cad-variants`.)
+
+`OBJ-1` is the closely-spaced object in `SIM-01`'s plane: not one of the
+fleet, so it should not look like one. The TRMM observatory, the alternate
+from the prototype, is visibly a different spacecraft (a boxy bus with two
+short arrays on booms, a dish on an arm, instruments at one end) and its file
+carries named parts, so its subsystems could be mapped by name. It is a
+retired civil science mission, not a defence asset.
 
 ## Subsystem mapping
 
@@ -84,6 +98,28 @@ The map is a reading of an artist's model, not an engineering drawing; it is
 good enough to light the right body for a verdict and no more. When the file
 cannot be loaded the page falls back to a procedural reference body
 (`src/lib/spacecraft3d/parts.ts`).
+
+### TRMM (`OBJ-1`)
+
+`TRMM_MODEL` in `src/lib/spacecraft3d/archive.ts`. The file's twenty meshes
+are named by material group, one material each, so assignment is by material
+with a position check where one material serves two assemblies. Frame after
+the spec's rotation: arrays along X, the dish at +Y, the bus along Z with the
+microwave imager at +Z and the propulsion ring at -Z. Positions below are in
+that frame after the fit to 6.4 units.
+
+| Material | Reading | Subsystem |
+| --- | --- | --- |
+| `Panel 1`–`Panel 4`, `Solar_Parts`, `Solar_Small_Parts` | The four array panels, their fittings | power |
+| `Sat/Solar_Arms`, beyond 1.0 in X | The array booms | power |
+| `Sat/Solar_Arms`, within 1.0 in X | The dish arm | comms |
+| `Satellite_Dish`, `Satellite_Arm_Parts` | The high-gain dish and its arm fittings | comms |
+| `VIRS`, `CERES`, `Microwave_*` | The three instruments | payload |
+| `Blue_Surfaces`, below -0.75 in Z | The ring and drum at the aft end | propulsion |
+| `Grey_Surfaces`, thin in Z and large | The two flat sheets on the bus (radiator panels) | thermal |
+| `Brown_Surface` | Equipment boxes on the bus panels (avionics stand-in) | cdh |
+| `Orange Surface` | The wheel-shaped assembly on the bus side (reaction-wheel stand-in) | adcs |
+| Everything else | Bus structure, fittings, surfaces | never tinted |
 
 ## Draco decoder
 

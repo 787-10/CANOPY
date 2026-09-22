@@ -6,6 +6,7 @@
 // components assigned by position or shape. Anything unmatched is primary
 // structure and is never tinted. On any failure the procedural body loads.
 import * as THREE from 'three'
+import type { SpacecraftBodyId } from '../syntheticSatellites'
 import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
@@ -451,10 +452,46 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
   return { root, meshes, structure, anchors, cameraDistance: spec.cameraDistance, credit: spec.credit, source: 'archive' }
 }
 
-/** The body the page shows: the archive file, else the procedural fallback. */
-export async function loadSpacecraftModel(): Promise<{ built: BuiltModel; fallback: boolean }> {
+/** The TRMM observatory body, the closely-spaced object's (OBJ-1): a
+ *  different spacecraft from the fleet's, so it reads as not one of ours.
+ *  The file's parts are named (twenty meshes, one material each), so
+ *  assignment is by material with a position check where one material
+ *  serves two assemblies. Frame after rotation: arrays along X, the dish
+ *  at +Y, the bus along Z with the microwave imager at +Z and the
+ *  propulsion ring at -Z (public/models/PROVENANCE.md). */
+export const TRMM_MODEL: ArchiveModelSpec = {
+  file: '/models/trmm.glb',
+  credit: 'Geometry: NASA 3D Resources (public domain)',
+  fit: 6.4,
+  rotation: [Math.PI / 2, 0, Math.PI / 2],
+  cameraDistance: 8.6,
+  wingSplitX: 0,
+  assign: (c) => {
+    const m = c.material
+    if (/^Panel \d|^Solar_Parts|^Solar_Small_Parts/.test(m)) return 'power'
+    // One material for the array booms and the dish arm: the booms run out
+    // along the arrays, the arm stays by the bus.
+    if (m.startsWith('Sat/Solar_Arms')) return Math.abs(c.centre.x) > 1.0 ? 'power' : 'comms'
+    if (m.startsWith('Satellite_Dish') || m.startsWith('Satellite_Arm_Parts')) return 'comms'
+    if (/^(VIRS|CERES|Microwave_)/.test(m)) return 'payload'
+    // The ring and drum at the aft end of the bus.
+    if (m.startsWith('Blue_Surfaces')) return c.centre.z < -0.75 ? 'propulsion' : null
+    // The two large flat sheets on the bus are its radiator panels.
+    if (m.startsWith('Grey_Surfaces')) return c.size.z < 0.05 && c.area > 1 ? 'thermal' : null
+    // Equipment boxes on the bus panels: the avionics stand-in.
+    if (m.startsWith('Brown_Surface')) return 'cdh'
+    // The wheel-shaped assembly on the bus side: the reaction-wheel stand-in.
+    if (m.startsWith('Orange Surface')) return 'adcs'
+    return null
+  },
+}
+
+export const ARCHIVE_MODELS: Record<SpacecraftBodyId, ArchiveModelSpec> = { gpm: ARCHIVE_MODEL, trmm: TRMM_MODEL }
+
+/** The body the page shows: the spacecraft's archive file, else the procedural fallback. */
+export async function loadSpacecraftModel(body: SpacecraftBodyId = 'gpm'): Promise<{ built: BuiltModel; fallback: boolean }> {
   try {
-    return { built: await loadArchiveModel(), fallback: false }
+    return { built: await loadArchiveModel(ARCHIVE_MODELS[body]), fallback: false }
   } catch (error) {
     console.warn('Spacecraft page: archive geometry unavailable; showing the procedural body', error)
     return { built: buildProceduralModel(), fallback: true }

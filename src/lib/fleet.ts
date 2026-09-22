@@ -3,7 +3,7 @@
 // Spacecraft page opens on the primary, and the globe pins them at their
 // pass, so an operator sees what is being observed when nothing is wrong yet.
 import { signalKindLabel } from './commanderLanguage'
-import { SYNTHETIC_SATELLITES, syntheticSatelliteFor } from './syntheticSatellites'
+import { SYNTHETIC_SATELLITES, syntheticSatelliteFor, type SpacecraftBodyId } from './syntheticSatellites'
 import type { Anomaly, Signal } from '../types/canopy'
 
 export type FleetRole = 'primary' | 'sibling' | 'object'
@@ -18,6 +18,8 @@ export type FleetMember = {
   note: string
   /** Drawn in flight view only, and pinned only when the stream names it. */
   flightOnly: boolean
+  /** The archive body that draws it. */
+  body: SpacecraftBodyId
 }
 
 const ROLES: Record<string, { role: FleetRole; roleLabel: string; note: string }> = {
@@ -32,6 +34,7 @@ export const FLEET: FleetMember[] = SYNTHETIC_SATELLITES.map((satellite) => {
     satelliteId: satellite.satelliteId,
     name: satellite.label,
     flightOnly: satellite.flightOnly === true,
+    body: satellite.body ?? 'gpm',
     ...role,
   }
 })

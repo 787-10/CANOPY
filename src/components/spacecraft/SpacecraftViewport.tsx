@@ -3,6 +3,7 @@
 // procedural fallback), health applied every frame in the skin's colours.
 // Lazy-loaded by the scene so `three` never enters the console's main chunk.
 import { useEffect, useRef, useState } from 'react'
+import type { SpacecraftBodyId } from '../../lib/syntheticSatellites'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js'
@@ -21,6 +22,8 @@ import {
 } from '../../lib/spacecraft3d/model'
 
 export type SpacecraftViewportProps = {
+  /** The archive body to draw; the fleet's bus when unset. */
+  body?: SpacecraftBodyId
   states: SubsystemState[]
   selected: Subsystem | null
   onSelect?: (subsystem: Subsystem | null) => void
@@ -181,9 +184,10 @@ export default function SpacecraftViewport(props: SpacecraftViewportProps) {
     observer?.observe(host)
     resize()
 
-    // The body, once; frame the camera when it lands.
+    // The body; frame the camera when it lands. A different body (the fleet
+    // switcher) rebuilds the stage: this effect depends on it.
     let cancelled = false
-    void loadSpacecraftModel().then(({ built, fallback }) => {
+    void loadSpacecraftModel(props.body ?? 'gpm').then(({ built, fallback }) => {
       if (cancelled) {
         disposeModel(built.root)
         return
@@ -270,7 +274,8 @@ export default function SpacecraftViewport(props: SpacecraftViewportProps) {
       renderer.domElement.remove()
       stageRef.current = null
     }
-  }, [])
+    // The stage is built once per body; everything else reaches it through refs.
+  }, [props.body])
 
   useEffect(() => {
     const stage = stageRef.current

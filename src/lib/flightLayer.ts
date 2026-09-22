@@ -25,6 +25,7 @@ import {
   type Viewer,
 } from 'cesium'
 import { FAMILY_COLOR_HEX, orbitEntityIdForSatellite, type N2YOLayerState } from './n2yoSatelliteLayer'
+import { syntheticSatelliteFor, type SpacecraftBodyId } from './syntheticSatellites'
 import { CircularOrbit, EARTH_RADIUS_KM, elementsFromSynthetic, type Subpoint } from './orbit/kepler'
 import { footprintRadiusKm, lookAngles, nextAos, type Site } from './orbit/lookAngles'
 
@@ -326,14 +327,24 @@ export function engineCheck(body: FlightBody, sample: { ts: string; lat: number;
   return { sampleMs, separationKm }
 }
 
-/** The spacecraft body the Spacecraft page shows (public/models/PROVENANCE.md),
- *  drawn on the flying mark while it is the focus (a double-click, Follow). */
-export const FLIGHT_MODEL_URI = '/models/gpm.glb'
-/** Metres per model unit. The archive file's bounding sphere is 271 units
- *  (measured through Cesium); the spacecraft is about 13 m long, so this puts
- *  the body at its real size. The camera frames the bounding sphere, so the
- *  picture is the same at any scale; the number is for the truth of it. */
-export const FLIGHT_MODEL_SCALE = 0.025
+/** The spacecraft bodies the Spacecraft page shows (public/models/PROVENANCE.md),
+ *  drawn on the flying mark while it is the focus (a double-click, Follow).
+ *  `scale` is metres per model unit, measured through Cesium: the GPM file's
+ *  bounding sphere is 271 units for a body about 13 m long; the TRMM file's is
+ *  551 units for a body whose arrays span about 14.6 m. The camera frames the
+ *  bounding sphere, so the picture is the same at any scale; the numbers are
+ *  for the truth of it. */
+export const FLIGHT_MODELS: Record<SpacecraftBodyId, { uri: string; scale: number }> = {
+  gpm: { uri: '/models/gpm.glb', scale: 0.025 },
+  trmm: { uri: '/models/trmm.glb', scale: 0.0133 },
+}
+export const FLIGHT_MODEL_URI = FLIGHT_MODELS.gpm.uri
+export const FLIGHT_MODEL_SCALE = FLIGHT_MODELS.gpm.scale
+
+/** The body a flight mark wears when focused: the spacecraft's own, else the fleet's bus. */
+export function flightModelFor(body: FlightBody): { uri: string; scale: number } {
+  return FLIGHT_MODELS[syntheticSatelliteFor(body.layer.satelliteName)?.body ?? 'gpm']
+}
 
 /** Put the 3D body on a flight entity and hide its glow dot: the entity is
  *  about to be tracked, so the camera frames the model in the spacecraft's
@@ -360,9 +371,10 @@ export function focusFlightModel(viewer: Viewer, body: FlightBody): Entity | nul
   entity.viewFrom = new ConstantProperty(FLIGHT_MODEL_VIEW_FROM)
   if (!entity.model) {
     entity.orientation = new VelocityOrientationProperty(entity.position as PositionProperty)
+    const model = flightModelFor(body)
     entity.model = new ModelGraphics({
-      uri: FLIGHT_MODEL_URI,
-      scale: FLIGHT_MODEL_SCALE,
+      uri: model.uri,
+      scale: model.scale,
       minimumPixelSize: 0,
       shadows: ShadowMode.DISABLED,
     })
