@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { fireEvent, act, render, screen } from '@testing-library/react'
 import { TopBar } from './TopBar'
+import { installLinkInterception } from '../lib/navigation'
 import { useEventStore } from '../store/eventStore'
 import { makeAttribution } from '../test/factories'
 
@@ -63,10 +64,12 @@ describe('TopBar marking chip', () => {
 describe('TopBar navigation and fullscreen', () => {
   it('a plain click on a page link navigates in the document; the fullscreen control is present when the API exists', () => {
     window.history.replaceState(null, '', '/brigade')
+    const remove = installLinkInterception()
     render(<TopBar title="Console" current="brigade" />)
     const link = screen.getByRole('link', { name: /Verdict/ })
     fireEvent.click(link)
     expect(window.location.pathname).toBe('/verdict')
+    remove()
     // jsdom has no fullscreen API: the control stays out of the way.
     expect(screen.queryByTestId('fullscreen')).toBeNull()
   })

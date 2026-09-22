@@ -5868,7 +5868,8 @@ html[data-capture="1"] .reasoning-line {
 .summary-card {
   position: relative;
   min-height: 0;
-  padding: 20px 14px 14px;
+  /* Room between the text and the frame (Jeewoo, 2026-09-21). */
+  padding: 24px 20px 18px;
 }
 
 .summary-card__link,
@@ -5912,7 +5913,7 @@ html[data-capture="1"] .reasoning-line {
 
 .stress-mode {
   position: relative;
-  padding: 20px 12px 12px;
+  padding: 24px 20px 18px;
 }
 
 /* Reports strip: the title and the link ride in the top border; the track

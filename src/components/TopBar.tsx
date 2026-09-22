@@ -1,6 +1,5 @@
 import { useMemo } from 'react'
 import { FullscreenButton } from './FullscreenButton'
-import { isPlainLeftClick, navigate } from '../lib/navigation'
 import type { ReactNode } from 'react'
 import { mostRestrictiveMarking } from '../lib/marking'
 import { PAGES, type ConsolePage } from '../lib/pages'
@@ -75,17 +74,7 @@ export function TopBar({ title, current, right }: TopBarProps) {
                 {label}
               </span>
             ) : (
-              <a
-                key={page}
-                href={withCapture(href, capture)}
-                data-key={index + 1}
-                title={`Key ${index + 1}`}
-                onClick={(event) => {
-                  if (!isPlainLeftClick(event)) return
-                  event.preventDefault()
-                  navigate(withCapture(href, capture))
-                }}
-              >
+              <a key={page} href={withCapture(href, capture)} data-key={index + 1} title={`Key ${index + 1}`}>
                 {label}
               </a>
             ),

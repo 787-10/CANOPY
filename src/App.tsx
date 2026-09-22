@@ -8,7 +8,7 @@ import { SignalZoom } from './pages/SignalZoom'
 import { Spacecraft } from './pages/Spacecraft'
 import { VerdictPage } from './pages/VerdictPage'
 import { useEffect } from 'react'
-import { useLocation } from './lib/navigation'
+import { installLinkInterception, useLocation } from './lib/navigation'
 import { resolveRoute } from './lib/routes'
 import { initialiseCaptureMode } from './store/captureStore'
 import { initialiseFlightView } from './store/clockStore'
@@ -50,6 +50,7 @@ function App() {
   // keeps its fullscreen across the header links and the page keys. The
   // capture and flight flags in the new URL are applied as on a load.
   const location = useLocation()
+  useEffect(() => installLinkInterception(), [])
   useEffect(() => {
     initialiseCaptureMode(location.search)
     initialiseFlightView(location.search)

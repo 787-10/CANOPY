@@ -54,3 +54,28 @@ export function useLocation(): Location {
   }, [])
   return location
 }
+
+/** Take over plain left clicks on same-origin links anywhere in the page, so
+ *  every link in the console (the fleet switcher, report cards, the "Full
+ *  verdict" arrows) changes pages in the document and a fullscreen console
+ *  keeps its fullscreen. Links that open elsewhere (`target`), download, go
+ *  off-origin or carry `data-full-load` are left to the browser. Returns the
+ *  remover. */
+export function installLinkInterception(doc: Document = document): () => void {
+  const onClick = (event: MouseEvent) => {
+    if (!isPlainLeftClick(event)) return
+    const target = event.target as Element | null
+    const anchor = target?.closest?.('a[href]') as HTMLAnchorElement | null
+    if (!anchor) return
+    if (anchor.target && anchor.target !== '_self') return
+    if (anchor.hasAttribute('download') || anchor.hasAttribute('data-full-load')) return
+    const href = anchor.getAttribute('href') ?? ''
+    if (href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return
+    const url = new URL(anchor.href, window.location.href)
+    if (url.origin !== window.location.origin) return
+    event.preventDefault()
+    navigate(`${url.pathname}${url.search}${url.hash}`)
+  }
+  doc.addEventListener('click', onClick)
+  return () => doc.removeEventListener('click', onClick)
+}
