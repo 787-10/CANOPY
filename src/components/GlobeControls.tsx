@@ -13,6 +13,8 @@ export type GlobeFlightControls = {
   onToggleView: () => void
   onSetRate: (rate: FlightRate) => void
   onTogglePause: () => void
+  /** Holding or stale: fly on from the held time. Falls back to onTogglePause. */
+  onPlay?: () => void
 }
 
 export type GlobeControlsProps = {
@@ -46,6 +48,9 @@ export function GlobeControls({
   onToggleFollow,
   flight = null,
 }: GlobeControlsProps) {
+  // Holding (the run ended) or stale (its stream is gone): the clock is not
+  // advancing, so no rate reads as engaged and the pause button offers Play.
+  const held = flight?.mode === 'holding' || flight?.mode === 'stale'
   const followTitle = following
     ? 'Stop following (Esc)'
     : followTarget
@@ -85,16 +90,22 @@ export function GlobeControls({
           <button
             type="button"
             className="globe-controls__btn"
-            onClick={flight.onTogglePause}
+            onClick={held ? (flight.onPlay ?? flight.onTogglePause) : flight.onTogglePause}
             aria-pressed={flight.mode === 'paused'}
             disabled={flight.view !== 'flight'}
-            title={flight.mode === 'paused' ? 'Resume (P): a run rejoins the stream at its time' : 'Pause the flight clock (P); the stream continues'}
+            title={
+              held
+                ? 'Play (P): the run has ended, fly on from its last time at the rate shown'
+                : flight.mode === 'paused'
+                  ? 'Resume (P): a run rejoins the stream at its time'
+                  : 'Pause the flight clock (P); the stream continues'
+            }
             data-testid="flight-pause"
           >
             <span className="globe-controls__glyph" aria-hidden="true">
-              {flight.mode === 'paused' ? '▶' : '‖'}
+              {held || flight.mode === 'paused' ? '▶' : '‖'}
             </span>
-            <span className="globe-controls__label">{flight.mode === 'paused' ? 'Resume' : 'Pause'}</span>
+            <span className="globe-controls__label">{held ? 'Play' : flight.mode === 'paused' ? 'Resume' : 'Pause'}</span>
           </button>
           {FLIGHT_RATES.map((rate) => (
             <button
@@ -102,7 +113,7 @@ export function GlobeControls({
               type="button"
               className="globe-controls__btn globe-controls__btn--rate"
               onClick={() => flight.onSetRate(rate)}
-              aria-pressed={flight.rate === rate}
+              aria-pressed={flight.rate === rate && !held}
               disabled={flight.view !== 'flight' || flight.rateLocked}
               title={
                 flight.rateLocked

@@ -66,6 +66,8 @@ export type ClockState = {
   setRate: (rate: FlightRate, wallMs?: number) => void
   pause: (wallMs?: number) => void
   resume: (wallMs?: number) => void
+  /** From holding or stale: fly on from the held time at the current rate, as free flight. */
+  play: (wallMs?: number) => void
   socketClosed: (wallMs?: number) => void
   /** Scenario time (Unix ms) at a wall instant. */
   timeAt: (wallMs?: number) => number
@@ -203,6 +205,17 @@ export const useClockStore = create<ClockState>()((set, get) => ({
     const state = get()
     if (state.mode === 'paused') return
     set({ mode: 'paused', resumeMode: state.mode, anchor: held(state, wallMs) })
+  },
+
+  play: (wallMs = now()) => {
+    const state = get()
+    if (state.mode !== 'holding' && state.mode !== 'stale') return
+    // The run is over (or its stream gone): the clock had held where it was.
+    // Flying on is free flight from that time at the rate on the buttons; a
+    // run's own rate can stay, so a 600x run flies on at 600x until changed.
+    const scenarioMs = state.timeAt(wallMs)
+    const rate = state.rate > 0 ? state.rate : 1
+    set({ mode: 'free', rate, anchor: { scenarioMs, wallMs, rate }, resumeMode: null })
   },
 
   resume: (wallMs = now()) => {

@@ -106,3 +106,28 @@ describe('GlobeControls with the flight clock', () => {
     expect(screen.queryByRole('toolbar', { name: 'Flight controls' })).toBeNull()
   })
 })
+
+describe('GlobeControls while the clock holds', () => {
+  it('lights no rate and offers Play, which calls onPlay', () => {
+    const onPlay = vi.fn()
+    const onTogglePause = vi.fn()
+    setup({
+      flight: {
+        view: 'flight',
+        mode: 'holding',
+        rate: 1,
+        rateLocked: false,
+        onToggleView: vi.fn(),
+        onSetRate: vi.fn(),
+        onTogglePause,
+        onPlay,
+      },
+    })
+    expect(screen.getByTestId('flight-rate-1')).toHaveAttribute('aria-pressed', 'false')
+    const play = screen.getByTestId('flight-pause')
+    expect(play).toHaveTextContent('Play')
+    fireEvent.click(play)
+    expect(onPlay).toHaveBeenCalledTimes(1)
+    expect(onTogglePause).not.toHaveBeenCalled()
+  })
+})

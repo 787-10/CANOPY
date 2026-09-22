@@ -280,3 +280,33 @@ describe('clockTextOn', () => {
     expect(clockTextOn(Date.parse('2026-09-21T01:40:20Z'), ref)).toBe('01:40:20Z 2026-09-21')
   })
 })
+
+describe('play from a held clock', () => {
+  it('flies on from the held time at the rate shown, and does nothing while free or paused', () => {
+    fresh()
+    const wall = Date.parse('2026-09-21T11:26:00Z')
+    useClockStore.getState().applyReplay(
+      {
+        state: 'finished',
+        scenario: 'megalith_link_margin_a.jsonl',
+        speed: 600,
+        max_delay_s: null,
+        first_ts: '2026-09-20T14:48:28Z',
+        last_ts: '2026-09-20T15:12:42Z',
+        now_ts: '2026-09-20T15:12:42Z',
+        started_at: '2026-09-21T11:25:57Z',
+        ts: '2026-09-21T11:26:00Z',
+      },
+      wall,
+    )
+    expect(useClockStore.getState().mode).toBe('holding')
+    expect(useClockStore.getState().timeAt(wall + 10_000)).toBe(Date.parse('2026-09-20T15:12:42Z'))
+    useClockStore.getState().play(wall + 10_000)
+    const state = useClockStore.getState()
+    expect(state.mode).toBe('free')
+    expect(state.timeAt(wall + 11_000)).toBe(Date.parse('2026-09-20T15:12:42Z') + 1000 * state.rate)
+    // Already flying: play is a no-op.
+    useClockStore.getState().play(wall + 12_000)
+    expect(useClockStore.getState().mode).toBe('free')
+  })
+})

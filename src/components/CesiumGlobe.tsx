@@ -1521,6 +1521,7 @@ export function CesiumGlobe({
         event.preventDefault()
         const clock = useClockStore.getState()
         if (clock.mode === 'paused') clock.resume()
+        else if (clock.mode === 'holding' || clock.mode === 'stale') clock.play()
         else clock.pause()
       } else if (flightViewRef.current && (event.key === ',' || event.key === '.')) {
         const clock = useClockStore.getState()
@@ -2258,6 +2259,7 @@ export function CesiumGlobe({
             rateLocked: clockRunLive,
             onToggleView: () => useClockStore.getState().setView(flightView ? 'pass' : 'flight'),
             onSetRate: (rate) => useClockStore.getState().setRate(rate),
+            onPlay: () => useClockStore.getState().play(),
             onTogglePause: () => {
               const clock = useClockStore.getState()
               if (clock.mode === 'paused') clock.resume()
