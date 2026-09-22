@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { fireEvent, render, screen, within } from '@testing-library/react'
 import { Spacecraft } from './Spacecraft'
 import { useEventStore } from '../store/eventStore'
 import { useCaptureStore } from '../store/captureStore'
@@ -198,5 +198,23 @@ describe('Spacecraft page — states', () => {
     render(<Spacecraft requestedSatellite="ctb://megalith.demo/sim-02" />)
     expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Spacecraft · SIM-02')
     expect(screen.getByTestId('symptom-sparkline')).toHaveAttribute('data-method', 'empty')
+  })
+})
+
+describe('Spacecraft page — view controls', () => {
+  it('offers focus on a subsystem only once one is selected, and resets it with the view', () => {
+    seed(nominal)
+    render(<Spacecraft />)
+    const focus = screen.getByTestId('spacecraft-isolate')
+    expect(focus).toBeDisabled()
+    fireEvent.click(screen.getByTestId('subsystem-comms'))
+    expect(focus).toBeEnabled()
+    fireEvent.click(focus)
+    expect(focus).toHaveAttribute('aria-pressed', 'true')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset view' }))
+    expect(focus).toBeDisabled()
+    expect(focus).toHaveAttribute('aria-pressed', 'false')
+    // The verdict is the top bar's alone now.
+    expect(screen.getAllByText(/No verdict yet/)).toHaveLength(1)
   })
 })

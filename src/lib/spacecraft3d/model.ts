@@ -230,6 +230,29 @@ export function applyHealth(
   }
 }
 
+/** Show one subsystem alone (the "focus on subsystem" toggle) or the whole
+ *  body: parts of other subsystems and the primary structure are hidden,
+ *  their edge lines with them (children). Null shows everything. */
+export function setIsolation(built: BuiltModel, only: Subsystem | null): void {
+  for (const mesh of built.meshes) {
+    mesh.visible = only === null || (mesh.userData as Tag).subsystem === only
+  }
+  for (const mesh of built.structure) mesh.visible = only === null
+}
+
+/** World-space bounds of one subsystem's parts, or null when it has none
+ *  (the orbit centre while a subsystem is the focus). */
+export function subsystemBounds(built: BuiltModel, subsystem: Subsystem): THREE.Box3 | null {
+  const box = new THREE.Box3()
+  let any = false
+  for (const mesh of built.meshes) {
+    if ((mesh.userData as Tag).subsystem !== subsystem) continue
+    box.expandByObject(mesh)
+    any = true
+  }
+  return any && !box.isEmpty() ? box : null
+}
+
 /** Anchor positions in viewport pixels, for leaders drawn over the canvas. */
 export function anchorScreenPositions(
   built: BuiltModel,
@@ -242,10 +265,17 @@ export function anchorScreenPositions(
   for (const [subsystem, object] of Object.entries(built.anchors) as Array<[Subsystem, THREE.Object3D]>) {
     object.getWorldPosition(world)
     world.project(camera)
+    let shown = true
+    for (let node: THREE.Object3D | null = object; node; node = node.parent) {
+      if (!node.visible) {
+        shown = false
+        break
+      }
+    }
     out[subsystem] = {
       x: ((world.x + 1) / 2) * width,
       y: ((1 - world.y) / 2) * height,
-      visible: world.z < 1,
+      visible: shown && world.z < 1,
     }
   }
   return out

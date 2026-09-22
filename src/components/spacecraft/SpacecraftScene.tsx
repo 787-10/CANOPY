@@ -1,10 +1,11 @@
-// The Spacecraft page's stage: the 3D body with an explode control, the
-// verdict at top-left, one chip per subsystem pinned on the right, and leader
-// lines that follow the parts as the model moves. Leaders are updated
+// The Spacecraft page's stage: the 3D body in the middle, the view controls
+// in a left column (explode, rotate, reset, focus on subsystem), one chip
+// per subsystem pinned on the right, and leader lines that follow the parts
+// as the model moves. The verdict is the top bar's; it is not repeated here. Leaders are updated
 // imperatively every frame; React state per frame would re-render the HUD
 // sixty times a second for nothing.
 import { Suspense, lazy, useCallback, useRef, useState } from 'react'
-import { subsystemLabel, verdictLabel } from '../../lib/commanderLanguage'
+import { subsystemLabel } from '../../lib/commanderLanguage'
 import type { AnchorScreen } from '../../lib/spacecraft3d/model'
 import { ASSEMBLY } from '../../lib/spacecraft3d/parts'
 import { isQuietHealth,
@@ -30,13 +31,24 @@ export type SpacecraftSceneProps = {
 
 const DEFAULT_EXPLODE = 0.55
 
-export function SpacecraftScene({ name, states, recovery, verdict, confidence, provisional, actor }: SpacecraftSceneProps) {
+export function SpacecraftScene({ name, states, recovery, actor }: SpacecraftSceneProps) {
   const [explode, setExplode] = useState(DEFAULT_EXPLODE)
   const [selected, setSelected] = useState<Subsystem | null>(
     () => states.find((state) => !isQuietHealth(state.health))?.subsystem ?? null,
   )
   const [autoRotate, setAutoRotate] = useState(false)
   const [resetToken, setResetToken] = useState(0)
+  // "Focus on subsystem": the chosen subsystem alone on the stage.
+  const [isolate, setIsolate] = useState(false)
+  // The orbit centre: a subsystem the operator chose by clicking (a chip or
+  // the part), never the page's default selection, so the page opens on the
+  // whole body and closes in only when asked.
+  const [focused, setFocused] = useState<Subsystem | null>(null)
+  const choose = (subsystem: Subsystem | null) => {
+    setSelected(subsystem)
+    setFocused(subsystem)
+    if (subsystem === null) setIsolate(false)
+  }
   const stageRef = useRef<HTMLDivElement>(null)
   const chipRefs = useRef<Partial<Record<Subsystem, HTMLButtonElement | null>>>({})
   const lineRefs = useRef<Partial<Record<Subsystem, SVGLineElement | null>>>({})
@@ -60,8 +72,6 @@ export function SpacecraftScene({ name, states, recovery, verdict, confidence, p
     }
   }, [])
 
-  const verdictState = verdict ?? 'absent'
-
   return (
     <div className="spacecraft-scene" ref={stageRef} aria-label={`${name} model`}>
       <Suspense fallback={<div className="viewport3d__status">Loading model…</div>}>
@@ -69,10 +79,12 @@ export function SpacecraftScene({ name, states, recovery, verdict, confidence, p
           className="spacecraft-scene__viewport"
           states={states}
           selected={selected}
-          onSelect={setSelected}
+          onSelect={choose}
           explode={explode}
           autoRotate={autoRotate}
           resetToken={resetToken}
+          focus={focused}
+          isolate={isolate}
           onAnchors={onAnchors}
         />
       </Suspense>
@@ -91,19 +103,9 @@ export function SpacecraftScene({ name, states, recovery, verdict, confidence, p
         })}
       </svg>
 
-      <div className="spacecraft-scene__hud">
-        <span className={`verdict-badge verdict-badge--${verdictState}`}>
-          {verdictLabel(verdict)}
-          {confidence !== null ? ` · ${Math.round(confidence * 100)}%` : ''}
-          {provisional ? ' · provisional' : ''}
-        </span>
-        {actor && actor !== 'Unknown' && actor !== 'None' ? (
-          <span className="spacecraft-scene__actor" data-testid="spacecraft-actor">
-            {actor}
-          </span>
-        ) : null}
+      <div className="spacecraft-scene__controls" role="group" aria-label="View controls">
         <label className="spacecraft-scene__explode">
-          Explode
+          <span>Explode</span>
           <input
             type="range"
             min={0}
@@ -118,9 +120,36 @@ export function SpacecraftScene({ name, states, recovery, verdict, confidence, p
         <button type="button" className="scene-btn" aria-pressed={autoRotate} onClick={() => setAutoRotate((value) => !value)}>
           {autoRotate ? 'Pause' : 'Rotate'}
         </button>
-        <button type="button" className="scene-btn" onClick={() => setResetToken((value) => value + 1)}>
+        <button
+          type="button"
+          className="scene-btn"
+          onClick={() => {
+            choose(null)
+            setResetToken((value) => value + 1)
+          }}
+        >
           Reset view
         </button>
+        <button
+          type="button"
+          className="scene-btn scene-btn--focus"
+          aria-pressed={isolate && selected !== null}
+          disabled={selected === null}
+          onClick={() => {
+            // Isolating a subsystem also makes it the orbit centre.
+            if (!isolate && selected) setFocused(selected)
+            setIsolate((value) => !value)
+          }}
+          title={selected ? 'Show the selected subsystem alone' : 'Select a subsystem to focus on it'}
+          data-testid="spacecraft-isolate"
+        >
+          Focus on subsystem
+        </button>
+        {actor && actor !== 'Unknown' && actor !== 'None' ? (
+          <span className="spacecraft-scene__actor" data-testid="spacecraft-actor">
+            {actor}
+          </span>
+        ) : null}
       </div>
 
       <div className="spacecraft-scene__chips" role="list" aria-label="Subsystems">
@@ -142,7 +171,7 @@ export function SpacecraftScene({ name, states, recovery, verdict, confidence, p
               data-testid={`subsystem-${subsystem}`}
               data-subsystem={subsystem}
               data-health={health}
-              onClick={() => setSelected(isSelected ? null : subsystem)}
+              onClick={() => choose(isSelected ? null : subsystem)}
             >
               <span className="subsystem-chip__head">
                 <i className={`health-dot health-dot--${health}`} aria-hidden="true" />

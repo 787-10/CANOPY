@@ -137,18 +137,34 @@
 .leader--withheld-recovery { stroke: var(--verdict-hostile); opacity: 0.95; stroke-width: 1.4; stroke-dasharray: 4 3; }
 .leader.is-selected { stroke: var(--text-primary); opacity: 1; stroke-width: 1.4; }
 
-.spacecraft-scene__hud {
+.spacecraft-scene__controls {
   position: absolute;
   left: 14px;
   top: 14px;
   display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  width: 168px;
+  padding: 10px;
   border: 1px solid var(--line);
   border-radius: 2px;
   background: var(--panel);
-  font-size: 0.72rem;
+}
+
+.spacecraft-scene__controls .scene-btn {
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.scene-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.scene-btn--focus[aria-pressed='true'] {
+  border-color: var(--amber);
+  color: var(--amber);
 }
 
 .spacecraft-scene__actor {
@@ -161,9 +177,9 @@
 }
 
 .spacecraft-scene__explode {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
   color: var(--text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -171,7 +187,7 @@
 }
 
 .spacecraft-scene__explode input {
-  width: 120px;
+  width: 100%;
   accent-color: var(--brand-bright);
 }
 

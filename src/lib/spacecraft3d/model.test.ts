@@ -12,6 +12,8 @@ import {
   readHealthPalette,
   setEdgesDimmed,
   setExplode,
+  setIsolation,
+  subsystemBounds,
   type Tag,
 } from './model'
 import { ANCHOR_PART, SIM01_PARTS } from './parts'
@@ -132,5 +134,20 @@ describe('drawn edges', () => {
     expect(material.opacity).toBe(EDGE_OPACITY)
     expect(edgesOf(new THREE.Mesh())).toBeNull()
     disposeModel(mesh)
+  })
+})
+
+describe('focus on one subsystem', () => {
+  it('shows the chosen subsystem alone and back, and bounds it for the orbit centre', () => {
+    const built = buildProceduralModel()
+    setIsolation(built, 'comms')
+    for (const mesh of built.meshes) expect(mesh.visible).toBe((mesh.userData as Tag).subsystem === 'comms')
+    for (const mesh of built.structure) expect(mesh.visible).toBe(false)
+    setIsolation(built, null)
+    expect(built.meshes.every((mesh) => mesh.visible) && built.structure.every((mesh) => mesh.visible)).toBe(true)
+    const bounds = subsystemBounds(built, 'comms')
+    expect(bounds).not.toBeNull()
+    expect(bounds!.isEmpty()).toBe(false)
+    disposeModel(built.root)
   })
 })

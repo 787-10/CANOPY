@@ -16,6 +16,8 @@ import {
   setExplode,
   type AnchorScreen,
   type BuiltModel,
+  setIsolation,
+  subsystemBounds,
 } from '../../lib/spacecraft3d/model'
 
 export type SpacecraftViewportProps = {
@@ -27,6 +29,10 @@ export type SpacecraftViewportProps = {
   autoRotate?: boolean
   /** Bump to reset the camera. */
   resetToken?: number
+  /** The subsystem the camera orbits and frames; null orbits the whole body. */
+  focus?: Subsystem | null
+  /** Show the focused subsystem alone. */
+  isolate?: boolean
   /** Called every frame with the anchors' positions in viewport pixels. */
   onAnchors?: (
     anchors: Partial<Record<Subsystem, AnchorScreen>>,
@@ -48,10 +54,21 @@ const hasWebGL = () =>
   typeof window !== 'undefined' &&
   (typeof WebGL2RenderingContext !== 'undefined' || typeof WebGLRenderingContext !== 'undefined')
 
+/** The body fills more of the stage than the first cut did (Jeewoo: "much larger"). */
+const FRAME_TIGHTEN = 0.74
+/** Radians per frame while Rotate is on: half the original rate (Jeewoo: "a bit fast"). */
+export const AUTO_ROTATE_RAD_PER_FRAME = 0.00125
+/** A focused subsystem is framed at this many times its bounding radius. */
+const FOCUS_DISTANCE_PER_RADIUS = 2.8
+
+function frameDistance(stage: Stage, built: BuiltModel): number {
+  return (built.cameraDistance * FRAME_TIGHTEN) / Math.min(1, stage.camera.aspect || 1)
+}
+
 function frameCamera(stage: Stage, built: BuiltModel) {
-  const distance = built.cameraDistance / Math.min(1, stage.camera.aspect || 1)
+  const distance = frameDistance(stage, built)
   stage.camera.position.copy(CAMERA_DIR).multiplyScalar(distance)
-  stage.controls.minDistance = distance * 0.3
+  stage.controls.minDistance = distance * 0.12
   stage.controls.maxDistance = distance * 2.4
   stage.controls.target.set(0, 0, 0)
   stage.controls.update()
@@ -63,6 +80,13 @@ export default function SpacecraftViewport(props: SpacecraftViewportProps) {
   const stageRef = useRef<Stage | null>(null)
   const builtRef = useRef<BuiltModel | null>(null)
   const explodeRef = useRef(props.explode ?? 0)
+  // The camera's goal while a subsystem is the focus (world target and the
+  // distance to settle at), consumed by the loop; null orbits the body.
+  const focusRef = useRef<{ subsystem: Subsystem | null; distanceGoal: number | null; isolate: boolean }>({
+    subsystem: null,
+    distanceGoal: null,
+    isolate: false,
+  })
   const [status, setStatus] = useState<'loading' | 'ready' | 'fallback' | 'unavailable'>(
     hasWebGL() ? 'loading' : 'unavailable',
   )
@@ -187,7 +211,40 @@ export default function SpacecraftViewport(props: SpacecraftViewportProps) {
         }
         const pulse = (Math.sin(performance.now() / 250) + 1) / 2
         applyHealth(built, current.states, current.selected, palette, pulse)
-        if (current.autoRotate) built.root.rotation.y += 0.0025
+        if (current.autoRotate) built.root.rotation.y += AUTO_ROTATE_RAD_PER_FRAME
+
+        // Focus: the orbit centre follows the chosen subsystem as the body
+        // turns and explodes; the camera closes to frame it once per change
+        // and is then the operator's again. Deselecting returns to the body.
+        const focus = focusRef.current
+        const wanted = current.focus ?? null
+        const isolate = Boolean(current.isolate && wanted)
+        if (wanted !== focus.subsystem || isolate !== focus.isolate) {
+          focus.subsystem = wanted
+          focus.isolate = isolate
+          setIsolation(built, isolate ? wanted : null)
+          if (wanted) {
+            const bounds = subsystemBounds(built, wanted)
+            focus.distanceGoal = bounds
+              ? Math.max(controls.minDistance, bounds.getBoundingSphere(new THREE.Sphere()).radius * FOCUS_DISTANCE_PER_RADIUS)
+              : null
+          } else {
+            focus.distanceGoal = frameDistance(stage, built)
+          }
+        }
+        const goal = focus.subsystem ? subsystemBounds(built, focus.subsystem)?.getCenter(new THREE.Vector3()) ?? null : new THREE.Vector3()
+        if (goal) {
+          const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
+          controls.target.lerp(goal, 0.12)
+          camera.position.copy(controls.target).add(offset)
+        }
+        if (focus.distanceGoal !== null) {
+          const offset = new THREE.Vector3().subVectors(camera.position, controls.target)
+          const distance = offset.length()
+          const next = distance + (focus.distanceGoal - distance) * 0.12
+          camera.position.copy(controls.target).add(offset.multiplyScalar(next / Math.max(distance, 1e-6)))
+          if (Math.abs(next - focus.distanceGoal) < 0.01) focus.distanceGoal = null
+        }
       }
       controls.update()
       renderer.render(scene, camera)
