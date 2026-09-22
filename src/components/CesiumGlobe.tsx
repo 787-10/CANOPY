@@ -211,10 +211,12 @@ const PIN_CAMERA_HEIGHT_M = 1_400_000
 const PRE_RUN_CAMERA_HEIGHT_M = 4_500_000
 /** The globe's zoom floor; a focused spacecraft model lowers it for its stay. */
 const GLOBE_MIN_ZOOM_M = 250
-/** The imagery's look, one setting for every provider: near-monochrome with
- *  the contrast raised (Jeewoo, 2026-09-22: the coloured globe tried that day
- *  was worse than the muted one, "but I'd like some more contrast"). */
-const IMAGERY_LOOK = { brightness: 0.9, contrast: 1.35, saturation: 0.04 }
+/** The imagery's look, one setting for every provider: near-monochrome,
+ *  darkened so the land sits back behind the marks, mild contrast, a little
+ *  gamma so the sea does not fall to black (Jeewoo, 2026-09-22: a coloured
+ *  globe and then a hard-contrast one were both turned down; "easier to look
+ *  at" is the brief). */
+const IMAGERY_LOOK = { brightness: 0.7, contrast: 1.1, gamma: 1.15, saturation: 0.08 }
 
 // One press of Zoom in (or +) brings the camera to 60% of its height; Zoom
 // out (or -) is the inverse, so a press each way lands where it started.
@@ -804,7 +806,7 @@ export function CesiumGlobe({
           alpha: 1,
           brightness: IMAGERY_LOOK.brightness,
           contrast: IMAGERY_LOOK.contrast,
-          gamma: 1,
+          gamma: IMAGERY_LOOK.gamma,
           saturation: IMAGERY_LOOK.saturation,
         })
         viewer.imageryLayers.add(layer)
@@ -825,7 +827,7 @@ export function CesiumGlobe({
           alpha: 1,
           brightness: IMAGERY_LOOK.brightness,
           contrast: IMAGERY_LOOK.contrast,
-          gamma: 1,
+          gamma: IMAGERY_LOOK.gamma,
           saturation: IMAGERY_LOOK.saturation,
         },
       )
@@ -858,7 +860,7 @@ export function CesiumGlobe({
           alpha: 1,
           brightness: IMAGERY_LOOK.brightness,
           contrast: IMAGERY_LOOK.contrast,
-          gamma: 1,
+          gamma: IMAGERY_LOOK.gamma,
           saturation: IMAGERY_LOOK.saturation,
         },
       )
