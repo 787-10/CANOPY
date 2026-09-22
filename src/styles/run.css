@@ -149,3 +149,49 @@
 .run-shell .run-timings--archive tbody td:last-child {
   font-size: 0.72rem;
 }
+
+/* Restart the demo from scratch (the Run page's one control): the launcher's
+   skin, amber while it waits for the confirming second click. */
+.run-restart dd {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: flex-start;
+}
+
+.run-restart__button {
+  padding: 6px 12px;
+  border: 1px solid var(--frame, var(--line-bright));
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+
+.run-restart__button:hover,
+.run-restart__button:focus-visible {
+  outline: none;
+  color: var(--cyan, var(--brand-bright));
+  border-color: var(--cyan, var(--brand-bright));
+}
+
+.run-restart__button--confirm {
+  color: var(--amber);
+  border-color: var(--amber);
+  background: rgba(201, 164, 87, 0.12);
+}
+
+.run-restart__button:disabled {
+  color: var(--text-subtle);
+  cursor: default;
+}
+
+.run-restart__note {
+  color: var(--text-subtle);
+  font-size: 0.68rem;
+}

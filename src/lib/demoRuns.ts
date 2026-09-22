@@ -3,6 +3,7 @@
 // navigation can be unit-tested with doubles.
 import { useCaptureStore, withCapture } from '../store/captureStore'
 import { COUPLED_RATES, useClockStore, type FlightRate } from '../store/clockStore'
+import { useEphemerisStore } from '../store/ephemerisStore'
 import { useEventStore } from '../store/eventStore'
 import { apiUrl, fetchGateway } from './gateway'
 
@@ -101,6 +102,64 @@ export type StartDemoRunOptions = {
   flight?: FlightRate | null
 }
 
+/** POST /reset with a short timeout. True when the gateway answered 2xx;
+ *  false when it is unreachable, slow or has no such route. */
+export async function resetEngine({
+  fetchImpl = fetch,
+  apiUrl = DEMO_API_URL,
+}: { fetchImpl?: typeof fetch; apiUrl?: string } = {}): Promise<boolean> {
+  try {
+    const controller = new AbortController()
+    const timer = setTimeout(() => controller.abort(), RESET_TIMEOUT_MS)
+    try {
+      await fetchGateway(
+        RESET_PATH,
+        { method: 'POST', signal: controller.signal },
+        { fetchImpl, baseUrl: apiUrl },
+      )
+      return true
+    } finally {
+      clearTimeout(timer)
+    }
+  } catch {
+    return false
+  }
+}
+
+/** Forget this console's run: every event buffer, the operator's calls, the
+ *  pin, the flight clock, the engine's samples, and what the launcher stored. */
+export function clearConsoleRun(): void {
+  useEventStore.getState().reset()
+  useClockStore.getState().reset()
+  useClockStore.getState().setView('pass')
+  useEphemerisStore.getState().reset()
+  try {
+    sessionStorage.removeItem('canopy-event-store')
+    sessionStorage.removeItem(PENDING_REPLAY_KEY)
+    sessionStorage.removeItem(LAST_RUN_KEY)
+  } catch {
+    // storage unavailable: the in-memory reset is enough
+  }
+}
+
+export type RestartDemoResult = { status: 'restarted'; gatewayReset: boolean }
+
+/** Restart the demo from scratch (the Run page's control): the engine's state
+ *  is cleared on the gateway, which tells every connected console to drop the
+ *  run, this console forgets its own copy and the launcher's memory of the
+ *  last run, and the operator lands on the launcher to pick the next run.
+ *  Nothing replays until they press Start. */
+export async function restartDemo({
+  fetchImpl = fetch,
+  navigate = (url) => window.location.assign(url),
+  apiUrl = DEMO_API_URL,
+}: { fetchImpl?: typeof fetch; navigate?: (url: string) => void; apiUrl?: string } = {}): Promise<RestartDemoResult> {
+  const gatewayReset = await resetEngine({ fetchImpl, apiUrl })
+  clearConsoleRun()
+  navigate('/demo')
+  return { status: 'restarted', gatewayReset }
+}
+
 /** POST the replay and move to the Brigade view in capture mode. Returns
  *  the gateway's response body on success; throws on a non-2xx response. */
 export async function startDemoRun(
@@ -126,21 +185,7 @@ export async function startDemoRun(
   // decide anomaly cache): a previous run's RF anomaly on the same satellite
   // would otherwise leak into this run's verdict. A gateway without /reset is
   // tolerated so the replay still starts.
-  try {
-    const controller = new AbortController()
-    const timer = setTimeout(() => controller.abort(), RESET_TIMEOUT_MS)
-    try {
-      await fetchGateway(
-        RESET_PATH,
-        { method: 'POST', signal: controller.signal },
-        { fetchImpl, baseUrl: apiUrl },
-      )
-    } finally {
-      clearTimeout(timer)
-    }
-  } catch {
-    // unreachable or slow gateway: the replay call below reports it
-  }
+  await resetEngine({ fetchImpl, apiUrl })
   try {
     sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run, stem: spec.stem, flight }))
     sessionStorage.setItem(

@@ -10,6 +10,7 @@ import {
   parseRun,
   readPendingReplay,
   replayUrl,
+  restartDemo,
   startDemoRun,
   startPendingReplay,
 } from '../lib/demoRuns'
@@ -124,6 +125,27 @@ describe('demo runs', () => {
   it('a pending flight rate outside 1/10/60/600 falls back to the storyboard pacing', async () => {
     sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'C', flight: 7 }))
     expect(readPendingReplay()).toEqual({ run: 'C', stem: DEMO_RUNS.C.stem, flight: null })
+  })
+
+  it('restartDemo resets the gateway, forgets the run on this console and opens the launcher', async () => {
+    useEventStore.getState().ingestSignal(makeSignal('old'))
+    sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'B', stem: 'x', startedAt: 'y' }))
+    sessionStorage.setItem(PENDING_REPLAY_KEY, JSON.stringify({ run: 'B' }))
+    useClockStore.getState().setView('flight')
+    const fetchImpl = vi.fn().mockResolvedValue(okResponse({ status: 'reset' }))
+    const navigate = vi.fn()
+    const result = await restartDemo({ fetchImpl, navigate, apiUrl: 'http://gw:8000' })
+    expect(result).toEqual({ status: 'restarted', gatewayReset: true })
+    expect(fetchImpl).toHaveBeenCalledTimes(1)
+    expect(fetchImpl.mock.calls[0][0]).toBe('http://gw:8000/reset')
+    expect(useEventStore.getState().signals).toEqual([])
+    expect(sessionStorage.getItem(LAST_RUN_KEY)).toBeNull()
+    expect(sessionStorage.getItem(PENDING_REPLAY_KEY)).toBeNull()
+    expect(useClockStore.getState().view).toBe('pass')
+    expect(navigate).toHaveBeenCalledWith('/demo')
+    // An unreachable gateway still clears the console and opens the launcher, and says so.
+    const offline = vi.fn().mockRejectedValue(new Error('offline'))
+    expect(await restartDemo({ fetchImpl: offline, navigate, apiUrl: 'http://gw:8000' })).toEqual({ status: 'restarted', gatewayReset: false })
   })
 
   it('startPendingReplay throws on a non-2xx gateway response', async () => {

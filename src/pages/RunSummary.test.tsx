@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { RunSummary } from './RunSummary'
 import { LAST_RUN_KEY } from '../lib/demoRuns'
 import { pacingLabel } from '../lib/runSummary'
@@ -217,6 +217,25 @@ describe('RunSummary page (S8)', () => {
     // Without the marker the launcher's flight rate is what is known.
     expect(pacingLabel(null, { run: 'A', stem: 'x', startedAt: '', flight: 600 })).toBe('flight 600× · no cap · posted by the launcher')
     expect(pacingLabel(null, null)).toBe('unknown')
+  })
+
+  it('restarts the demo from scratch on a confirmed click: gateway reset, console cleared, launcher opened', async () => {
+    sessionStorage.setItem(LAST_RUN_KEY, JSON.stringify({ run: 'A', stem: 'megalith_link_margin_a.jsonl', startedAt: 'x' }))
+    const fetchImpl = vi.fn((url: string) =>
+      Promise.resolve(url.endsWith('/reset') ? response(200, { status: 'reset' }) : response(200, HEALTH)),
+    )
+    const navigate = vi.fn()
+    render(<RunSummary fetchImpl={fetchImpl as unknown as typeof fetch} navigate={navigate} />)
+    const button = screen.getByTestId('run-restart')
+    expect(button).toHaveTextContent('Restart demo from scratch')
+    fireEvent.click(button)
+    expect(button).toHaveAttribute('data-state', 'confirm')
+    expect(button).toHaveTextContent(/Confirm restart/)
+    expect(fetchImpl.mock.calls.map(([url]) => url)).not.toContainEqual(expect.stringMatching(/\/reset$/))
+    fireEvent.click(button)
+    await waitFor(() => expect(navigate).toHaveBeenCalledWith('/demo'))
+    expect(fetchImpl.mock.calls.map(([url]) => url)).toContainEqual(expect.stringMatching(/\/reset$/))
+    expect(sessionStorage.getItem(LAST_RUN_KEY)).toBeNull()
   })
 
   it('asks /health and /archive with the bearer header when the console carries a deploy-time token (C11)', async () => {

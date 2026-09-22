@@ -3,6 +3,7 @@ import { TopBar } from '../components/TopBar'
 import { useCanopySocket } from '../hooks/useCanopySocket'
 import { actionLabel } from '../lib/actionLabels'
 import { spacecraftDisplayName, verdictLabel, withheldRecoveryLabel } from '../lib/commanderLanguage'
+import { restartDemo } from '../lib/demoRuns'
 import { fetchGateway } from '../lib/gateway'
 import {
   pacingLabel,
@@ -65,8 +66,33 @@ function scoreLabel(row: ArchiveRow): string {
  *  hashes, model digest) from `GET /archive`, when the gateway serves one.
  *  The archive panel is left out in capture mode so the pinned layout does
  *  not shift. */
-export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) {
+/** Second click within this many ms confirms a restart; otherwise the button relaxes. */
+const RESTART_CONFIRM_MS = 6000
+
+export function RunSummary({
+  fetchImpl = fetch,
+  navigate,
+}: {
+  fetchImpl?: typeof fetch
+  navigate?: (url: string) => void
+}) {
   useCanopySocket()
+  const [restart, setRestart] = useState<'idle' | 'confirm' | 'working' | 'failed'>('idle')
+  useEffect(() => {
+    if (restart !== 'confirm') return
+    const timer = setTimeout(() => setRestart('idle'), RESTART_CONFIRM_MS)
+    return () => clearTimeout(timer)
+  }, [restart])
+  const onRestart = async () => {
+    if (restart === 'idle') {
+      setRestart('confirm')
+      return
+    }
+    if (restart !== 'confirm') return
+    setRestart('working')
+    const result = await restartDemo({ fetchImpl, navigate })
+    if (!result.gatewayReset) setRestart('failed')
+  }
   const capture = useCaptureStore((s) => s.enabled)
   const traces = useEventStore((s) => s.traces)
   const attributions = useEventStore((s) => s.attributions)
@@ -150,6 +176,31 @@ export function RunSummary({ fetchImpl = fetch }: { fetchImpl?: typeof fetch }) 
               <div>
                 <dt>Pacing</dt>
                 <dd data-testid="run-pacing">{pacingLabel(replayMarker, lastRun)}</dd>
+              </div>
+              <div className="run-facts__wide run-restart">
+                <dt>Demo</dt>
+                <dd>
+                  <button
+                    type="button"
+                    className={`run-restart__button${restart === 'confirm' ? ' run-restart__button--confirm' : ''}`}
+                    onClick={() => void onRestart()}
+                    disabled={restart === 'working'}
+                    data-testid="run-restart"
+                    data-state={restart}
+                    title="Clears the engine on the gateway (every connected console drops the run), forgets this console's copy, and opens the launcher"
+                  >
+                    {restart === 'confirm'
+                      ? 'Confirm restart: clears this run on every console'
+                      : restart === 'working'
+                        ? 'Restarting…'
+                        : restart === 'failed'
+                          ? 'Gateway did not answer; console cleared. Retry'
+                          : 'Restart demo from scratch'}
+                  </button>
+                  <small className="run-restart__note">
+                    Resets the gateway and this console, then opens the launcher. Nothing replays until Start.
+                  </small>
+                </dd>
               </div>
               <div>
                 <dt>Spacecraft</dt>
