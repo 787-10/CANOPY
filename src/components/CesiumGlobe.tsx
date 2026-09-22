@@ -1458,14 +1458,12 @@ export function CesiumGlobe({
       satelliteFamilySelectionRef.current = next
       void ensureN2YOSatellitesLoaded(next, { includeFlightOnly: true })
     }
+    // Every fleet body flies, named in the stream or not: a follow from a
+    // fleet row needs the body to exist, and during a run the stream names
+    // SIM-01 alone (Jeewoo, 2026-09-22: "SIM-02 and OBJ-1 can't get
+    // tracked"). The stream still decides which flight-only body stays shown
+    // back in pass view (the cleanup below).
     const bodies = simLayers
-      .filter(
-        (layer) =>
-          !inStream ||
-          inStream.has(
-            syntheticSatelliteFor(layer.satelliteName)?.satelliteId ?? layer.cache.synthetic?.satellite_id ?? '',
-          ),
-      )
       .map(flightBodyFor)
       .filter((body): body is FlightBody => body !== null)
     simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, false))
