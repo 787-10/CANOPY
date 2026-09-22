@@ -41,6 +41,46 @@ export type BuiltModel = {
   source: 'archive' | 'procedural'
 }
 
+/** Drawn edges (Jeewoo, 2026-09-21: flat white parts had nothing to define
+ *  them). Creases sharper than this angle get a line; a grey that reads on
+ *  white surfaces and against the dark background alike. */
+export const EDGE_THRESHOLD_DEG = 22
+export const EDGE_COLOR = 0x8d9794
+export const EDGE_OPACITY = 0.72
+/** Edge opacity on a part dimmed behind a selection. */
+export const EDGE_OPACITY_DIMMED = 0.18
+
+/** Put edge lines on a mesh as its child, so they explode and rotate with
+ *  it; the faces step back a little in depth so the lines win on shared
+ *  surfaces. Returns the lines. */
+export function addEdges(mesh: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>): THREE.LineSegments {
+  const geometry = new THREE.EdgesGeometry(mesh.geometry, EDGE_THRESHOLD_DEG)
+  const material = new THREE.LineBasicMaterial({ color: EDGE_COLOR, transparent: true, opacity: EDGE_OPACITY })
+  const lines = new THREE.LineSegments(geometry, material)
+  lines.name = 'edges'
+  lines.userData = { edges: true }
+  lines.renderOrder = 1
+  mesh.material.polygonOffset = true
+  mesh.material.polygonOffsetFactor = 1
+  mesh.material.polygonOffsetUnits = 1
+  mesh.add(lines)
+  return lines
+}
+
+/** The edge lines of a mesh, if it has them. */
+export function edgesOf(mesh: THREE.Object3D): THREE.LineSegments | null {
+  const found = mesh.children.find((child) => child.userData?.edges === true)
+  return found instanceof THREE.LineSegments ? found : null
+}
+
+/** Dim or restore a mesh's edge lines with the part they outline. */
+export function setEdgesDimmed(mesh: THREE.Object3D, dimmed: boolean): void {
+  const lines = edgesOf(mesh)
+  if (!lines) return
+  const material = lines.material as THREE.LineBasicMaterial
+  material.opacity = dimmed ? EDGE_OPACITY_DIMMED : EDGE_OPACITY
+}
+
 const UP = new THREE.Vector3(0, 1, 0)
 const AXIS = { x: new THREE.Vector3(1, 0, 0), y: UP, z: new THREE.Vector3(0, 0, 1) }
 
@@ -169,6 +209,7 @@ export function applyHealth(
         health === 'withheld-recovery' ? 0.18 + 0.3 * pulse : health === 'faulted' ? 0.32 : 0.22
     }
     material.envMapIntensity = 1
+    setEdgesDimmed(mesh, selected !== null && tag.subsystem !== selected)
     if (!selected) continue
     if (tag.subsystem === selected) {
       const glow = isQuietHealth(health) ? palette.selected : palette[health]
@@ -185,6 +226,7 @@ export function applyHealth(
     mesh.material.color.setHex(mesh.userData.baseColor)
     mesh.material.envMapIntensity = selected ? DIMMED_ENV : 1
     if (selected) mesh.material.color.multiplyScalar(DIMMED)
+    setEdgesDimmed(mesh, selected !== null)
   }
 }
 

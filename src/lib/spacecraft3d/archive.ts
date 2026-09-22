@@ -10,7 +10,7 @@ import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js'
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js'
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js'
 import type { Subsystem } from '../spacecraftHealth'
-import { buildProceduralModel, type BuiltModel, type StructureMesh, type Tag, type TaggedMesh } from './model'
+import { addEdges, buildProceduralModel, type BuiltModel, type StructureMesh, type Tag, type TaggedMesh } from './model'
 
 /** A welded, spatially connected piece of one mesh, in the normalised frame
  *  (arrays along X, +Y zenith, the bus along Z with the aft module at +Z). */
@@ -272,12 +272,17 @@ export async function loadArchiveModel(spec: ArchiveModelSpec = ARCHIVE_MODEL): 
       if (!merged) continue
       const pieceMaterial = material.clone()
       pieceMaterial.name = material.name
+      // The archive models thin parts as single sheets (dish surfaces, panels,
+      // blankets): drawn one-sided they vanish from behind, which looked like
+      // 2D parts visible from one angle only. Both faces are drawn.
+      pieceMaterial.side = THREE.DoubleSide
       const piece = new THREE.Mesh(merged, pieceMaterial)
       piece.name = `${material.name}·${target ?? 'structure'}`
       piece.position.copy(object.position)
       piece.quaternion.copy(object.quaternion)
       piece.scale.copy(object.scale)
       parent.add(piece)
+      addEdges(piece)
       if (target) tagMesh(piece, pieceMaterial, target)
       else keepAsStructure(piece, pieceMaterial)
     }

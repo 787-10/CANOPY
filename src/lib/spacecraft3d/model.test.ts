@@ -1,6 +1,19 @@
+import * as THREE from 'three'
 import { describe, expect, it } from 'vitest'
 import { SUBSYSTEMS, type Subsystem, type SubsystemState } from '../spacecraftHealth'
-import { applyHealth, buildProceduralModel, disposeModel, readHealthPalette, setExplode, type Tag } from './model'
+import {
+  EDGE_OPACITY,
+  EDGE_OPACITY_DIMMED,
+  addEdges,
+  applyHealth,
+  buildProceduralModel,
+  disposeModel,
+  edgesOf,
+  readHealthPalette,
+  setEdgesDimmed,
+  setExplode,
+  type Tag,
+} from './model'
 import { ANCHOR_PART, SIM01_PARTS } from './parts'
 
 const state = (subsystem: Subsystem, health: SubsystemState['health']): SubsystemState => ({
@@ -100,5 +113,24 @@ describe('procedural spacecraft model', () => {
     expect(palette.faulted.getHex()).toBe(0x7b96ff)
     expect(palette['withheld-recovery'].getHex()).toBe(0xff7b6d)
     expect(palette.degraded.getHex()).toBe(0xc9a457)
+  })
+})
+
+describe('drawn edges', () => {
+  it('outlines a box with its twelve creases as a child that follows the part, and dims with it', () => {
+    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial())
+    const lines = addEdges(mesh)
+    expect(edgesOf(mesh)).toBe(lines)
+    expect(lines.parent).toBe(mesh)
+    expect(lines.geometry.getAttribute('position').count).toBe(24)
+    expect(mesh.material.polygonOffset).toBe(true)
+    const material = lines.material as THREE.LineBasicMaterial
+    expect(material.opacity).toBe(EDGE_OPACITY)
+    setEdgesDimmed(mesh, true)
+    expect(material.opacity).toBe(EDGE_OPACITY_DIMMED)
+    setEdgesDimmed(mesh, false)
+    expect(material.opacity).toBe(EDGE_OPACITY)
+    expect(edgesOf(new THREE.Mesh())).toBeNull()
+    disposeModel(mesh)
   })
 })
