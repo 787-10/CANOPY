@@ -60,7 +60,8 @@ import {
   isFlightSatelliteEntityId,
   removeFlightBody,
   setLayerEntitiesShown,
-  updateFlightRing,
+  FOLLOWER_TRAIL_S,
+  planeKey,
   ENGINE_DISAGREEMENT_KM,
   engineCheck,
   FLIGHT_MODEL_MIN_ZOOM_M,
@@ -1416,13 +1417,19 @@ export function CesiumGlobe({
       .map(flightBodyFor)
       .filter((body): body is FlightBody => body !== null)
     simLayers.forEach((layer) => setLayerEntitiesShown(viewer, layer, false))
-    bodies.forEach((body, index) => addFlightBody(viewer, body, index))
+    // One ring per orbital plane; a follower in a shared plane keeps a short trail.
+    const ringedPlanes = new Set<string>()
+    bodies.forEach((body, index) => {
+      const key = planeKey(body)
+      const first = !ringedPlanes.has(key)
+      ringedPlanes.add(key)
+      addFlightBody(viewer, body, index, { ring: first, trailS: first ? undefined : FOLLOWER_TRAIL_S })
+    })
     flightBodiesRef.current = bodies
     const tick = () => {
       if (viewer.isDestroyed()) return
       const clock = useClockStore.getState()
       const ms = clock.timeAt()
-      bodies.forEach((body) => updateFlightRing(viewer, body))
       const engine = useEphemerisStore.getState().latest
       setFlightReadouts(
         bodies.map((body) => {

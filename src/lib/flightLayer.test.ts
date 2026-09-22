@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { ENGINE_DISAGREEMENT_KM, LABEL_OFFSETS, PULSE_PERIOD_MS, engineCheck, glowDotImage, pulseScale, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
+import { ENGINE_DISAGREEMENT_KM, LABEL_OFFSETS, PULSE_PERIOD_MS, engineCheck, glowDotImage, planeKey, pulseScale, flightBodyFor, flightReadout, flightSatelliteNumber, isFlightSatelliteEntityId, flightSatelliteId, labelOffsetFor } from './flightLayer'
 import type { N2YOLayerState } from './n2yoSatelliteLayer'
 import type { N2YOPositionCache } from './positionCache'
 
@@ -101,5 +101,19 @@ describe('the mark', () => {
     // jsdom has no 2D canvas: the helper returns null there and a 64 px canvas in a browser.
     const canvas = glowDotImage('#7b96ff')
     expect(canvas === null || canvas.width === 64).toBe(true)
+  })
+})
+
+describe('one ring per plane', () => {
+  const load = (name: string) =>
+    JSON.parse(readFileSync(resolve(process.cwd(), 'public', 'orbital', `${name}_positions.json`), 'utf8')) as N2YOPositionCache
+  const bodyFor = (name: string, id: number) =>
+    flightBodyFor({ ...layer, cache: load(name), satelliteId: id, satelliteName: name.toUpperCase(), entityIds: [] })!
+  it('SIM-01 and OBJ-1 share a plane key; SIM-02 has its own', () => {
+    const sim01 = bodyFor('sim01', 900001)
+    const obj01 = bodyFor('obj01', 900003)
+    const sim02 = bodyFor('sim02', 900002)
+    expect(planeKey(obj01)).toBe(planeKey(sim01))
+    expect(planeKey(sim02)).not.toBe(planeKey(sim01))
   })
 })

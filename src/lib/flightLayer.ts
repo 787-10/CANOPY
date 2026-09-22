@@ -139,8 +139,29 @@ export function labelOffsetFor(index: number): Cartesian2 {
   return new Cartesian2(x, y)
 }
 
-export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void {
+/** Bodies in one orbital plane share one ring: two identical lines drawn on
+ *  top of each other z-fight (SIM-01 and OBJ-1, 3 s apart, looked like one
+ *  path bouncing against the other). Altitude, inclination and node to a
+ *  tolerance well inside the file's rounding. */
+export function planeKey(body: FlightBody): string {
+  const { altitudeKm, inclinationDeg } = body.orbit.elements
+  return `${altitudeKm.toFixed(1)}|${inclinationDeg.toFixed(3)}|${body.orbit.raan.toFixed(4)}`
+}
+
+export type AddFlightBodyOptions = {
+  /** Draw the orbit ring (false for a body whose plane already has one). */
+  ring?: boolean
+  /** Seconds of trail; a follower in a shared plane gets a short one so the
+   *  two tails do not lie along each other. */
+  trailS?: number
+}
+
+/** Seconds of trail for a follower sharing a plane with a body that has the full trail. */
+export const FOLLOWER_TRAIL_S = 240
+
+export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0, options: AddFlightBodyOptions = {}): void {
   removeFlightBody(viewer, body)
+  const { ring = true, trailS = TRAIL_S } = options
   const scratch: Subpoint = { lat: 0, lng: 0, altKm: 0 }
   const position = new CallbackPositionProperty((time, result) => {
     const at = time ?? viewer.clock.currentTime
@@ -177,7 +198,7 @@ export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void
     },
     path: {
       leadTime: 0,
-      trailTime: TRAIL_S,
+      trailTime: trailS,
       resolution: 15,
       width: 2,
       material: color.withAlpha(0.55),
@@ -200,7 +221,7 @@ export function addFlightBody(viewer: Viewer, body: FlightBody, index = 0): void
       },
     })
   }
-  addFlightRing(viewer, body)
+  if (ring) addFlightRing(viewer, body)
 }
 
 /** The orbit ring: the inertial circle in the Earth-fixed frame at the
